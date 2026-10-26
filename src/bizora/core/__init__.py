@@ -1,0 +1,1 @@
+"""Core domain contracts and provider-independent business rules."""
