@@ -15,14 +15,84 @@ from sqlalchemy.orm import Session
 
 from bizora.contracts.graph import MethodologyGraph
 from bizora.contracts.patches import GraphPatch
+from bizora.core.config import get_settings
 from bizora.core.errors import BizoraError, ErrorCode
+from bizora.core.extraction_persistence_service import (
+    ExtractionPersistenceService,
+)
 from bizora.core.graph_persistence_service import GraphPersistenceService
 from bizora.core.patch_service import GraphPatchService
 from bizora.db.repository import get_graph_revision
 from bizora.db.session import get_db_session
+from bizora.providers.base import (
+    MethodologyExtractionRequest,
+    MethodologyProvider,
+)
+from bizora.providers.fireworks import (
+    FireworksMethodologyProvider,
+    FireworksProviderError,
+)
 
 DB_SESSION_DEPENDENCY = Depends(get_db_session)
+
+def get_fireworks_provider() -> FireworksMethodologyProvider:
+    """Create the configured Fireworks provider or fail clearly."""
+
+    try:
+        settings = get_settings()
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Fireworks provider configuration is invalid.",
+        ) from exc
+
+    if not settings.enable_fireworks:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Fireworks provider is disabled.",
+        )
+
+    if not settings.fireworks_api_key or not settings.fireworks_model_name:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Fireworks credentials or model configuration are missing.",
+        )
+
+    return FireworksMethodologyProvider(
+        api_key=settings.fireworks_api_key.get_secret_value(),
+        model_name=settings.fireworks_model_name,
+        base_url=settings.fireworks_base_url,
+    )
+
+FIREWORKS_PROVIDER_DEPENDENCY = Depends(get_fireworks_provider)
+
 router = APIRouter()
+
+@router.post(
+    "/api/v1/graphs/extract",
+    response_model=MethodologyGraph,
+    status_code=status.HTTP_201_CREATED,
+    tags=["graphs"],
+)
+async def extract_graph(
+    extraction_request: MethodologyExtractionRequest,
+    session: Session = DB_SESSION_DEPENDENCY,
+    provider: MethodologyProvider = FIREWORKS_PROVIDER_DEPENDENCY,
+) -> MethodologyGraph:
+    """Extract, validate, and persist an initial methodology graph."""
+
+    try:
+        return await ExtractionPersistenceService.extract_and_persist_initial(
+            session,
+            provider,
+            extraction_request,
+        )
+    except FireworksProviderError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Methodology extraction provider failed.",
+        ) from exc
+
 
 def _error_payload(exc: BizoraError) -> dict[str, Any]:
     """Convert a domain exception into a stable JSON error body."""

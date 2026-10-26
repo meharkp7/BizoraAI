@@ -9,9 +9,17 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
+from bizora.api import get_fireworks_provider
 from bizora.db.base import Base
 from bizora.db.session import get_db_session
 from bizora.main import app
+from bizora.providers.base import (
+    MethodologyExtractionRequest,
+    MethodologyExtractionResult,
+)
+from bizora.providers.fireworks import (
+    FireworksProviderError,
+)
 
 
 @pytest.fixture
@@ -59,6 +67,33 @@ def make_graph_payload() -> dict[str, object]:
         "created_by": "api-test",
     }
 
+
+class FakeMethodologyProvider:
+    """Fake provider for extraction endpoint tests."""
+
+    def __init__(self, graph_payload: dict[str, object]) -> None:
+        self.graph_payload = graph_payload
+
+    async def extract_methodology(
+        self,
+        request: MethodologyExtractionRequest,
+    ) -> MethodologyExtractionResult:
+        from bizora.contracts.graph import MethodologyGraph
+
+        graph_data = dict(self.graph_payload)
+        graph_data["project_id"] = request.project_id
+        graph_data["graph_id"] = request.graph_id
+        graph_data["version"] = 1
+        graph_data["parent_version"] = None
+        graph_data["created_by"] = request.created_by
+        graph_data["source_ids"] = [request.source_id]
+        graph_data["title"] = request.title or graph_data["title"]
+
+        return MethodologyExtractionResult(
+            draft_graph=MethodologyGraph.model_validate(graph_data),
+            provider_name="fake",
+            model_name="test-model",
+        )
 
 def test_health_endpoint(client: TestClient) -> None:
     response = client.get("/health")
@@ -286,3 +321,163 @@ def test_apply_graph_patch_rejects_invalid_result(
     )
     assert latest.status_code == 200
     assert latest.json()["version"] == 1
+
+def test_extract_graph_persists_initial_revision(
+    client: TestClient,
+) -> None:
+    app.dependency_overrides[get_fireworks_provider] = lambda: (
+        FakeMethodologyProvider(make_graph_payload())
+    )
+
+    try:
+        response = client.post(
+            "/api/v1/graphs/extract",
+            json={
+                "paper_text": (
+                    "The paper describes an image encoder and prediction head."
+                ),
+                "project_id": "project-api",
+                "graph_id": "graph-api",
+                "source_id": "paper-api",
+                "created_by": "api-test",
+                "title": "Extracted methodology",
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(get_fireworks_provider, None)
+
+    assert response.status_code == 201
+    assert response.json()["version"] == 1
+    assert response.json()["parent_version"] is None
+    assert response.json()["project_id"] == "project-api"
+    assert response.json()["graph_id"] == "graph-api"
+
+    retrieved = client.get(
+        "/api/v1/graphs/project-api/graph-api/revisions/1"
+    )
+    assert retrieved.status_code == 200
+    assert retrieved.json() == response.json()
+
+def test_extract_graph_rejects_duplicate_initial_revision(
+    client: TestClient,
+) -> None:
+    app.dependency_overrides[get_fireworks_provider] = lambda: (
+        FakeMethodologyProvider(make_graph_payload())
+    )
+
+    payload = {
+        "paper_text": "A research paper about image classification.",
+        "project_id": "project-api",
+        "graph_id": "graph-api",
+        "source_id": "paper-api",
+        "created_by": "api-test",
+        "title": "Extracted methodology",
+    }
+
+    try:
+        first = client.post("/api/v1/graphs/extract", json=payload)
+        duplicate = client.post("/api/v1/graphs/extract", json=payload)
+    finally:
+        app.dependency_overrides.pop(get_fireworks_provider, None)
+
+    assert first.status_code == 201
+    assert duplicate.status_code == 409
+    assert duplicate.json()["error"]["code"] == "RESOURCE_CONFLICT"
+
+def test_extract_graph_returns_502_on_provider_failure(
+    client: TestClient,
+) -> None:
+    class FailingProvider:
+        async def extract_methodology(
+            self,
+            request: MethodologyExtractionRequest,
+        ) -> MethodologyExtractionResult:
+            raise FireworksProviderError("simulated provider failure")
+
+    app.dependency_overrides[get_fireworks_provider] = FailingProvider
+
+    try:
+        response = client.post(
+            "/api/v1/graphs/extract",
+            json={
+                "paper_text": "Paper text",
+                "project_id": "project-api",
+                "graph_id": "graph-api",
+                "source_id": "paper-api",
+                "created_by": "api-test",
+                "title": "Test",
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(get_fireworks_provider, None)
+
+    assert response.status_code == 502
+    assert "simulated provider failure" not in response.text
+
+
+def test_extract_graph_returns_503_when_provider_disabled(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from bizora import api
+    from bizora.core.config import Settings
+
+    monkeypatch.setattr(
+        api,
+        "get_settings",
+        lambda: Settings(enable_fireworks=False),
+    )
+
+    response = client.post(
+        "/api/v1/graphs/extract",
+        json={
+            "paper_text": "Paper text",
+            "project_id": "project-api",
+            "graph_id": "graph-api",
+            "source_id": "paper-api",
+            "created_by": "api-test",
+            "title": "Test",
+        },
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Fireworks provider is disabled."
+
+def test_extract_graph_rejects_invalid_provider_graph(
+    client: TestClient,
+) -> None:
+    payload = make_graph_payload()
+    payload["edges"] = [
+        {
+            "id": "invalid-edge",
+            "source": "input",
+            "target": "missing-node",
+        }
+    ]
+
+    app.dependency_overrides[get_fireworks_provider] = lambda: (
+        FakeMethodologyProvider(payload)
+    )
+
+    try:
+        response = client.post(
+            "/api/v1/graphs/extract",
+            json={
+                "paper_text": "Paper text",
+                "project_id": "project-api",
+                "graph_id": "graph-api",
+                "source_id": "paper-api",
+                "created_by": "api-test",
+                "title": "Test",
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(get_fireworks_provider, None)
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "INVALID_GRAPH"
+
+    retrieved = client.get(
+        "/api/v1/graphs/project-api/graph-api/revisions/1"
+    )
+    assert retrieved.status_code == 404
