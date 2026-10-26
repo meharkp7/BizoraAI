@@ -3,7 +3,7 @@
 
 import hashlib
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import select, update
@@ -212,3 +212,120 @@ def compare_and_set_run_state(
         # instance to avoid returning stale state to the caller.
         session.refresh(record)
     return record
+
+
+def list_claimable_runs(
+    session: Session,
+    *,
+    limit: int = 10,
+) -> list[ExperimentRunRecord]:
+    """List pending runs oldest-first for worker polling."""
+    if limit < 1:
+        raise ValueError("limit must be a positive integer.")
+    statement = (
+        select(ExperimentRunRecord)
+        .where(ExperimentRunRecord.state == RunState.PENDING.value)
+        .order_by(ExperimentRunRecord.created_at.asc())
+        .limit(limit)
+    )
+    return list(session.scalars(statement))
+
+
+def claim_experiment_run(
+    session: Session,
+    *,
+    run_id: str,
+    worker_id: str,
+    now: datetime,
+    lease_ttl_seconds: int,
+) -> ExperimentRunRecord | None:
+    """Atomically claim a pending run for one worker.
+
+    Returns the refreshed record on success, or None when the run is
+    missing or no longer pending. Callers must pass timezone-aware UTC
+    timestamps so lease comparisons stay consistent across databases.
+    """
+    result = session.connection().execute(
+        update(ExperimentRunRecord)
+        .where(
+            ExperimentRunRecord.run_id == run_id,
+            ExperimentRunRecord.state == RunState.PENDING.value,
+        )
+        .values(
+            state=RunState.RUNNING.value,
+            started_at=now,
+            worker_id=worker_id,
+            lease_expires_at=now + timedelta(seconds=lease_ttl_seconds),
+        )
+    )
+
+    if result.rowcount != 1:
+        return None
+
+    session.flush()
+    record = get_experiment_run(session, run_id)
+    if record is not None:
+        session.refresh(record)
+    return record
+
+
+def heartbeat_experiment_run(
+    session: Session,
+    *,
+    run_id: str,
+    worker_id: str,
+    now: datetime,
+    lease_ttl_seconds: int,
+) -> ExperimentRunRecord | None:
+    """Extend the lease only when the worker still owns a running run.
+
+    Returns the refreshed record, or None when the run is missing,
+    finished, expired-and-reaped, or owned by another worker.
+    """
+    result = session.connection().execute(
+        update(ExperimentRunRecord)
+        .where(
+            ExperimentRunRecord.run_id == run_id,
+            ExperimentRunRecord.state == RunState.RUNNING.value,
+            ExperimentRunRecord.worker_id == worker_id,
+        )
+        .values(lease_expires_at=now + timedelta(seconds=lease_ttl_seconds))
+    )
+
+    if result.rowcount != 1:
+        return None
+
+    session.flush()
+    record = get_experiment_run(session, run_id)
+    if record is not None:
+        session.refresh(record)
+    return record
+
+
+def reap_expired_leases(
+    session: Session,
+    *,
+    now: datetime,
+    error: str,
+) -> int:
+    """Fail running runs whose worker lease expired; return the count.
+
+    Runs without a lease are operator-managed and never reaped.
+    """
+    result = session.connection().execute(
+        update(ExperimentRunRecord)
+        .where(
+            ExperimentRunRecord.state == RunState.RUNNING.value,
+            ExperimentRunRecord.lease_expires_at.is_not(None),
+            ExperimentRunRecord.lease_expires_at <= now,
+        )
+        .values(
+            state=RunState.FAILED.value,
+            finished_at=now,
+            error=error,
+        )
+    )
+    session.flush()
+    # The bulk UPDATE may touch rows already present in this session.
+    session.expire_all()
+    return int(result.rowcount or 0)

@@ -1,5 +1,7 @@
 """Tests for execution boundary contracts."""
 
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -270,3 +272,22 @@ def test_echo_round_trips_reproducibility_fields() -> None:
     assert echo.dataset_revision == "sha256:example"
     assert echo.code_revision == "abcdef1"
     assert echo.graph_version == 1
+
+
+def test_error_record_value_round_trips_as_json() -> None:
+    error = StructuredError.model_validate(valid_error_data())
+
+    payload = json.loads(error.to_record_value())
+
+    assert payload["code"] == ExecutionErrorCode.ADAPTER_FAILED.value
+    assert payload["message"] == "Adapter exited with status 1."
+    assert payload["exit_code"] == 1
+    assert payload["signal"] is None
+
+
+def test_error_record_value_is_bounded() -> None:
+    payload = valid_error_data()
+    payload["message"] = "x" * 2000
+    error = StructuredError.model_validate(payload)
+
+    assert len(error.to_record_value()) <= 2000

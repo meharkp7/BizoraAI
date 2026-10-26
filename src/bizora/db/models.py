@@ -66,6 +66,11 @@ class ExperimentRunRecord(Base):
             "graph_id",
             "graph_version",
         ),
+        Index(
+            "ix_experiment_run_state_lease",
+            "state",
+            "lease_expires_at",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -76,6 +81,11 @@ class ExperimentRunRecord(Base):
     graph_version: Mapped[int] = mapped_column(Integer, nullable=False)
     state: Mapped[str] = mapped_column(String(32), nullable=False)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    worker_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
 
     config_snapshot: Mapped[dict[str, Any]] = mapped_column(
         JSON,

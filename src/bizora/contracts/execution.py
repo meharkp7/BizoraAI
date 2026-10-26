@@ -1,6 +1,8 @@
 """Execution boundary contracts for controlled experiment runs."""
 
+import json
 from enum import StrEnum
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -33,6 +35,16 @@ class StructuredError(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
     exit_code: int | None = None
     signal: int | None = Field(default=None, ge=0)
+
+    def to_record_value(self) -> str:
+        """Serialize to the bounded run-record error format."""
+        payload: dict[str, Any] = {
+            "code": self.code.value,
+            "message": self.message,
+            "exit_code": self.exit_code,
+            "signal": self.signal,
+        }
+        return json.dumps(payload, sort_keys=True)[:2000]
 
 
 class ExecutionLimits(BaseModel):
