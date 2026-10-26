@@ -114,3 +114,76 @@ def test_invalid_graph_request_returns_422(client: TestClient) -> None:
     response = client.post("/api/v1/graphs", json=payload)
 
     assert response.status_code == 422
+
+
+def test_create_graph_revision_increments_version(
+    client: TestClient,
+) -> None:
+    payload = make_graph_payload()
+    initial = client.post("/api/v1/graphs", json=payload)
+    assert initial.status_code == 201
+
+    revised = client.post(
+        "/api/v1/graphs/project-api/graph-api/revisions",
+        json=initial.json(),
+    )
+
+    assert revised.status_code == 201
+    assert revised.json()["version"] == 2
+    assert revised.json()["parent_version"] == 1
+    assert revised.json()["graph_id"] == "graph-api"
+
+    retrieved = client.get(
+        "/api/v1/graphs/project-api/graph-api/revisions/2"
+    )
+    assert retrieved.status_code == 200
+    assert retrieved.json() == revised.json()
+
+
+def test_create_graph_revision_rejects_stale_snapshot(
+    client: TestClient,
+) -> None:
+    initial = client.post(
+        "/api/v1/graphs",
+        json=make_graph_payload(),
+    )
+    assert initial.status_code == 201
+
+    stale_snapshot = initial.json()
+    stale_snapshot["title"] = "Edited stale copy"
+
+    response = client.post(
+        "/api/v1/graphs/project-api/graph-api/revisions",
+        json=stale_snapshot,
+    )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "resource_conflict"
+
+
+def test_create_graph_revision_requires_existing_graph(
+    client: TestClient,
+) -> None:
+    payload = make_graph_payload()
+    payload["project_id"] = "missing-project"
+
+    response = client.post(
+        "/api/v1/graphs/missing-project/graph-api/revisions",
+        json=payload,
+    )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "resource_conflict"
+
+
+def test_create_graph_revision_rejects_mismatched_path(
+    client: TestClient,
+) -> None:
+    payload = make_graph_payload()
+
+    response = client.post(
+        "/api/v1/graphs/another-project/graph-api/revisions",
+        json=payload,
+    )
+
+    assert response.status_code == 422

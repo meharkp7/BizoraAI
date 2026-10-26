@@ -56,6 +56,31 @@ def create_graph(
     GraphPersistenceService.create_initial_revision(session, graph)
     return graph
 
+@router.post(
+    "/api/v1/graphs/{project_id}/{graph_id}/revisions",
+    response_model=MethodologyGraph,
+    status_code=status.HTTP_201_CREATED,
+    tags=["graphs"],
+)
+def create_graph_revision(
+    project_id: str,
+    graph_id: str,
+    graph: MethodologyGraph,
+    session: Session = DB_SESSION_DEPENDENCY,
+) -> MethodologyGraph:
+    """Create a new revision from the exact current persisted snapshot."""
+    if graph.project_id != project_id or graph.graph_id != graph_id:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Path identifiers must match the graph payload.",
+        )
+
+    record = GraphPersistenceService.create_revision(
+        session,
+        graph,
+        created_by=graph.created_by,
+    )
+    return MethodologyGraph.model_validate(record.graph_payload)
 
 @router.get(
     "/api/v1/graphs/{project_id}/{graph_id}/revisions/{version}",
