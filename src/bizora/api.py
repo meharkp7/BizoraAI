@@ -7,6 +7,7 @@ from fastapi import (
     Depends,
     FastAPI,
     HTTPException,
+    Query,
     Request,
     status,
 )
@@ -16,8 +17,10 @@ from sqlalchemy.orm import Session
 from bizora.contracts.graph import MethodologyGraph
 from bizora.contracts.patches import GraphPatch
 from bizora.contracts.run import (
+    ArtifactRecord,
     CreateExperimentRunRequest,
     ExperimentRun,
+    MetricRecord,
     TransitionExperimentRunRequest,
 )
 from bizora.core.config import get_settings
@@ -28,7 +31,15 @@ from bizora.core.extraction_persistence_service import (
 from bizora.core.graph_persistence_service import GraphPersistenceService
 from bizora.core.patch_service import GraphPatchService
 from bizora.core.run_service import ExperimentRunService
-from bizora.db.repository import get_graph_revision
+from bizora.db.repository import (
+    artifact_record_from_row,
+    experiment_run_from_record,
+    get_graph_revision,
+    list_artifacts_for_run,
+    list_experiment_runs,
+    list_metrics_for_run,
+    metric_record_from_row,
+)
 from bizora.db.session import get_db_session
 from bizora.providers.base import (
     MethodologyExtractionRequest,
@@ -275,6 +286,63 @@ def get_experiment_run(
 ) -> ExperimentRun:
     """Return one experiment run by its identifier."""
     return ExperimentRunService.get_run(session, run_id)
+
+
+@router.get(
+    "/api/v1/experiments/runs",
+    response_model=list[ExperimentRun],
+    tags=["experiments"],
+)
+def list_runs(
+    session: Session = DB_SESSION_DEPENDENCY,
+    project_id: str | None = Query(default=None, max_length=128),
+    graph_id: str | None = Query(default=None, max_length=128),
+    limit: int = Query(default=50, ge=1, le=200),
+) -> list[ExperimentRun]:
+    """List runs newest-first, optionally filtered by project and graph."""
+    return [
+        experiment_run_from_record(record)
+        for record in list_experiment_runs(
+            session,
+            project_id=project_id,
+            graph_id=graph_id,
+            limit=limit,
+        )
+    ]
+
+
+@router.get(
+    "/api/v1/experiments/runs/{run_id}/metrics",
+    response_model=list[MetricRecord],
+    tags=["experiments"],
+)
+def list_run_metrics(
+    run_id: str,
+    session: Session = DB_SESSION_DEPENDENCY,
+) -> list[MetricRecord]:
+    """List one run's persisted metric records."""
+    ExperimentRunService.get_run(session, run_id)
+    return [
+        metric_record_from_row(row)
+        for row in list_metrics_for_run(session, run_id)
+    ]
+
+
+@router.get(
+    "/api/v1/experiments/runs/{run_id}/artifacts",
+    response_model=list[ArtifactRecord],
+    tags=["experiments"],
+)
+def list_run_artifacts(
+    run_id: str,
+    session: Session = DB_SESSION_DEPENDENCY,
+) -> list[ArtifactRecord]:
+    """List one run's persisted artifact records."""
+    ExperimentRunService.get_run(session, run_id)
+    return [
+        artifact_record_from_row(row)
+        for row in list_artifacts_for_run(session, run_id)
+    ]
 
 
 @router.post(

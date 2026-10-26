@@ -184,6 +184,28 @@ def get_experiment_run(
     return session.scalar(statement)
 
 
+def list_experiment_runs(
+    session: Session,
+    *,
+    project_id: str | None = None,
+    graph_id: str | None = None,
+    limit: int = 50,
+) -> list[ExperimentRunRecord]:
+    """List runs newest-first, optionally filtered by project and graph."""
+    if limit < 1 or limit > 200:
+        raise ValueError("limit must be within 1 and 200.")
+    statement = select(ExperimentRunRecord).order_by(
+        ExperimentRunRecord.created_at.desc()
+    )
+    if project_id is not None:
+        statement = statement.where(
+            ExperimentRunRecord.project_id == project_id
+        )
+    if graph_id is not None:
+        statement = statement.where(ExperimentRunRecord.graph_id == graph_id)
+    return list(session.scalars(statement.limit(limit)))
+
+
 def compare_and_set_run_state(
     session: Session,
     *,

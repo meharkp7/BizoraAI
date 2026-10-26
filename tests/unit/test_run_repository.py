@@ -15,6 +15,7 @@ from bizora.db.repository import (
     compare_and_set_run_state,
     experiment_run_from_record,
     get_experiment_run,
+    list_experiment_runs,
     save_experiment_run,
 )
 
@@ -61,14 +62,22 @@ def make_run(
     *,
     run_id: str = "run-1",
     created_at: datetime | None = None,
+    config: ExperimentConfig | None = None,
 ) -> ExperimentRun:
     """Build a minimal pending run."""
     return ExperimentRun(
         run_id=run_id,
-        config=ExperimentConfig.model_validate(valid_experiment_data()),
+        config=config or ExperimentConfig.model_validate(valid_experiment_data()),
         state=RunState.PENDING,
         created_at=created_at or datetime(2026, 1, 1, tzinfo=UTC),
     )
+
+
+def make_config(**overrides: object) -> ExperimentConfig:
+    """Build a config with overridden fields."""
+    payload = valid_experiment_data()
+    payload.update(overrides)
+    return ExperimentConfig.model_validate(payload)
 
 
 def test_save_and_retrieve_run_round_trips_config(
@@ -257,3 +266,75 @@ def test_cancel_from_pending_keeps_started_at_empty(
     assert restored.started_at is None
     assert restored.finished_at == finished
     assert restored.error == "cancelled by request"
+
+
+def test_list_runs_returns_newest_first(db_session: Session) -> None:
+    save_experiment_run(
+        db_session,
+        make_run(
+            run_id="run-old",
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+        ),
+    )
+    save_experiment_run(
+        db_session,
+        make_run(
+            run_id="run-new",
+            created_at=datetime(2026, 1, 2, tzinfo=UTC),
+        ),
+    )
+    db_session.commit()
+
+    rows = list_experiment_runs(db_session)
+
+    assert [row.run_id for row in rows] == ["run-new", "run-old"]
+
+
+def test_list_runs_filters_by_project_and_graph(
+    db_session: Session,
+) -> None:
+    save_experiment_run(
+        db_session,
+        make_run(
+            run_id="run-1", created_at=datetime(2026, 1, 1, tzinfo=UTC)
+        ),
+    )
+    save_experiment_run(
+        db_session,
+        make_run(
+            run_id="run-2",
+            created_at=datetime(2026, 1, 2, tzinfo=UTC),
+            config=make_config(project_id="project-2"),
+        ),
+    )
+    save_experiment_run(
+        db_session,
+        make_run(
+            run_id="run-3",
+            created_at=datetime(2026, 1, 3, tzinfo=UTC),
+            config=make_config(graph_id="graph-2"),
+        ),
+    )
+    db_session.commit()
+
+    assert [
+        row.run_id
+        for row in list_experiment_runs(db_session, project_id="project-2")
+    ] == ["run-2"]
+    assert [
+        row.run_id
+        for row in list_experiment_runs(
+            db_session, project_id="project-1", graph_id="graph-2"
+        )
+    ] == ["run-3"]
+    assert [
+        row.run_id for row in list_experiment_runs(db_session, limit=2)
+    ] == ["run-3", "run-2"]
+
+
+def test_list_runs_rejects_invalid_limit(db_session: Session) -> None:
+    with pytest.raises(ValueError, match="within 1 and 200"):
+        list_experiment_runs(db_session, limit=0)
+
+    with pytest.raises(ValueError, match="within 1 and 200"):
+        list_experiment_runs(db_session, limit=201)

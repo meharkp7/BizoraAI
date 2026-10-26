@@ -1,6 +1,6 @@
 """API tests for the experiment run lifecycle."""
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from typing import Any
 
 import pytest
@@ -9,7 +9,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
+from bizora.contracts.experiment import ResultKind
+from bizora.contracts.run import ArtifactRecord, MetricRecord
 from bizora.db.base import Base
+from bizora.db.repository import save_artifact_record, save_metric_record
 from bizora.db.session import get_db_session
 from bizora.main import app
 
@@ -227,3 +230,178 @@ def test_transition_rejects_terminal_state_change(
         json={"to_state": "running"},
     )
     assert reopened.status_code == 422
+
+
+@pytest.fixture
+def client_with_db() -> Iterator[tuple[TestClient, Callable[[], Session]]]:
+    """Provide a client plus direct database access for seeding results."""
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+
+    def override_get_db_session() -> Iterator[Session]:
+        with Session(engine) as session:
+            yield session
+
+    app.dependency_overrides[get_db_session] = override_get_db_session
+
+    try:
+        with TestClient(app) as test_client:
+            yield test_client, lambda: Session(engine)
+    finally:
+        app.dependency_overrides.pop(get_db_session, None)
+        engine.dispose()
+
+
+def seed_metric(session: Session, run_id: str) -> None:
+    """Persist one metric record for a run."""
+    save_metric_record(
+        session,
+        MetricRecord(
+            metric_id="metric-accuracy",
+            run_id=run_id,
+            name="accuracy",
+            value=0.92,
+            result_kind=ResultKind.MEASURED,
+        ),
+    )
+    session.commit()
+
+
+def seed_artifact(session: Session, run_id: str) -> None:
+    """Persist one artifact record for a run."""
+    save_artifact_record(
+        session,
+        ArtifactRecord(
+            artifact_id="artifact-checkpoint",
+            run_id=run_id,
+            kind="checkpoint",
+            uri="file:///tmp/checkpoint",
+            sha256="c" * 64,
+            result_kind=ResultKind.MEASURED,
+        ),
+    )
+    session.commit()
+
+
+def test_list_run_metrics_returns_persisted_records(
+    client_with_db: tuple[TestClient, Callable[[], Session]],
+) -> None:
+    client, session_factory = client_with_db
+    assert client.post("/api/v1/graphs", json=make_graph_payload()).status_code == 201
+    assert create_run(client).status_code == 201
+    session = session_factory()
+    try:
+        seed_metric(session, "run-api-1")
+    finally:
+        session.close()
+
+    response = client.get("/api/v1/experiments/runs/run-api-1/metrics")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "metric_id": "metric-accuracy",
+            "run_id": "run-api-1",
+            "name": "accuracy",
+            "value": 0.92,
+            "result_kind": "measured",
+        }
+    ]
+
+
+def test_list_run_metrics_empty_without_results(
+    client_with_db: tuple[TestClient, Callable[[], Session]],
+) -> None:
+    client, _session_factory = client_with_db
+    assert client.post("/api/v1/graphs", json=make_graph_payload()).status_code == 201
+    assert create_run(client).status_code == 201
+
+    response = client.get("/api/v1/experiments/runs/run-api-1/metrics")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_list_run_metrics_missing_run_returns_404(
+    client_with_db: tuple[TestClient, Callable[[], Session]],
+) -> None:
+    client, _session_factory = client_with_db
+
+    response = client.get("/api/v1/experiments/runs/missing-run/metrics")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "RESOURCE_NOT_FOUND"
+
+
+def test_list_run_artifacts_returns_persisted_records(
+    client_with_db: tuple[TestClient, Callable[[], Session]],
+) -> None:
+    client, session_factory = client_with_db
+    assert client.post("/api/v1/graphs", json=make_graph_payload()).status_code == 201
+    assert create_run(client).status_code == 201
+    session = session_factory()
+    try:
+        seed_artifact(session, "run-api-1")
+    finally:
+        session.close()
+
+    response = client.get("/api/v1/experiments/runs/run-api-1/artifacts")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "artifact_id": "artifact-checkpoint",
+            "run_id": "run-api-1",
+            "kind": "checkpoint",
+            "uri": "file:///tmp/checkpoint",
+            "sha256": "c" * 64,
+            "result_kind": "measured",
+        }
+    ]
+
+
+def test_list_run_artifacts_missing_run_returns_404(
+    client_with_db: tuple[TestClient, Callable[[], Session]],
+) -> None:
+    client, _session_factory = client_with_db
+
+    response = client.get("/api/v1/experiments/runs/missing-run/artifacts")
+
+    assert response.status_code == 404
+
+
+def test_list_runs_filters_and_limits(
+    client_with_db: tuple[TestClient, Callable[[], Session]],
+) -> None:
+    client, _session_factory = client_with_db
+    assert client.post("/api/v1/graphs", json=make_graph_payload()).status_code == 201
+    assert create_run(client, run_id="run-api-1").status_code == 201
+    assert create_run(client, run_id="run-api-2").status_code == 201
+
+    all_runs = client.get("/api/v1/experiments/runs")
+    assert all_runs.status_code == 200
+    assert len(all_runs.json()) == 2
+
+    filtered = client.get(
+        "/api/v1/experiments/runs",
+        params={"project_id": "project-api", "graph_id": "graph-api"},
+    )
+    assert filtered.status_code == 200
+    assert len(filtered.json()) == 2
+
+    empty = client.get(
+        "/api/v1/experiments/runs", params={"project_id": "other-project"}
+    )
+    assert empty.status_code == 200
+    assert empty.json() == []
+
+    limited = client.get("/api/v1/experiments/runs", params={"limit": 1})
+    assert limited.status_code == 200
+    assert len(limited.json()) == 1
+
+    invalid = client.get("/api/v1/experiments/runs", params={"limit": 0})
+    assert invalid.status_code == 422

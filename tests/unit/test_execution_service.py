@@ -30,6 +30,8 @@ from bizora.db.repository import (
     experiment_run_from_record,
     get_experiment_run,
     get_graph_revision,
+    list_artifacts_for_run,
+    list_metrics_for_run,
     save_experiment_run,
     save_graph_revision,
 )
@@ -625,6 +627,62 @@ def test_execute_fails_when_run_deleted_mid_run(
     deleter.join(timeout=10.0)
 
     assert errors == [ErrorCode.RESOURCE_NOT_FOUND.value]
+
+
+def test_execute_run_persists_reported_results(
+    session_factory: Callable[[], Session],
+) -> None:
+    seed_run(session_factory)
+    service = ExecutionService(
+        session_factory,
+        WorkerConfig(worker_id="worker-a", poll_seconds=0.05),
+        argv_factory=argv_for("metrics"),
+    )
+
+    result = service.execute_run("run-1")
+
+    assert result.state == RunState.SUCCEEDED
+    session = session_factory()
+    try:
+        metrics = list_metrics_for_run(session, "run-1")
+        assert [(row.metric_id, row.name, row.value) for row in metrics] == [
+            ("metric-accuracy", "accuracy", 0.92)
+        ]
+        assert metrics[0].result_kind == "measured"
+        artifacts = list_artifacts_for_run(session, "run-1")
+        assert [
+            (row.artifact_id, row.kind, row.uri) for row in artifacts
+        ] == [
+            (
+                "artifact-checkpoint",
+                "checkpoint",
+                "file:///tmp/fake-checkpoint",
+            )
+        ]
+        assert artifacts[0].sha256 == "b" * 64
+    finally:
+        session.close()
+
+
+def test_execute_run_discards_failed_run_results(
+    session_factory: Callable[[], Session],
+) -> None:
+    seed_run(session_factory)
+    service = ExecutionService(
+        session_factory,
+        WorkerConfig(worker_id="worker-a", poll_seconds=0.05),
+        argv_factory=argv_for("failedmetrics"),
+    )
+
+    result = service.execute_run("run-1")
+
+    assert result.state == RunState.FAILED
+    session = session_factory()
+    try:
+        assert list_metrics_for_run(session, "run-1") == []
+        assert list_artifacts_for_run(session, "run-1") == []
+    finally:
+        session.close()
 
 
 @pytest.mark.parametrize(

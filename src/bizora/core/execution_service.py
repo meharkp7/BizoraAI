@@ -32,7 +32,12 @@ from bizora.contracts.execution import (
 )
 from bizora.contracts.experiment import ExperimentConfig
 from bizora.contracts.graph import MethodologyGraph
-from bizora.contracts.run import ExperimentRun, RunState
+from bizora.contracts.run import (
+    ArtifactRecord,
+    ExperimentRun,
+    MetricRecord,
+    RunState,
+)
 from bizora.core.errors import BizoraError, ErrorCode, ExperimentStateError
 from bizora.db.models import ExperimentRunRecord
 from bizora.db.repository import (
@@ -43,6 +48,8 @@ from bizora.db.repository import (
     get_graph_revision,
     heartbeat_experiment_run,
     list_claimable_runs,
+    save_artifact_record,
+    save_metric_record,
 )
 
 _resource: ModuleType | None
@@ -264,6 +271,37 @@ class ExecutionService:
                 details={"run_id": run_id, "state": record.state},
             )
 
+    def _cas_terminal(
+        self,
+        session: Session,
+        run_id: str,
+        *,
+        to_state: RunState,
+        error: str | None,
+    ) -> ExperimentRunRecord | None:
+        """Attempt the terminal compare-and-set in an open session."""
+        return compare_and_set_run_state(
+            session,
+            run_id=run_id,
+            expected_state=RunState.RUNNING,
+            new_state=to_state,
+            now=self._utcnow(),
+            error=error,
+        )
+
+    def _resolve_finalize_race(
+        self, session: Session, run_id: str
+    ) -> ExperimentRun:
+        """Return the cancelled run or report a conflicting finalize race."""
+        current = get_experiment_run(session, run_id)
+        if current is not None and current.state == RunState.CANCELLED.value:
+            return experiment_run_from_record(current)
+        raise BizoraError(
+            ErrorCode.RESOURCE_CONFLICT,
+            f"Run '{run_id}' changed while finalizing.",
+            details={"run_id": run_id},
+        )
+
     def _finalize(
         self,
         run_id: str,
@@ -273,22 +311,46 @@ class ExecutionService:
     ) -> ExperimentRun:
         """Move a running run to a terminal state without overwriting cancel."""
         with self._session() as session:
-            record = compare_and_set_run_state(
-                session,
-                run_id=run_id,
-                expected_state=RunState.RUNNING,
-                new_state=to_state,
-                now=self._utcnow(),
-                error=error,
+            record = self._cas_terminal(
+                session, run_id, to_state=to_state, error=error
             )
             if record is None:
-                current = get_experiment_run(session, run_id)
-                if current is not None and current.state == RunState.CANCELLED.value:
-                    return experiment_run_from_record(current)
-                raise BizoraError(
-                    ErrorCode.RESOURCE_CONFLICT,
-                    f"Run '{run_id}' changed while finalizing.",
-                    details={"run_id": run_id},
+                return self._resolve_finalize_race(session, run_id)
+            session.commit()
+            return experiment_run_from_record(record)
+
+    def _succeed_with_results(
+        self, run_id: str, result: ExecutionResult
+    ) -> ExperimentRun:
+        """Persist adapter-reported results and finalize as succeeded."""
+        with self._session() as session:
+            record = self._cas_terminal(
+                session, run_id, to_state=RunState.SUCCEEDED, error=None
+            )
+            if record is None:
+                return self._resolve_finalize_race(session, run_id)
+            for metric in result.metrics:
+                save_metric_record(
+                    session,
+                    MetricRecord(
+                        metric_id=metric.metric_id,
+                        run_id=run_id,
+                        name=metric.name,
+                        value=metric.value,
+                        result_kind=metric.result_kind,
+                    ),
+                )
+            for artifact in result.artifacts:
+                save_artifact_record(
+                    session,
+                    ArtifactRecord(
+                        artifact_id=artifact.artifact_id,
+                        run_id=run_id,
+                        kind=artifact.kind,
+                        uri=artifact.uri,
+                        sha256=artifact.sha256,
+                        result_kind=artifact.result_kind,
+                    ),
                 )
             session.commit()
             return experiment_run_from_record(record)
@@ -613,10 +675,11 @@ class ExecutionService:
                 "Adapter returned a result for a different run.",
             )
         if result.status == ExecutionStatus.FAILED:
+            # Failed runs record errors, never partial measurements.
             assert result.error is not None  # Guaranteed by the contract.
             return self._finalize(
                 run_id,
                 to_state=RunState.FAILED,
                 error=result.error.to_record_value(),
             )
-        return self._finalize(run_id, to_state=RunState.SUCCEEDED, error=None)
+        return self._succeed_with_results(run_id, result)

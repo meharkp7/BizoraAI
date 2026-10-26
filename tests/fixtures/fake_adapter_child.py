@@ -2,8 +2,9 @@
 
 Usage: fake_adapter_child.py <mode> <request.json> <result.json> [extra...]
 
-Modes: ok, slow, crash, spam, badjson, silent, env. No network, no imports
-beyond the standard library, no effects outside the given paths.
+Modes: ok, slow, crash, spam, badjson, silent, env, metrics,
+failedmetrics. No network, no imports beyond the standard library, no
+effects outside the given paths.
 """
 
 import json
@@ -69,6 +70,55 @@ def main(argv: list[str]) -> int:
         with open(extra[0], "w", encoding="utf-8") as handle:
             handle.write(json.dumps(dict(os.environ), sort_keys=True))
         _write_ok(request, result_path)
+        return 0
+    if mode == "metrics":
+        result = {
+            "run_id": request["run_id"],
+            "status": "succeeded",
+            "echo": _echo_for(request),
+            "diagnostics": ["fake adapter ok"],
+            "metrics": [
+                {
+                    "metric_id": "metric-accuracy",
+                    "name": "accuracy",
+                    "value": 0.92,
+                    "result_kind": "measured",
+                }
+            ],
+            "artifacts": [
+                {
+                    "artifact_id": "artifact-checkpoint",
+                    "kind": "checkpoint",
+                    "uri": "file:///tmp/fake-checkpoint",
+                    "sha256": "b" * 64,
+                    "result_kind": "measured",
+                }
+            ],
+        }
+        with open(result_path, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps(result))
+        return 0
+    if mode == "failedmetrics":
+        result = {
+            "run_id": request["run_id"],
+            "status": "failed",
+            "echo": _echo_for(request),
+            "diagnostics": ["fake adapter failed"],
+            "metrics": [
+                {
+                    "metric_id": "metric-partial",
+                    "name": "partial",
+                    "value": 0.5,
+                    "result_kind": "measured",
+                }
+            ],
+            "error": {
+                "code": "adapter_failed",
+                "message": "Fake adapter failed after partial work.",
+            },
+        }
+        with open(result_path, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps(result))
         return 0
     print(f"unknown mode: {mode}", file=sys.stderr)
     return 2
