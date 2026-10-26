@@ -14,6 +14,7 @@ from fastapi import (
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
+from bizora.contracts.comparison import RunComparison
 from bizora.contracts.graph import MethodologyGraph
 from bizora.contracts.patches import GraphPatch
 from bizora.contracts.run import (
@@ -23,6 +24,7 @@ from bizora.contracts.run import (
     MetricRecord,
     TransitionExperimentRunRequest,
 )
+from bizora.core.comparison_service import ComparisonService
 from bizora.core.config import get_settings
 from bizora.core.errors import BizoraError, ErrorCode
 from bizora.core.extraction_persistence_service import (
@@ -361,6 +363,24 @@ def transition_experiment_run(
         run_id,
         to_state=request.to_state,
         error=request.error,
+    )
+
+
+@router.get(
+    "/api/v1/experiments/comparisons",
+    response_model=RunComparison,
+    tags=["experiments"],
+)
+def compare_experiment_runs(
+    session: Session = DB_SESSION_DEPENDENCY,
+    baseline_run_id: str = Query(min_length=1, max_length=128),
+    variant_run_id: str = Query(min_length=1, max_length=128),
+) -> RunComparison:
+    """Compare a variant run against a baseline run."""
+    return ComparisonService.compare_runs(
+        session,
+        baseline_run_id=baseline_run_id,
+        variant_run_id=variant_run_id,
     )
 
 

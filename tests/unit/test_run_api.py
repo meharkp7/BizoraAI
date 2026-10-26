@@ -405,3 +405,78 @@ def test_list_runs_filters_and_limits(
 
     invalid = client.get("/api/v1/experiments/runs", params={"limit": 0})
     assert invalid.status_code == 422
+
+
+def test_compare_runs_returns_valid_comparison(
+    client_with_db: tuple[TestClient, Callable[[], Session]],
+) -> None:
+    client, session_factory = client_with_db
+    assert client.post("/api/v1/graphs", json=make_graph_payload()).status_code == 201
+    assert create_run(client, run_id="run-baseline").status_code == 201
+    assert create_run(client, run_id="run-variant").status_code == 201
+    for run_id in ("run-baseline", "run-variant"):
+        assert (
+            client.post(
+                f"/api/v1/experiments/runs/{run_id}/transitions",
+                json={"to_state": "running"},
+            ).status_code
+            == 200
+        )
+        assert (
+            client.post(
+                f"/api/v1/experiments/runs/{run_id}/transitions",
+                json={"to_state": "succeeded"},
+            ).status_code
+            == 200
+        )
+    session = session_factory()
+    try:
+        save_metric_record(
+            session,
+            MetricRecord(
+                metric_id="m-accuracy",
+                run_id="run-baseline",
+                name="accuracy",
+                value=0.8,
+                result_kind=ResultKind.MEASURED,
+            ),
+        )
+        save_metric_record(
+            session,
+            MetricRecord(
+                metric_id="m-accuracy",
+                run_id="run-variant",
+                name="accuracy",
+                value=0.9,
+                result_kind=ResultKind.MEASURED,
+            ),
+        )
+        session.commit()
+    finally:
+        session.close()
+
+    response = client.get(
+        "/api/v1/experiments/comparisons",
+        params={"baseline_run_id": "run-baseline", "variant_run_id": "run-variant"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["verdict"] == "valid"
+    assert body["metrics"][0]["name"] == "accuracy"
+    assert body["metrics"][0]["absolute_change"] == pytest.approx(0.1)
+    assert body["metrics"][0]["relative_change"] == pytest.approx(0.125)
+
+
+def test_compare_runs_missing_run_returns_404(
+    client_with_db: tuple[TestClient, Callable[[], Session]],
+) -> None:
+    client, _session_factory = client_with_db
+
+    response = client.get(
+        "/api/v1/experiments/comparisons",
+        params={"baseline_run_id": "missing-run", "variant_run_id": "run-variant"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "RESOURCE_NOT_FOUND"

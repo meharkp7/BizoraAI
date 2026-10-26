@@ -1,5 +1,13 @@
 """Versioned contracts shared by Bizora services."""
 
+from bizora.contracts.comparison import (
+    ComparisonVerdict,
+    ConfigDifference,
+    GraphPair,
+    MetricComparison,
+    RunComparison,
+    SkippedMetric,
+)
 from bizora.contracts.evidence import EvidenceRef, EvidenceStatus, Provenance
 from bizora.contracts.execution import (
     AdapterExecutionRequest,
@@ -33,6 +41,8 @@ __all__ = [
     "TERMINAL_STATES",
     "AdapterExecutionRequest",
     "ArtifactRecord",
+    "ComparisonVerdict",
+    "ConfigDifference",
     "CreateExperimentRunRequest",
     "EvidenceRef",
     "EvidenceStatus",
@@ -44,8 +54,10 @@ __all__ = [
     "ExperimentRun",
     "GraphEdge",
     "GraphNode",
+    "GraphPair",
     "GraphPatch",
     "MethodologyGraph",
+    "MetricComparison",
     "MetricRecord",
     "NodeKind",
     "PatchOperation",
@@ -54,7 +66,9 @@ __all__ = [
     "ReportedMetric",
     "ReproducibilityEcho",
     "ResultKind",
+    "RunComparison",
     "RunState",
+    "SkippedMetric",
     "StructuredError",
     "TransitionExperimentRunRequest",
     "is_terminal",
