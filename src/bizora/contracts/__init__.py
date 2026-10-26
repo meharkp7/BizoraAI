@@ -7,6 +7,8 @@ from bizora.contracts.execution import (
     ExecutionLimits,
     ExecutionResult,
     ExecutionStatus,
+    ReportedArtifact,
+    ReportedMetric,
     ReproducibilityEcho,
     StructuredError,
 )
@@ -48,6 +50,8 @@ __all__ = [
     "NodeKind",
     "PatchOperation",
     "Provenance",
+    "ReportedArtifact",
+    "ReportedMetric",
     "ReproducibilityEcho",
     "ResultKind",
     "RunState",

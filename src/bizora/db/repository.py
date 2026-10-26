@@ -10,11 +10,22 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from bizora.contracts.experiment import ExperimentConfig
+from bizora.contracts.experiment import ExperimentConfig, ResultKind
 from bizora.contracts.graph import MethodologyGraph
-from bizora.contracts.run import TERMINAL_STATES, ExperimentRun, RunState
+from bizora.contracts.run import (
+    TERMINAL_STATES,
+    ArtifactRecord,
+    ExperimentRun,
+    MetricRecord,
+    RunState,
+)
 from bizora.core.errors import BizoraError, ErrorCode
-from bizora.db.models import ExperimentRunRecord, GraphRevisionRecord
+from bizora.db.models import (
+    ArtifactRecordRow,
+    ExperimentRunRecord,
+    GraphRevisionRecord,
+    MetricRecordRow,
+)
 
 
 def _serialize_graph(graph: MethodologyGraph) -> dict[str, Any]:
@@ -329,3 +340,131 @@ def reap_expired_leases(
     # The bulk UPDATE may touch rows already present in this session.
     session.expire_all()
     return int(result.rowcount or 0)
+
+
+def metric_record_from_row(row: MetricRecordRow) -> MetricRecord:
+    """Convert a persisted metric row into its contract."""
+    return MetricRecord(
+        metric_id=row.metric_id,
+        run_id=row.run_id,
+        name=row.name,
+        value=row.value,
+        result_kind=ResultKind(row.result_kind),
+    )
+
+
+def artifact_record_from_row(row: ArtifactRecordRow) -> ArtifactRecord:
+    """Convert a persisted artifact row into its contract."""
+    return ArtifactRecord(
+        artifact_id=row.artifact_id,
+        run_id=row.run_id,
+        kind=row.kind,
+        uri=row.uri,
+        sha256=row.sha256,
+        result_kind=ResultKind(row.result_kind),
+    )
+
+
+def save_metric_record(
+    session: Session,
+    record: MetricRecord,
+) -> MetricRecordRow:
+    """Stage a metric record and flush it without committing the transaction."""
+    row = MetricRecordRow(
+        metric_id=record.metric_id,
+        run_id=record.run_id,
+        name=record.name,
+        value=record.value,
+        result_kind=record.result_kind.value,
+    )
+    session.add(row)
+    try:
+        session.flush()
+    except IntegrityError as exc:
+        session.rollback()
+        raise BizoraError(
+            ErrorCode.RESOURCE_CONFLICT,
+            "The metric record conflicts with an existing database record.",
+            details={"run_id": record.run_id, "metric_id": record.metric_id},
+        ) from exc
+    return row
+
+
+def get_metric_record(
+    session: Session,
+    *,
+    run_id: str,
+    metric_id: str,
+) -> MetricRecordRow | None:
+    """Retrieve one metric record by run and metric id."""
+    statement = select(MetricRecordRow).where(
+        MetricRecordRow.run_id == run_id,
+        MetricRecordRow.metric_id == metric_id,
+    )
+    return session.scalar(statement)
+
+
+def list_metrics_for_run(
+    session: Session,
+    run_id: str,
+) -> list[MetricRecordRow]:
+    """List one run's metric records ordered by name."""
+    statement = (
+        select(MetricRecordRow)
+        .where(MetricRecordRow.run_id == run_id)
+        .order_by(MetricRecordRow.name.asc())
+    )
+    return list(session.scalars(statement))
+
+
+def save_artifact_record(
+    session: Session,
+    record: ArtifactRecord,
+) -> ArtifactRecordRow:
+    """Stage an artifact record and flush it without committing the transaction."""
+    row = ArtifactRecordRow(
+        artifact_id=record.artifact_id,
+        run_id=record.run_id,
+        kind=record.kind,
+        uri=record.uri,
+        sha256=record.sha256,
+        result_kind=record.result_kind.value,
+    )
+    session.add(row)
+    try:
+        session.flush()
+    except IntegrityError as exc:
+        session.rollback()
+        raise BizoraError(
+            ErrorCode.RESOURCE_CONFLICT,
+            "The artifact record conflicts with an existing database record.",
+            details={"run_id": record.run_id, "artifact_id": record.artifact_id},
+        ) from exc
+    return row
+
+
+def get_artifact_record(
+    session: Session,
+    *,
+    run_id: str,
+    artifact_id: str,
+) -> ArtifactRecordRow | None:
+    """Retrieve one artifact record by run and artifact id."""
+    statement = select(ArtifactRecordRow).where(
+        ArtifactRecordRow.run_id == run_id,
+        ArtifactRecordRow.artifact_id == artifact_id,
+    )
+    return session.scalar(statement)
+
+
+def list_artifacts_for_run(
+    session: Session,
+    run_id: str,
+) -> list[ArtifactRecordRow]:
+    """List one run's artifact records ordered by artifact id."""
+    statement = (
+        select(ArtifactRecordRow)
+        .where(ArtifactRecordRow.run_id == run_id)
+        .order_by(ArtifactRecordRow.artifact_id.asc())
+    )
+    return list(session.scalars(statement))

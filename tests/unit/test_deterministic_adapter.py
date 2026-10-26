@@ -147,6 +147,8 @@ def test_execute_succeeds_and_echoes_reproducibility() -> None:
     assert result.echo.code_revision == "abcdef1"
     assert result.echo.graph_version == 1
     assert result.diagnostics != ()
+    assert result.metrics == ()
+    assert result.artifacts == ()
 
 
 def test_execute_is_deterministic() -> None:

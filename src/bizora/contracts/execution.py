@@ -1,12 +1,13 @@
 """Execution boundary contracts for controlled experiment runs."""
 
 import json
+import math
 from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from bizora.contracts.experiment import ExperimentConfig
+from bizora.contracts.experiment import ExperimentConfig, ResultKind
 from bizora.contracts.graph import MethodologyGraph
 
 
@@ -99,8 +100,37 @@ class ReproducibilityEcho(BaseModel):
     graph_version: int = Field(ge=1)
 
 
+class ReportedMetric(BaseModel):
+    """One adapter-reported metric value, keyed by the adapter's metric id."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    metric_id: str = Field(min_length=1, max_length=128)
+    name: str = Field(min_length=1, max_length=128)
+    value: float
+    result_kind: ResultKind
+
+    @model_validator(mode="after")
+    def validate_finite_value(self) -> "ReportedMetric":
+        if not math.isfinite(self.value):
+            raise ValueError("Metric values must be finite.")
+        return self
+
+
+class ReportedArtifact(BaseModel):
+    """One adapter-reported artifact reference."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    artifact_id: str = Field(min_length=1, max_length=128)
+    kind: str = Field(min_length=1, max_length=64)
+    uri: str = Field(min_length=1, max_length=1024)
+    sha256: str | None = Field(default=None, min_length=64, max_length=64)
+    result_kind: ResultKind
+
+
 class ExecutionResult(BaseModel):
-    """Outcome of one adapter execution; diagnostics only, never metrics."""
+    """Outcome of one adapter execution with its reported results."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -108,6 +138,8 @@ class ExecutionResult(BaseModel):
     status: ExecutionStatus
     echo: ReproducibilityEcho
     diagnostics: tuple[str, ...] = Field(default=(), max_length=32)
+    metrics: tuple[ReportedMetric, ...] = Field(default=(), max_length=100)
+    artifacts: tuple[ReportedArtifact, ...] = Field(default=(), max_length=100)
     error: StructuredError | None = None
 
     @model_validator(mode="after")
@@ -115,6 +147,12 @@ class ExecutionResult(BaseModel):
         for entry in self.diagnostics:
             if len(entry) > 2000:
                 raise ValueError("Diagnostic entries must be at most 2000 characters.")
+        metric_ids = [metric.metric_id for metric in self.metrics]
+        if len(metric_ids) != len(set(metric_ids)):
+            raise ValueError("Reported metric ids must be unique within a result.")
+        artifact_ids = [artifact.artifact_id for artifact in self.artifacts]
+        if len(artifact_ids) != len(set(artifact_ids)):
+            raise ValueError("Reported artifact ids must be unique within a result.")
         if self.status == ExecutionStatus.FAILED and self.error is None:
             raise ValueError("A failed execution result must carry a structured error.")
         if self.status == ExecutionStatus.SUCCEEDED and self.error is not None:

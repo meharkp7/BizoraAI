@@ -239,9 +239,102 @@ def test_result_rejects_oversized_diagnostic_entry() -> None:
         )
 
 
-def test_result_carries_no_metric_values() -> None:
-    assert "metrics" not in ExecutionResult.model_fields
-    assert "metric_values" not in ExecutionResult.model_fields
+def test_result_defaults_to_no_reported_results() -> None:
+    result = ExecutionResult.model_validate(
+        {
+            "run_id": "run-1",
+            "status": ExecutionStatus.SUCCEEDED.value,
+            "echo": valid_echo_data(),
+        }
+    )
+
+    assert result.metrics == ()
+    assert result.artifacts == ()
+
+
+def test_result_accepts_reported_metrics_and_artifacts() -> None:
+    result = ExecutionResult.model_validate(
+        {
+            "run_id": "run-1",
+            "status": ExecutionStatus.SUCCEEDED.value,
+            "echo": valid_echo_data(),
+            "metrics": [
+                {
+                    "metric_id": "metric-1",
+                    "name": "accuracy",
+                    "value": 0.92,
+                    "result_kind": "measured",
+                }
+            ],
+            "artifacts": [
+                {
+                    "artifact_id": "artifact-1",
+                    "kind": "checkpoint",
+                    "uri": "file:///tmp/checkpoint",
+                    "result_kind": "measured",
+                }
+            ],
+        }
+    )
+
+    assert result.metrics[0].name == "accuracy"
+    assert result.artifacts[0].kind == "checkpoint"
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_reported_metric_rejects_non_finite_values(value: float) -> None:
+    with pytest.raises(ValidationError, match="finite"):
+        ExecutionResult.model_validate(
+            {
+                "run_id": "run-1",
+                "status": ExecutionStatus.SUCCEEDED.value,
+                "echo": valid_echo_data(),
+                "metrics": [
+                    {
+                        "metric_id": "metric-1",
+                        "name": "accuracy",
+                        "value": value,
+                        "result_kind": "measured",
+                    }
+                ],
+            }
+        )
+
+
+def test_result_rejects_duplicate_metric_ids() -> None:
+    metric = {
+        "metric_id": "metric-1",
+        "name": "accuracy",
+        "value": 0.92,
+        "result_kind": "measured",
+    }
+    with pytest.raises(ValidationError, match="unique"):
+        ExecutionResult.model_validate(
+            {
+                "run_id": "run-1",
+                "status": ExecutionStatus.SUCCEEDED.value,
+                "echo": valid_echo_data(),
+                "metrics": [metric, dict(metric)],
+            }
+        )
+
+
+def test_result_rejects_duplicate_artifact_ids() -> None:
+    artifact = {
+        "artifact_id": "artifact-1",
+        "kind": "checkpoint",
+        "uri": "file:///tmp/checkpoint",
+        "result_kind": "measured",
+    }
+    with pytest.raises(ValidationError, match="unique"):
+        ExecutionResult.model_validate(
+            {
+                "run_id": "run-1",
+                "status": ExecutionStatus.SUCCEEDED.value,
+                "echo": valid_echo_data(),
+                "artifacts": [artifact, dict(artifact)],
+            }
+        )
 
 
 def test_execution_contracts_are_immutable() -> None:
