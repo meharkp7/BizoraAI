@@ -15,6 +15,11 @@ from sqlalchemy.orm import Session
 
 from bizora.contracts.graph import MethodologyGraph
 from bizora.contracts.patches import GraphPatch
+from bizora.contracts.run import (
+    CreateExperimentRunRequest,
+    ExperimentRun,
+    TransitionExperimentRunRequest,
+)
 from bizora.core.config import get_settings
 from bizora.core.errors import BizoraError, ErrorCode
 from bizora.core.extraction_persistence_service import (
@@ -22,6 +27,7 @@ from bizora.core.extraction_persistence_service import (
 )
 from bizora.core.graph_persistence_service import GraphPersistenceService
 from bizora.core.patch_service import GraphPatchService
+from bizora.core.run_service import ExperimentRunService
 from bizora.db.repository import get_graph_revision
 from bizora.db.session import get_db_session
 from bizora.providers.base import (
@@ -240,6 +246,55 @@ def get_graph(
     return MethodologyGraph.model_validate(record.graph_payload)
 
 
+@router.post(
+    "/api/v1/experiments/runs",
+    response_model=ExperimentRun,
+    status_code=status.HTTP_201_CREATED,
+    tags=["experiments"],
+)
+def create_experiment_run(
+    request: CreateExperimentRunRequest,
+    session: Session = DB_SESSION_DEPENDENCY,
+) -> ExperimentRun:
+    """Create a pending run bound to an exact persisted graph revision."""
+    return ExperimentRunService.create_run(
+        session,
+        request.config,
+        run_id=request.run_id,
+    )
+
+
+@router.get(
+    "/api/v1/experiments/runs/{run_id}",
+    response_model=ExperimentRun,
+    tags=["experiments"],
+)
+def get_experiment_run(
+    run_id: str,
+    session: Session = DB_SESSION_DEPENDENCY,
+) -> ExperimentRun:
+    """Return one experiment run by its identifier."""
+    return ExperimentRunService.get_run(session, run_id)
+
+
+@router.post(
+    "/api/v1/experiments/runs/{run_id}/transitions",
+    response_model=ExperimentRun,
+    tags=["experiments"],
+)
+def transition_experiment_run(
+    run_id: str,
+    request: TransitionExperimentRunRequest,
+    session: Session = DB_SESSION_DEPENDENCY,
+) -> ExperimentRun:
+    """Move an experiment run to a new lifecycle state."""
+    return ExperimentRunService.transition_run(
+        session,
+        run_id,
+        to_state=request.to_state,
+        error=request.error,
+    )
+
 
 def register_error_handlers(app: FastAPI) -> None:
     """Register consistent JSON responses for domain exceptions."""
@@ -252,11 +307,12 @@ def register_error_handlers(app: FastAPI) -> None:
         """Convert domain errors into stable HTTP responses."""
         del request
 
-        status_code = (
-            status.HTTP_409_CONFLICT
-            if exc.code == ErrorCode.RESOURCE_CONFLICT
-            else status.HTTP_422_UNPROCESSABLE_CONTENT
-        )
+        if exc.code == ErrorCode.RESOURCE_CONFLICT:
+            status_code = status.HTTP_409_CONFLICT
+        elif exc.code == ErrorCode.RESOURCE_NOT_FOUND:
+            status_code = status.HTTP_404_NOT_FOUND
+        else:
+            status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
 
         return JSONResponse(
             status_code=status_code,
