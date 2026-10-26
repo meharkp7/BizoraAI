@@ -187,3 +187,102 @@ def test_create_graph_revision_rejects_mismatched_path(
     )
 
     assert response.status_code == 422
+
+
+def test_apply_graph_patch_creates_revision(client: TestClient) -> None:
+    initial = client.post("/api/v1/graphs", json=make_graph_payload())
+    assert initial.status_code == 201
+
+    patch = {
+        "patch_id": "patch-api-1",
+        "base_graph_id": "graph-api",
+        "base_version": 1,
+        "operation": "add_node",
+        "target_id": None,
+        "payload": {
+            "node": {
+                "id": "normalizer",
+                "kind": "preprocessing",
+                "label": "Normalize image",
+            }
+        },
+        "rationale": "Add image normalization",
+        "requested_by": "api-test",
+    }
+
+    response = client.post(
+        "/api/v1/graphs/project-api/graph-api/patches",
+        json=patch,
+    )
+
+    assert response.status_code == 201
+    assert response.json()["version"] == 2
+    assert response.json()["parent_version"] == 1
+    assert any(
+        node["id"] == "normalizer"
+        for node in response.json()["nodes"]
+    )
+
+
+def test_apply_graph_patch_rejects_missing_base_revision(
+    client: TestClient,
+) -> None:
+    patch = {
+        "patch_id": "patch-api-missing",
+        "base_graph_id": "graph-api",
+        "base_version": 1,
+        "operation": "add_node",
+        "payload": {
+            "node": {
+                "id": "normalizer",
+                "kind": "preprocessing",
+                "label": "Normalize image",
+            }
+        },
+        "rationale": "Test missing graph",
+        "requested_by": "api-test",
+    }
+
+    response = client.post(
+        "/api/v1/graphs/project-api/graph-api/patches",
+        json=patch,
+    )
+
+    assert response.status_code == 404
+
+
+def test_apply_graph_patch_rejects_invalid_result(
+    client: TestClient,
+) -> None:
+    initial = client.post("/api/v1/graphs", json=make_graph_payload())
+    assert initial.status_code == 201
+
+    patch = {
+        "patch_id": "patch-api-invalid",
+        "base_graph_id": "graph-api",
+        "base_version": 1,
+        "operation": "add_edge",
+        "payload": {
+            "edge": {
+                "id": "bad-edge",
+                "source": "input",
+                "target": "missing-node",
+            }
+        },
+        "rationale": "Test invalid edge",
+        "requested_by": "api-test",
+    }
+
+    response = client.post(
+        "/api/v1/graphs/project-api/graph-api/patches",
+        json=patch,
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "INVALID_GRAPH_PATCH"
+
+    latest = client.get(
+        "/api/v1/graphs/project-api/graph-api/revisions/1"
+    )
+    assert latest.status_code == 200
+    assert latest.json()["version"] == 1

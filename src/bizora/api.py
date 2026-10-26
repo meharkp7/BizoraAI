@@ -14,8 +14,10 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from bizora.contracts.graph import MethodologyGraph
+from bizora.contracts.patches import GraphPatch
 from bizora.core.errors import BizoraError, ErrorCode
 from bizora.core.graph_persistence_service import GraphPersistenceService
+from bizora.core.patch_service import GraphPatchService
 from bizora.db.repository import get_graph_revision
 from bizora.db.session import get_db_session
 
@@ -80,6 +82,58 @@ def create_graph_revision(
         graph,
         created_by=graph.created_by,
     )
+    return MethodologyGraph.model_validate(record.graph_payload)
+
+
+@router.post(
+    "/api/v1/graphs/{project_id}/{graph_id}/patches",
+    response_model=MethodologyGraph,
+    status_code=status.HTTP_201_CREATED,
+    tags=["graphs"],
+)
+def apply_graph_patch(
+    project_id: str,
+    graph_id: str,
+    patch: GraphPatch,
+    session: Session = DB_SESSION_DEPENDENCY,
+) -> MethodologyGraph:
+    """Apply a validated patch and persist the resulting graph revision."""
+    if patch.base_graph_id != graph_id:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Path graph_id must match patch.base_graph_id.",
+        )
+
+    base_record = get_graph_revision(
+        session,
+        project_id=project_id,
+        graph_id=graph_id,
+        version=patch.base_version,
+    )
+
+    if base_record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Base graph revision not found.",
+        )
+
+    base_graph = MethodologyGraph.model_validate(
+        base_record.graph_payload
+    )
+
+    patched_graph = GraphPatchService.apply_patch(base_graph, patch)
+
+    # Re-check the latest persisted snapshot transactionally before saving.
+    record = GraphPersistenceService.create_revision(
+        session,
+        base_graph,
+        created_by=patched_graph.created_by,
+        nodes=patched_graph.nodes,
+        edges=patched_graph.edges,
+        source_ids=patched_graph.source_ids,
+        title=patched_graph.title,
+    )
+
     return MethodologyGraph.model_validate(record.graph_payload)
 
 @router.get(
