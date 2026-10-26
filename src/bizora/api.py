@@ -71,7 +71,7 @@ def create_graph_revision(
     """Create a new revision from the exact current persisted snapshot."""
     if graph.project_id != project_id or graph.graph_id != graph_id:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Path identifiers must match the graph payload.",
         )
 

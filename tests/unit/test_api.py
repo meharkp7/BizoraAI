@@ -158,7 +158,7 @@ def test_create_graph_revision_rejects_stale_snapshot(
     )
 
     assert response.status_code == 409
-    assert response.json()["error"]["code"] == "resource_conflict"
+    assert response.json()["error"]["code"] == "RESOURCE_CONFLICT"
 
 
 def test_create_graph_revision_requires_existing_graph(
@@ -173,7 +173,7 @@ def test_create_graph_revision_requires_existing_graph(
     )
 
     assert response.status_code == 409
-    assert response.json()["error"]["code"] == "resource_conflict"
+    assert response.json()["error"]["code"] == "RESOURCE_CONFLICT"
 
 
 def test_create_graph_revision_rejects_mismatched_path(
