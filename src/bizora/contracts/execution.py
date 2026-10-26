@@ -1,0 +1,110 @@
+"""Execution boundary contracts for controlled experiment runs."""
+
+from enum import StrEnum
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from bizora.contracts.experiment import ExperimentConfig
+from bizora.contracts.graph import MethodologyGraph
+
+
+class ExecutionErrorCode(StrEnum):
+    ADAPTER_UNKNOWN = "adapter_unknown"
+    ADAPTER_INCOMPATIBLE = "adapter_incompatible"
+    GRAPH_MISMATCH = "graph_mismatch"
+    TIMEOUT = "timeout"
+    MEMORY_SOFT_LIMIT = "memory_soft_limit"
+    ADAPTER_FAILED = "adapter_failed"
+    RESULT_INVALID = "result_invalid"
+    LEASE_EXPIRED = "lease_expired"
+
+
+class ExecutionStatus(StrEnum):
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
+class StructuredError(BaseModel):
+    """Machine-readable failure detail recorded for a run."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    code: ExecutionErrorCode
+    message: str = Field(min_length=1, max_length=2000)
+    exit_code: int | None = None
+    signal: int | None = Field(default=None, ge=0)
+
+
+class ExecutionLimits(BaseModel):
+    """Resource bounds enforced around one adapter execution."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    timeout_seconds: int = Field(ge=1, le=86_400)
+    cpu_seconds: int = Field(ge=1, le=86_400)
+    soft_rss_mb: int = Field(ge=1)
+    max_output_bytes: int = Field(ge=1024, le=100_000_000)
+    kill_grace_seconds: int = Field(ge=0, le=300)
+
+
+class AdapterExecutionRequest(BaseModel):
+    """Immutable inputs handed to one adapter execution."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: str = Field(min_length=1, max_length=128)
+    config: ExperimentConfig
+    graph: MethodologyGraph
+    limits: ExecutionLimits
+
+    @model_validator(mode="after")
+    def validate_request_binding(self) -> "AdapterExecutionRequest":
+        config = self.config
+        graph = self.graph
+        if (
+            config.project_id != graph.project_id
+            or config.graph_id != graph.graph_id
+            or config.graph_version != graph.version
+        ):
+            raise ValueError(
+                "Request config must reference the exact supplied graph revision."
+            )
+        return self
+
+
+class ReproducibilityEcho(BaseModel):
+    """Adapter-observed reproducibility fields, echoed back for verification."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    adapter_id: str = Field(min_length=1, max_length=128)
+    adapter_version: str = Field(min_length=1, max_length=64)
+    dataset_id: str = Field(min_length=1, max_length=128)
+    dataset_revision: str = Field(min_length=1, max_length=128)
+    code_revision: str = Field(min_length=7, max_length=64)
+    seed: int = Field(ge=0, le=2**32 - 1)
+    graph_id: str = Field(min_length=1, max_length=128)
+    graph_version: int = Field(ge=1)
+
+
+class ExecutionResult(BaseModel):
+    """Outcome of one adapter execution; diagnostics only, never metrics."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: str = Field(min_length=1, max_length=128)
+    status: ExecutionStatus
+    echo: ReproducibilityEcho
+    diagnostics: tuple[str, ...] = Field(default=(), max_length=32)
+    error: StructuredError | None = None
+
+    @model_validator(mode="after")
+    def validate_result_consistency(self) -> "ExecutionResult":
+        for entry in self.diagnostics:
+            if len(entry) > 2000:
+                raise ValueError("Diagnostic entries must be at most 2000 characters.")
+        if self.status == ExecutionStatus.FAILED and self.error is None:
+            raise ValueError("A failed execution result must carry a structured error.")
+        if self.status == ExecutionStatus.SUCCEEDED and self.error is not None:
+            raise ValueError("A succeeded execution result must not carry an error.")
+        return self

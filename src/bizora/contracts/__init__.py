@@ -1,6 +1,15 @@
 """Versioned contracts shared by Bizora services."""
 
 from bizora.contracts.evidence import EvidenceRef, EvidenceStatus, Provenance
+from bizora.contracts.execution import (
+    AdapterExecutionRequest,
+    ExecutionErrorCode,
+    ExecutionLimits,
+    ExecutionResult,
+    ExecutionStatus,
+    ReproducibilityEcho,
+    StructuredError,
+)
 from bizora.contracts.experiment import ExperimentConfig, ResultKind
 from bizora.contracts.graph import GraphEdge, GraphNode, MethodologyGraph, NodeKind, validate_graph
 from bizora.contracts.patches import GraphPatch, PatchOperation
@@ -20,10 +29,15 @@ from bizora.contracts.run import (
 __all__ = [
     "ALLOWED_TRANSITIONS",
     "TERMINAL_STATES",
+    "AdapterExecutionRequest",
     "ArtifactRecord",
     "CreateExperimentRunRequest",
     "EvidenceRef",
     "EvidenceStatus",
+    "ExecutionErrorCode",
+    "ExecutionLimits",
+    "ExecutionResult",
+    "ExecutionStatus",
     "ExperimentConfig",
     "ExperimentRun",
     "GraphEdge",
@@ -34,8 +48,10 @@ __all__ = [
     "NodeKind",
     "PatchOperation",
     "Provenance",
+    "ReproducibilityEcho",
     "ResultKind",
     "RunState",
+    "StructuredError",
     "TransitionExperimentRunRequest",
     "is_terminal",
     "is_valid_transition",
