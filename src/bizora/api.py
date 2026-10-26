@@ -50,7 +50,7 @@ def health_check() -> dict[str, str]:
 )
 def create_graph(
     graph: MethodologyGraph,
-    session: Session = DB_SESSION_DEPENDENCY, 
+    session: Session = DB_SESSION_DEPENDENCY,
 ) -> MethodologyGraph:
     """Validate and persist a graph's initial revision."""
     GraphPersistenceService.create_initial_revision(session, graph)
