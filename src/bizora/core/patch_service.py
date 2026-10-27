@@ -12,6 +12,7 @@ from bizora.contracts.graph import (
     MethodologyGraph,
 )
 from bizora.contracts.patches import GraphPatch, PatchOperation
+from bizora.core.entity_service import check_replacement
 from bizora.core.errors import BizoraError, ErrorCode, GraphValidationError
 from bizora.core.graph_service import GraphService
 
@@ -118,6 +119,7 @@ def _check_patch_base(
 
 
 def _apply_operation(
+    graph: MethodologyGraph,
     nodes: list[GraphNode],
     edges: list[GraphEdge],
     patch: GraphPatch,
@@ -202,6 +204,19 @@ def _apply_operation(
                 details={"node_id": target_id},
             )
         nodes[index] = node
+        compatibility = check_replacement(graph, target_id, node)
+        if not compatibility.compatible:
+            raise _patch_error(
+                "The replacement drops interfaces the original component exposes.",
+                details={
+                    "node_id": target_id,
+                    "missing_interfaces": [
+                        missing.model_dump(mode="json")
+                        for missing in compatibility.missing_interfaces
+                    ],
+                    "incident_edge_ids": list(compatibility.incident_edge_ids),
+                },
+            )
 
     elif patch.operation == PatchOperation.ADD_EDGE:
         edge = _parse_edge(patch)
@@ -274,7 +289,7 @@ class GraphPatchService:
 
         nodes = list(graph.nodes)
         edges = list(graph.edges)
-        _apply_operation(nodes, edges, patch)
+        _apply_operation(graph, nodes, edges, patch)
 
         try:
             return GraphService.create_revision(
@@ -314,7 +329,7 @@ class GraphPatchService:
         edges = list(graph.edges)
         for patch in batch:
             _check_patch_base(graph, patch)
-            _apply_operation(nodes, edges, patch)
+            _apply_operation(graph, nodes, edges, patch)
 
         try:
             return GraphService.create_revision(

@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from bizora.contracts.comparison import RunComparison
 from bizora.contracts.diff import GraphRevisionDiff
+from bizora.contracts.domain import GraphEntities
 from bizora.contracts.graph import MethodologyGraph
 from bizora.contracts.layout import GraphLayout
 from bizora.contracts.patches import GraphPatch, GraphPatchBatch
@@ -38,6 +39,7 @@ from bizora.contracts.table import (
 from bizora.core.comparison_service import ComparisonService
 from bizora.core.config import get_settings
 from bizora.core.diff_service import RevisionDiffService
+from bizora.core.entity_service import resolve_graph
 from bizora.core.errors import BizoraError, ErrorCode
 from bizora.core.execution_service import ExecutionService, WorkerConfig
 from bizora.core.extraction_persistence_service import (
@@ -560,6 +562,41 @@ def get_graph(
         )
 
     return MethodologyGraph.model_validate(record.graph_payload)
+
+
+@router.get(
+    "/api/v1/graphs/{project_id}/{graph_id}/revisions/{version}/entities",
+    response_model=GraphEntities,
+    tags=["graphs"],
+)
+def get_graph_entities(
+    project_id: str,
+    graph_id: str,
+    version: int,
+    session: Session = DB_SESSION_DEPENDENCY,
+) -> GraphEntities:
+    """Return domain classification plus per-node entity resolutions."""
+    if version < 1:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Version must be a positive integer.",
+        )
+
+    record = get_graph_revision(
+        session,
+        project_id=project_id,
+        graph_id=graph_id,
+        version=version,
+    )
+
+    if record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Graph revision not found.",
+        )
+
+    graph = MethodologyGraph.model_validate(record.graph_payload)
+    return resolve_graph(graph)
 
 
 @router.put(
