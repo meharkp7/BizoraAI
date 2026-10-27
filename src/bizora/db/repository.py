@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from bizora.contracts.experiment import ExperimentConfig, ResultKind
 from bizora.contracts.graph import MethodologyGraph
+from bizora.contracts.layout import GraphLayout
 from bizora.contracts.run import (
     TERMINAL_STATES,
     ArtifactRecord,
@@ -23,6 +24,7 @@ from bizora.core.errors import BizoraError, ErrorCode
 from bizora.db.models import (
     ArtifactRecordRow,
     ExperimentRunRecord,
+    GraphLayoutRecord,
     GraphRevisionRecord,
     MetricRecordRow,
 )
@@ -494,3 +496,75 @@ def list_artifacts_for_run(
         .order_by(ArtifactRecordRow.artifact_id.asc())
     )
     return list(session.scalars(statement))
+
+
+def layout_from_record(record: GraphLayoutRecord) -> GraphLayout:
+    """Convert a persisted layout row into its contract."""
+    return GraphLayout.model_validate(record.layout_payload)
+
+
+def get_graph_layout(
+    session: Session,
+    *,
+    project_id: str,
+    graph_id: str,
+    version: int,
+) -> GraphLayoutRecord | None:
+    """Retrieve one revision's layout, if one was saved."""
+    statement = select(GraphLayoutRecord).where(
+        GraphLayoutRecord.project_id == project_id,
+        GraphLayoutRecord.graph_id == graph_id,
+        GraphLayoutRecord.version == version,
+    )
+    return session.scalar(statement)
+
+
+def save_graph_layout(
+    session: Session,
+    layout: GraphLayout,
+    *,
+    now: datetime,
+) -> GraphLayoutRecord:
+    """Insert or replace one revision's layout without committing.
+
+    Layouts are visual-only and mutable per revision: saving replaces any
+    prior layout for the same revision instead of versioning it.
+    """
+    payload = layout.model_dump(mode="json")
+    existing = get_graph_layout(
+        session,
+        project_id=layout.project_id,
+        graph_id=layout.graph_id,
+        version=layout.version,
+    )
+    if existing is None:
+        record = GraphLayoutRecord(
+            project_id=layout.project_id,
+            graph_id=layout.graph_id,
+            version=layout.version,
+            updated_by=layout.updated_by,
+            layout_payload=payload,
+            updated_at=now,
+        )
+        session.add(record)
+    else:
+        existing.updated_by = layout.updated_by
+        existing.layout_payload = payload
+        existing.updated_at = now
+        record = existing
+
+    try:
+        session.flush()
+    except IntegrityError as exc:
+        session.rollback()
+        raise BizoraError(
+            ErrorCode.RESOURCE_CONFLICT,
+            "The graph layout conflicts with an existing database record.",
+            details={
+                "project_id": layout.project_id,
+                "graph_id": layout.graph_id,
+                "version": layout.version,
+            },
+        ) from exc
+
+    return record

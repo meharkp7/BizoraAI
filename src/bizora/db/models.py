@@ -54,6 +54,41 @@ class GraphRevisionRecord(Base):
     )
 
 
+class GraphLayoutRecord(Base):
+    """A persisted visual-only layout bound to one graph revision.
+
+    Layouts are mutable per revision and never affect graph semantics;
+    saving a layout must not create a graph revision.
+    """
+
+    __tablename__ = "graph_layouts"
+    __table_args__ = (
+        UniqueConstraint(
+            "project_id",
+            "graph_id",
+            "version",
+            name="uq_graph_layout_project_graph_version",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    graph_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    updated_by: Mapped[str] = mapped_column(String(128), nullable=False)
+
+    layout_payload: Mapped[dict[str, Any]] = mapped_column(
+        JSON,
+        nullable=False,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+
 class ExperimentRunRecord(Base):
     """A persisted experiment run bound to one exact graph revision."""
 

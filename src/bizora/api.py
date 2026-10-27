@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from bizora.contracts.comparison import RunComparison
 from bizora.contracts.graph import MethodologyGraph
+from bizora.contracts.layout import GraphLayout
 from bizora.contracts.patches import GraphPatch
 from bizora.contracts.run import (
     ArtifactRecord,
@@ -31,6 +32,7 @@ from bizora.core.extraction_persistence_service import (
     ExtractionPersistenceService,
 )
 from bizora.core.graph_persistence_service import GraphPersistenceService
+from bizora.core.layout_service import LayoutService
 from bizora.core.patch_service import GraphPatchService
 from bizora.core.run_service import ExperimentRunService
 from bizora.db.repository import (
@@ -225,6 +227,7 @@ def apply_graph_patch(
 
     return MethodologyGraph.model_validate(record.graph_payload)
 
+
 @router.get(
     "/api/v1/graphs/{project_id}/{graph_id}/revisions/{version}",
     response_model=MethodologyGraph,
@@ -257,6 +260,52 @@ def get_graph(
         )
 
     return MethodologyGraph.model_validate(record.graph_payload)
+
+
+@router.put(
+    "/api/v1/graphs/{project_id}/{graph_id}/revisions/{version}/layout",
+    response_model=GraphLayout,
+    tags=["graphs"],
+)
+def save_graph_layout(
+    project_id: str,
+    graph_id: str,
+    version: int,
+    layout: GraphLayout,
+    session: Session = DB_SESSION_DEPENDENCY,
+) -> GraphLayout:
+    """Save a visual-only layout without altering the graph revision."""
+    if (
+        layout.project_id != project_id
+        or layout.graph_id != graph_id
+        or layout.version != version
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Path identifiers must match the layout payload.",
+        )
+
+    return LayoutService.save_layout(session, layout)
+
+
+@router.get(
+    "/api/v1/graphs/{project_id}/{graph_id}/revisions/{version}/layout",
+    response_model=GraphLayout,
+    tags=["graphs"],
+)
+def get_saved_graph_layout(
+    project_id: str,
+    graph_id: str,
+    version: int,
+    session: Session = DB_SESSION_DEPENDENCY,
+) -> GraphLayout:
+    """Return one revision's saved visual-only layout."""
+    return LayoutService.get_layout(
+        session,
+        project_id=project_id,
+        graph_id=graph_id,
+        version=version,
+    )
 
 
 @router.post(

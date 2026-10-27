@@ -22,6 +22,7 @@ from bizora.contracts.execution import (
 )
 from bizora.contracts.experiment import ExperimentConfig, ResultKind
 from bizora.contracts.graph import GraphEdge, GraphNode, MethodologyGraph, NodeKind, validate_graph
+from bizora.contracts.layout import CameraState, GraphLayout, NodePosition, ViewportState
 from bizora.contracts.patches import GraphPatch, PatchOperation
 from bizora.contracts.run import (
     ALLOWED_TRANSITIONS,
@@ -44,6 +45,7 @@ __all__ = [
     "ComparisonVerdict",
     "ConfigDifference",
     "CreateExperimentRunRequest",
+    "CameraState",
     "EvidenceRef",
     "EvidenceStatus",
     "ExecutionErrorCode",
@@ -53,6 +55,7 @@ __all__ = [
     "ExperimentConfig",
     "ExperimentRun",
     "GraphEdge",
+    "GraphLayout",
     "GraphNode",
     "GraphPair",
     "GraphPatch",
@@ -60,6 +63,7 @@ __all__ = [
     "MetricComparison",
     "MetricRecord",
     "NodeKind",
+    "NodePosition",
     "PatchOperation",
     "Provenance",
     "ReportedArtifact",
@@ -71,6 +75,7 @@ __all__ = [
     "SkippedMetric",
     "StructuredError",
     "TransitionExperimentRunRequest",
+    "ViewportState",
     "is_terminal",
     "is_valid_transition",
     "validate_graph",
