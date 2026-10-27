@@ -69,6 +69,42 @@ export function updateConfigPatch(
   });
 }
 
+export interface NodeReplacement {
+  kind: NodeKind;
+  label: string;
+  description: string | null;
+  config: Record<string, unknown>;
+}
+
+/** Swap a component in place: the ID is retained so all connections survive.
+ *  Evidence, provenance, and shapes carry over from the original node. */
+export function replaceNodePatch(
+  graph: MethodologyGraph,
+  node: GraphNode,
+  replacement: NodeReplacement,
+): GraphPatch {
+  return basePatch(
+    graph,
+    "replace_node",
+    `Replace ${node.id} (${node.label}) with ${replacement.label}`,
+    node.id,
+    {
+      node: {
+        id: node.id,
+        kind: replacement.kind,
+        label: replacement.label,
+        description: replacement.description,
+        config: replacement.config,
+        input_shape: node.input_shape,
+        output_shape: node.output_shape,
+        evidence: node.evidence,
+        provenance: node.provenance,
+        confidence: node.confidence,
+      },
+    },
+  );
+}
+
 /** Removal batch: edges first (explicit plus connected), then nodes. */
 export function removalBatch(
   graph: MethodologyGraph,

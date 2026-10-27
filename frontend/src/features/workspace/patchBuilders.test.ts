@@ -4,6 +4,7 @@ import {
   addEdgePatch,
   addNodePatch,
   removalBatch,
+  replaceNodePatch,
   updateConfigPatch,
 } from "./patchBuilders.ts";
 
@@ -31,7 +32,29 @@ describe("patch builders", () => {
     });
   });
 
-  it("builds a config-update patch for the target node", () => {
+  it("builds a replace-node patch retaining the id", () => {
+    const patch = replaceNodePatch(graphFixture, graphFixture.nodes[1], {
+      kind: "operation",
+      label: "INT8 quantizer",
+      description: "Replacement quantizer",
+      config: { bits: 8 },
+    });
+    expect(patch).toMatchObject({
+      operation: "replace_node",
+      target_id: "encoder",
+      requested_by: "workspace-ui",
+    });
+    expect(patch.payload["node"]).toMatchObject({
+      id: "encoder",
+      kind: "operation",
+      label: "INT8 quantizer",
+      description: "Replacement quantizer",
+      config: { bits: 8 },
+    });
+    expect(patch.rationale).toContain("encoder");
+  });
+
+  it("builds an update-config patch", () => {
     const patch = updateConfigPatch(graphFixture, graphFixture.nodes[1], { layers: 24 });
     expect(patch).toMatchObject({
       operation: "update_node_config",

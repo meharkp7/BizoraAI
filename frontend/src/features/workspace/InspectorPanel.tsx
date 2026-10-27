@@ -1,5 +1,7 @@
 import { useState } from "react";
-import type { GraphEdge, GraphNode } from "../../lib/types.ts";
+import { NODE_KINDS } from "../../lib/constants.ts";
+import type { GraphEdge, GraphNode, NodeKind } from "../../lib/types.ts";
+import type { NodeReplacement } from "./patchBuilders.ts";
 import styles from "./InspectorPanel.module.css";
 
 function ProvenanceBadge({ value }: { value: string }) {
@@ -77,18 +79,130 @@ function ConfigEditor({
   );
 }
 
+function ReplaceForm({
+  node,
+  disabled,
+  onReplace,
+}: {
+  node: GraphNode;
+  disabled: boolean;
+  onReplace: (replacement: NodeReplacement) => void;
+}) {
+  const [kind, setKind] = useState<NodeKind>(node.kind);
+  const [label, setLabel] = useState(node.label);
+  const [description, setDescription] = useState(node.description ?? "");
+  const [configText, setConfigText] = useState(() => JSON.stringify(node.config, null, 2));
+  const [error, setError] = useState<string | null>(null);
+
+  function replace(): void {
+    if (!label.trim()) {
+      setError("A replacement label is required.");
+      return;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(configText) as unknown;
+    } catch {
+      setError("Configuration must be valid JSON.");
+      return;
+    }
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      setError("Configuration must be a JSON object.");
+      return;
+    }
+    setError(null);
+    onReplace({
+      kind,
+      label: label.trim(),
+      description: description.trim() === "" ? null : description.trim(),
+      config: parsed as Record<string, unknown>,
+    });
+  }
+
+  return (
+    <form
+      className={styles.replaceForm}
+      aria-label="Replace component"
+      onSubmit={(event) => {
+        event.preventDefault();
+        replace();
+      }}
+    >
+      <h3>Replace component</h3>
+      <label>
+        Kind
+        <select
+          value={kind}
+          onChange={(event) => setKind(event.target.value as NodeKind)}
+          disabled={disabled}
+        >
+          {NODE_KINDS.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Label
+        <input
+          value={label}
+          onChange={(event) => setLabel(event.target.value)}
+          autoComplete="off"
+          spellCheck={false}
+          disabled={disabled}
+        />
+      </label>
+      <label>
+        Description
+        <textarea
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+          rows={2}
+          spellCheck={false}
+          disabled={disabled}
+        />
+      </label>
+      <label>
+        Configuration JSON
+        <textarea
+          value={configText}
+          onChange={(event) => setConfigText(event.target.value)}
+          rows={4}
+          spellCheck={false}
+          aria-label="Replacement configuration JSON"
+          disabled={disabled}
+        />
+      </label>
+      <div className={styles.editorRow}>
+        <button type="submit" disabled={disabled}>
+          Replace component
+        </button>
+        <span className={styles.mergeNote}>Keeps the ID, so connections survive.</span>
+      </div>
+      {error ? (
+        <p className={styles.editorError} role="alert">
+          {error}
+        </p>
+      ) : null}
+    </form>
+  );
+}
+
 export function InspectorPanel({
   node,
   edge,
   formatShape,
   disabled,
   onUpdateConfig,
+  onReplaceNode,
 }: {
   node: GraphNode | null;
   edge: GraphEdge | null;
   formatShape: (shape: (number | null)[] | null) => string;
   disabled?: boolean;
   onUpdateConfig?: (config: Record<string, unknown>) => void;
+  onReplaceNode?: (replacement: NodeReplacement) => void;
 }) {
   if (!node && !edge) {
     return (
@@ -187,6 +301,14 @@ export function InspectorPanel({
           node={node}
           disabled={disabled === true}
           onApply={onUpdateConfig}
+        />
+      ) : null}
+      {onReplaceNode ? (
+        <ReplaceForm
+          key={`replace-${node.id}`}
+          node={node}
+          disabled={disabled === true}
+          onReplace={onReplaceNode}
         />
       ) : null}
     </section>

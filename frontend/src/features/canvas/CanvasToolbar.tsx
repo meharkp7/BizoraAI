@@ -1,21 +1,11 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
+import { NODE_KINDS } from "../../lib/constants.ts";
 import type { NodeKind } from "../../lib/types.ts";
 import { isValidNodeId, suggestNodeId } from "./ids.ts";
 import styles from "./CanvasToolbar.module.css";
 
-const KINDS: NodeKind[] = [
-  "input",
-  "preprocessing",
-  "model",
-  "operation",
-  "loss",
-  "optimizer",
-  "evaluation",
-  "output",
-  "dataset",
-  "component",
-];
+const KINDS: readonly NodeKind[] = NODE_KINDS;
 
 export interface NewNodeSpec {
   id: string;

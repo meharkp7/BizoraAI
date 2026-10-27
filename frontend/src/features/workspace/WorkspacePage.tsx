@@ -34,6 +34,7 @@ import {
   addEdgePatch,
   addNodePatch,
   removalBatch,
+  replaceNodePatch,
   updateConfigPatch,
 } from "./patchBuilders.ts";
 import { EvidencePanel } from "./EvidencePanel.tsx";
@@ -512,6 +513,12 @@ function WorkspaceLoaded({
             onUpdateConfig={
               selectedNode
                 ? (config) => onSubmit([updateConfigPatch(graph, selectedNode, config)])
+                : undefined
+            }
+            onReplaceNode={
+              selectedNode
+                ? (replacement) =>
+                    onSubmit([replaceNodePatch(graph, selectedNode, replacement)])
                 : undefined
             }
           />
