@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from bizora.contracts.comparison import RunComparison
+from bizora.contracts.diff import GraphRevisionDiff
 from bizora.contracts.graph import MethodologyGraph
 from bizora.contracts.layout import GraphLayout
 from bizora.contracts.patches import GraphPatch
@@ -27,6 +28,7 @@ from bizora.contracts.run import (
 )
 from bizora.core.comparison_service import ComparisonService
 from bizora.core.config import get_settings
+from bizora.core.diff_service import RevisionDiffService
 from bizora.core.errors import BizoraError, ErrorCode
 from bizora.core.extraction_persistence_service import (
     ExtractionPersistenceService,
@@ -305,6 +307,44 @@ def get_saved_graph_layout(
         project_id=project_id,
         graph_id=graph_id,
         version=version,
+    )
+
+
+@router.get(
+    "/api/v1/graphs/{project_id}/{graph_id}/diff",
+    response_model=GraphRevisionDiff,
+    tags=["graphs"],
+)
+def diff_graph_revisions(
+    project_id: str,
+    graph_id: str,
+    session: Session = DB_SESSION_DEPENDENCY,
+    base_version: int = Query(ge=1),
+    target_version: int = Query(ge=1),
+) -> GraphRevisionDiff:
+    """Return the deterministic diff between two persisted revisions."""
+    base_record = get_graph_revision(
+        session,
+        project_id=project_id,
+        graph_id=graph_id,
+        version=base_version,
+    )
+    target_record = get_graph_revision(
+        session,
+        project_id=project_id,
+        graph_id=graph_id,
+        version=target_version,
+    )
+
+    if base_record is None or target_record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Graph revision not found.",
+        )
+
+    return RevisionDiffService.diff(
+        MethodologyGraph.model_validate(base_record.graph_payload),
+        MethodologyGraph.model_validate(target_record.graph_payload),
     )
 
 

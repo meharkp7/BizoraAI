@@ -8,6 +8,7 @@ from bizora.contracts.comparison import (
     RunComparison,
     SkippedMetric,
 )
+from bizora.contracts.diff import ChangedEdge, ChangedNode, GraphRevisionDiff
 from bizora.contracts.evidence import EvidenceRef, EvidenceStatus, Provenance
 from bizora.contracts.execution import (
     AdapterExecutionRequest,
@@ -46,6 +47,8 @@ __all__ = [
     "ConfigDifference",
     "CreateExperimentRunRequest",
     "CameraState",
+    "ChangedEdge",
+    "ChangedNode",
     "EvidenceRef",
     "EvidenceStatus",
     "ExecutionErrorCode",
@@ -59,6 +62,7 @@ __all__ = [
     "GraphNode",
     "GraphPair",
     "GraphPatch",
+    "GraphRevisionDiff",
     "MethodologyGraph",
     "MetricComparison",
     "MetricRecord",
