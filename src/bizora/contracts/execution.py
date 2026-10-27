@@ -20,6 +20,7 @@ class ExecutionErrorCode(StrEnum):
     ADAPTER_FAILED = "adapter_failed"
     RESULT_INVALID = "result_invalid"
     LEASE_EXPIRED = "lease_expired"
+    ISOLATION_UNAVAILABLE = "isolation_unavailable"
 
 
 class ExecutionStatus(StrEnum):

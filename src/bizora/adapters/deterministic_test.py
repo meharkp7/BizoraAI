@@ -4,6 +4,7 @@ import hashlib
 import json
 from typing import Any
 
+from bizora.adapters.isolation import IsolationRequirement
 from bizora.contracts.execution import (
     AdapterExecutionRequest,
     ExecutionErrorCode,
@@ -31,6 +32,9 @@ class DeterministicTestAdapter:
 
     adapter_id = "bizora.deterministic-test"
     adapter_version = "0.1.0"
+    # First-party pure validation and hashing: no network, no subprocess,
+    # no filesystem writes. Safe for local-trusted execution.
+    isolation_requirement = IsolationRequirement.LOCAL_TRUSTED
 
     def check_compatibility(
         self,

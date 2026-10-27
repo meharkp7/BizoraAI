@@ -4,6 +4,7 @@ import pytest
 
 from bizora.adapters.base import ExecutionAdapter
 from bizora.adapters.deterministic_test import DeterministicTestAdapter
+from bizora.adapters.isolation import IsolationRequirement
 from bizora.adapters.registry import AdapterRegistry, create_default_registry
 from bizora.contracts.execution import AdapterExecutionRequest, ExecutionResult
 from bizora.contracts.experiment import ExperimentConfig
@@ -25,6 +26,10 @@ class StubAdapter:
     @property
     def adapter_version(self) -> str:
         return self._adapter_version
+
+    @property
+    def isolation_requirement(self) -> IsolationRequirement:
+        return IsolationRequirement.ISOLATED
 
     def check_compatibility(
         self,

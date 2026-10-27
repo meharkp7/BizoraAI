@@ -2,6 +2,7 @@
 
 from typing import Protocol, runtime_checkable
 
+from bizora.adapters.isolation import IsolationRequirement
 from bizora.contracts.execution import AdapterExecutionRequest, ExecutionResult
 from bizora.contracts.experiment import ExperimentConfig
 from bizora.contracts.graph import MethodologyGraph
@@ -19,6 +20,11 @@ class ExecutionAdapter(Protocol):
     @property
     def adapter_version(self) -> str:
         """Return the exact adapter version."""
+        ...
+
+    @property
+    def isolation_requirement(self) -> IsolationRequirement:
+        """Return the isolation tier required to execute safely."""
         ...
 
     def check_compatibility(

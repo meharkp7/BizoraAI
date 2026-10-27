@@ -21,6 +21,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 import bizora
+from bizora.adapters.isolation import (
+    IsolationProvider,
+    IsolationRequirement,
+    LocalIsolationProvider,
+    requirement_of,
+)
 from bizora.adapters.registry import AdapterRegistry, create_default_registry
 from bizora.contracts.execution import (
     AdapterExecutionRequest,
@@ -155,12 +161,16 @@ class ExecutionService:
         registry: AdapterRegistry | None = None,
         argv_factory: Callable[[str, str], list[str]] | None = None,
         rss_reader: Callable[[int], int | None] | None = None,
+        isolation_provider: IsolationProvider | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._config = config
         self._registry = registry if registry is not None else create_default_registry()
         self._argv_factory = argv_factory
         self._rss_reader = rss_reader if rss_reader is not None else _read_rss_mb
+        self._isolation = (
+            isolation_provider if isolation_provider is not None else LocalIsolationProvider()
+        )
 
     @contextmanager
     def _session(self) -> Iterator[Session]:
@@ -438,6 +448,18 @@ class ExecutionService:
                 run_id,
                 ExecutionErrorCode.ADAPTER_INCOMPATIBLE,
                 "; ".join(reasons)[:2000],
+            )
+        requirement = requirement_of(adapter)
+        if config.network_access:
+            # Local execution can neither provision nor gate network
+            # access; network-capable workloads need an isolated backend.
+            requirement = IsolationRequirement.ISOLATED
+        if not self._isolation.supports(requirement):
+            return self._fail(
+                run_id,
+                ExecutionErrorCode.ISOLATION_UNAVAILABLE,
+                f"Run requires '{requirement.value}' isolation, which "
+                f"provider '{self._isolation.provider_id}' cannot satisfy.",
             )
         return self._spawn_and_supervise(run_id, request)
 
