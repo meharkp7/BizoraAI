@@ -91,6 +91,14 @@ class Settings(BaseSettings):
 
     baseten_api_key: SecretStr | None = Field(default=None, alias="BASETEN_API_KEY")
     baseten_model_url: str | None = Field(default=None, alias="BASETEN_MODEL_URL")
+    baseten_base_url: str = Field(
+        default="https://inference.baseten.co/v1",
+        alias="BASETEN_BASE_URL",
+    )
+    baseten_model_name: str | None = Field(
+        default=None,
+        alias="BASETEN_MODEL_NAME",
+    )
 
     modal_token_id: SecretStr | None = Field(default=None, alias="MODAL_TOKEN_ID")
     modal_token_secret: SecretStr | None = Field(
@@ -184,10 +192,12 @@ class Settings(BaseSettings):
             raise ValueError("Fireworks is enabled but FIREWORKS_API_KEY is missing.")
 
         if self.enable_baseten and not (
-            self.baseten_api_key and self.baseten_model_url
+            self.baseten_api_key
+            and (self.baseten_model_url or self.baseten_model_name)
         ):
             raise ValueError(
-                "Baseten is enabled but its API key or model URL is missing."
+                "Baseten is enabled but its API key, model URL, "
+                "or model name is missing."
             )
 
         if self.enable_modal and not (

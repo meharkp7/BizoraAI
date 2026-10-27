@@ -10,6 +10,10 @@ from bizora.contracts.graph import MethodologyGraph
 MAX_PAPER_TEXT_LENGTH = 500_000
 
 
+class MethodologyProviderError(RuntimeError):
+    """Raised when any methodology provider cannot return a usable draft."""
+
+
 class MethodologyExtractionRequest(BaseModel):
     """Input supplied to a methodology extraction provider."""
 

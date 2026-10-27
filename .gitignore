@@ -57,7 +57,7 @@ models/
 mlruns/
 wandb/
 outputs/
-runs/
+/runs/
 
 # Local secrets and cloud credentials
 secrets/

@@ -12,6 +12,7 @@ from bizora.providers.fireworks import (
     FireworksMethodologyProvider,
     FireworksProviderError,
 )
+from bizora.providers.tables import TableExtractionRequest
 
 
 def make_request() -> MethodologyExtractionRequest:
@@ -158,3 +159,84 @@ def test_provider_requires_api_key() -> None:
             api_key=" ",
             model_name="test-model",
         )
+
+
+def make_table_request() -> TableExtractionRequest:
+    return TableExtractionRequest(
+        paper_text="Table 1 shows TM-scores for CASP14 targets.",
+        project_id="project-1",
+        graph_id="graph-1",
+        source_id="paper-1",
+        created_by="test-user",
+    )
+
+
+def make_table_payload() -> dict[str, object]:
+    return {
+        "tables": [
+            {
+                "table_id": "table-1",
+                "caption": "CASP14 results.",
+                "columns": ["Method", "TM-score"],
+                "rows": [["AlphaFold2", "0.92"]],
+            },
+            {
+                "table_id": "table-2",
+                "caption": "Ragged table.",
+                "columns": ["Method", "TM-score"],
+                "rows": [["AlphaFold2"]],
+            },
+            "not-an-object",
+        ]
+    }
+
+
+def test_extract_tables_returns_typed_drafts() -> None:
+    async def run_test() -> None:
+        def handler(_: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "choices": [
+                        {"message": {"content": json.dumps(make_table_payload())}}
+                    ]
+                },
+            )
+
+        async with make_client(httpx.MockTransport(handler)) as client:
+            provider = FireworksMethodologyProvider(
+                api_key="test-key",
+                model_name="test-model",
+                client=client,
+            )
+            result = await provider.extract_tables(make_table_request())
+
+        assert [table.table_id for table in result.draft_tables] == ["table-1"]
+        assert result.draft_tables[0].project_id == "project-1"
+        assert result.draft_tables[0].source_id == "paper-1"
+        assert result.draft_tables[0].created_by == "test-user"
+        assert len(result.warnings) == 2
+        assert result.warnings[1] == "Table 3 was skipped: not an object."
+
+    asyncio.run(run_test())
+
+
+def test_extract_tables_rejects_invalid_envelope() -> None:
+    async def run_test() -> None:
+        def handler(_: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json={"choices": []})
+
+        async with make_client(httpx.MockTransport(handler)) as client:
+            provider = FireworksMethodologyProvider(
+                api_key="test-key",
+                model_name="test-model",
+                client=client,
+            )
+
+            with pytest.raises(
+                FireworksProviderError,
+                match="invalid tables response",
+            ):
+                await provider.extract_tables(make_table_request())
+
+    asyncio.run(run_test())

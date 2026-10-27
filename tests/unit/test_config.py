@@ -71,6 +71,30 @@ def test_modal_requires_both_token_values_when_enabled() -> None:
         settings.validate_provider_configuration()
 
 
+def test_baseten_accepts_model_name_without_model_url() -> None:
+    settings = Settings(
+        _env_file=None,
+        BIZORA_ENABLE_BASETEN=True,
+        BASETEN_API_KEY="test-key",
+        BASETEN_MODEL_NAME="meta-models/muse-spark-open-1026",
+    )
+
+    settings.validate_provider_configuration()
+
+    assert settings.baseten_base_url == "https://inference.baseten.co/v1"
+
+
+def test_baseten_accepts_model_url_without_model_name() -> None:
+    settings = Settings(
+        _env_file=None,
+        BIZORA_ENABLE_BASETEN=True,
+        BASETEN_API_KEY="test-key",
+        BASETEN_MODEL_URL="https://example.baseten.co/deployment",
+    )
+
+    settings.validate_provider_configuration()
+
+
 def test_configured_provider_passes_validation() -> None:
     settings = Settings(
         _env_file=None,

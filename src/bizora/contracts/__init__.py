@@ -22,7 +22,14 @@ from bizora.contracts.execution import (
     StructuredError,
 )
 from bizora.contracts.experiment import ExperimentConfig, ResultKind
-from bizora.contracts.graph import GraphEdge, GraphNode, MethodologyGraph, NodeKind, validate_graph
+from bizora.contracts.graph import (
+    GraphEdge,
+    GraphNode,
+    MethodologyGraph,
+    NodeKind,
+    ResearchBrief,
+    validate_graph,
+)
 from bizora.contracts.layout import CameraState, GraphLayout, NodePosition, ViewportState
 from bizora.contracts.patches import GraphPatch, GraphPatchBatch, PatchOperation
 from bizora.contracts.run import (
@@ -74,6 +81,7 @@ __all__ = [
     "ReportedArtifact",
     "ReportedMetric",
     "ReproducibilityEcho",
+    "ResearchBrief",
     "ResultKind",
     "RunComparison",
     "RunState",
