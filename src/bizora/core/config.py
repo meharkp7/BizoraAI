@@ -1,11 +1,39 @@
 
-"""Centralized, validated configuration for Bizora."""
+"""Centralized, validated configuration for Bizora.
 
+Database target resolution (canonical source: Settings.database_url):
+1. BIZORA_DATABASE_URL from any supported source (init argument, process
+   environment, or .env file) wins.
+2. Otherwise the legacy DATABASE_URL process-environment override applies.
+3. Otherwise the built-in default is used.
+
+Both the application engine and Alembic resolve through this class, so they
+always agree on the migration target. When both variables disagree,
+BIZORA_DATABASE_URL wins and a warning is emitted. Blank values are never
+used as a target; invalid URLs fail fast with an actionable error that
+never echoes credentials.
+"""
+
+import os
+import warnings
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine.url import make_url
+from sqlalchemy.exc import SQLAlchemyError
+
+DEFAULT_DATABASE_URL = "postgresql+psycopg://bizora:bizora@localhost:5432/bizora"
+
+
+def is_valid_database_url(value: str) -> bool:
+    """Return whether a value parses as a SQLAlchemy database URL."""
+    try:
+        make_url(value)
+    except SQLAlchemyError:
+        return False
+    return True
 
 
 class Settings(BaseSettings):
@@ -17,6 +45,7 @@ class Settings(BaseSettings):
         case_sensitive=False,
         extra="ignore",
         validate_default=True,
+        hide_input_in_errors=True,
     )
 
     app_name: str = Field(default="Bizora", alias="BIZORA_APP_NAME")
@@ -36,7 +65,7 @@ class Settings(BaseSettings):
     )
 
     database_url: str = Field(
-        default="postgresql+psycopg://bizora:bizora@localhost:5432/bizora",
+        default=DEFAULT_DATABASE_URL,
         alias="BIZORA_DATABASE_URL",
     )
 
@@ -106,6 +135,39 @@ class Settings(BaseSettings):
         if normalized.endswith("/"):
             normalized = normalized.rstrip("/")
         return normalized
+
+    @field_validator("database_url")
+    @classmethod
+    def validate_database_url(cls, value: str) -> str:
+        """Reject blank or unparseable primary database URLs."""
+        if not value.strip():
+            raise ValueError("BIZORA_DATABASE_URL must not be empty.")
+        if not is_valid_database_url(value):
+            raise ValueError("BIZORA_DATABASE_URL must be a valid SQLAlchemy database URL.")
+        return value
+
+    @model_validator(mode="after")
+    def apply_legacy_database_url(self) -> "Settings":
+        """Apply DATABASE_URL only when BIZORA_DATABASE_URL is unset.
+
+        An explicitly configured primary URL always wins; a disagreeing
+        legacy override is ignored with a warning instead of silently
+        redirecting migrations away from the application target.
+        """
+        legacy = os.environ.get("DATABASE_URL", "").strip()
+        if not legacy:
+            return self
+        if self.database_url != DEFAULT_DATABASE_URL:
+            if legacy != self.database_url:
+                warnings.warn(
+                    "Both BIZORA_DATABASE_URL and DATABASE_URL are set; using BIZORA_DATABASE_URL.",
+                    stacklevel=2,
+                )
+            return self
+        if not is_valid_database_url(legacy):
+            raise ValueError("DATABASE_URL must be a valid SQLAlchemy database URL.")
+        self.database_url = legacy
+        return self
 
     @field_validator("secret_key")
     @classmethod

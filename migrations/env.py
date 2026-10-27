@@ -1,31 +1,19 @@
 """Alembic migration environment for Bizora."""
 
-
-
-import os
-
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from bizora.core.config import get_settings
 from bizora.db.base import Base
-from bizora.db.models import GraphRevisionRecord
+from bizora.db.models import GraphRevisionRecord  # noqa: F401 (registers tables)
 
 config = context.config
 settings = get_settings()
 
-# Allow a one-command database override for local migration checks.
-migration_url = os.environ.get("DATABASE_URL", settings.database_url)
-
-config.set_main_option(
-    "sqlalchemy.url",
-    migration_url.replace("%", "%%"),
-)
-
-target_metadata = GraphRevisionRecord.metadata
-
-config = context.config
-settings = get_settings()
+# Canonical target shared with the application: Settings applies the
+# documented precedence (BIZORA_DATABASE_URL > DATABASE_URL > default), so
+# Alembic can never resolve a different database than the application.
+migration_url = settings.database_url
 
 # Escape percent signs for ConfigParser interpolation.
 config.set_main_option(
