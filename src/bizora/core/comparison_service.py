@@ -82,13 +82,24 @@ class ComparisonService:
     @staticmethod
     def _load_metrics(
         session: Session, run_id: str
-    ) -> dict[str, MetricRecord]:
-        """Load one run's metrics keyed by metric name."""
+    ) -> tuple[dict[str, MetricRecord], frozenset[str]]:
+        """Load one run's metrics keyed by name, plus duplicated names.
+
+        Metric ids are unique per run but names are not; a duplicated
+        name is ambiguous and must never be silently collapsed into one
+        comparison value.
+        """
         records = [
             metric_record_from_row(row)
             for row in list_metrics_for_run(session, run_id)
         ]
-        return {record.name: record for record in records}
+        by_name: dict[str, MetricRecord] = {}
+        duplicates: set[str] = set()
+        for record in records:
+            if record.name in by_name:
+                duplicates.add(record.name)
+            by_name[record.name] = record
+        return by_name, frozenset(duplicates)
 
     @staticmethod
     def compare_runs(
@@ -100,8 +111,13 @@ class ComparisonService:
         """Compare a variant run against a baseline run."""
         baseline = ComparisonService._load_run(session, baseline_run_id)
         variant = ComparisonService._load_run(session, variant_run_id)
-        baseline_metrics = ComparisonService._load_metrics(session, baseline_run_id)
-        variant_metrics = ComparisonService._load_metrics(session, variant_run_id)
+        baseline_metrics, baseline_dupes = ComparisonService._load_metrics(
+            session, baseline_run_id
+        )
+        variant_metrics, variant_dupes = ComparisonService._load_metrics(
+            session, variant_run_id
+        )
+        ambiguous = baseline_dupes | variant_dupes
 
         graph = GraphPair(
             baseline_graph_id=baseline.config.graph_id,
@@ -131,12 +147,21 @@ class ComparisonService:
         measured_names = [
             name
             for name in shared_names
-            if baseline_metrics[name].result_kind == ResultKind.MEASURED
+            if name not in ambiguous
+            and baseline_metrics[name].result_kind == ResultKind.MEASURED
             and variant_metrics[name].result_kind == ResultKind.MEASURED
         ]
         skipped: list[SkippedMetric] = []
         for name in sorted(set(baseline_metrics) | set(variant_metrics)):
             if name in measured_names:
+                continue
+            if name in ambiguous:
+                skipped.append(
+                    SkippedMetric(
+                        name=name,
+                        reason="Metric name is duplicated within a run; excluded as ambiguous.",
+                    )
+                )
                 continue
             if name not in baseline_metrics:
                 skipped.append(

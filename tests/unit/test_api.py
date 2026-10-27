@@ -481,3 +481,83 @@ def test_extract_graph_rejects_invalid_provider_graph(
         "/api/v1/graphs/project-api/graph-api/revisions/1"
     )
     assert retrieved.status_code == 404
+
+
+def test_extract_rejects_overlong_title_without_calling_provider(
+    client: TestClient,
+) -> None:
+    class ExplodingProvider:
+        async def extract_methodology(
+            self,
+            request: MethodologyExtractionRequest,
+        ) -> MethodologyExtractionResult:
+            raise AssertionError("invalid request must not reach the provider")
+
+    app.dependency_overrides[get_fireworks_provider] = ExplodingProvider
+
+    try:
+        response = client.post(
+            "/api/v1/graphs/extract",
+            json={
+                "paper_text": "Paper text",
+                "project_id": "project-api",
+                "graph_id": "graph-api",
+                "source_id": "paper-api",
+                "created_by": "api-test",
+                "title": "T" * 301,
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(get_fireworks_provider, None)
+
+    assert response.status_code == 422
+
+
+def test_extract_rejects_overlong_project_id(
+    client: TestClient,
+) -> None:
+    app.dependency_overrides[get_fireworks_provider] = lambda: (
+        FakeMethodologyProvider(make_graph_payload())
+    )
+
+    try:
+        response = client.post(
+            "/api/v1/graphs/extract",
+            json={
+                "paper_text": "Paper text",
+                "project_id": "p" * 129,
+                "graph_id": "graph-api",
+                "source_id": "paper-api",
+                "created_by": "api-test",
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(get_fireworks_provider, None)
+
+    assert response.status_code == 422
+
+
+def test_extract_rejects_enormous_paper_text(
+    client: TestClient,
+) -> None:
+    from bizora.providers.base import MAX_PAPER_TEXT_LENGTH
+
+    app.dependency_overrides[get_fireworks_provider] = lambda: (
+        FakeMethodologyProvider(make_graph_payload())
+    )
+
+    try:
+        response = client.post(
+            "/api/v1/graphs/extract",
+            json={
+                "paper_text": "x" * (MAX_PAPER_TEXT_LENGTH + 1),
+                "project_id": "project-api",
+                "graph_id": "graph-api",
+                "source_id": "paper-api",
+                "created_by": "api-test",
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(get_fireworks_provider, None)
+
+    assert response.status_code == 422

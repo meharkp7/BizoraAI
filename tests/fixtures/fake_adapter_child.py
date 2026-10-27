@@ -3,8 +3,8 @@
 Usage: fake_adapter_child.py <mode> <request.json> <result.json> [extra...]
 
 Modes: ok, slow, crash, spam, badjson, silent, env, metrics,
-failedmetrics. No network, no imports beyond the standard library, no
-effects outside the given paths.
+failedmetrics, nanmetrics. No network, no imports beyond the standard
+library, no effects outside the given paths.
 """
 
 import json
@@ -97,6 +97,24 @@ def main(argv: list[str]) -> int:
         }
         with open(result_path, "w", encoding="utf-8") as handle:
             handle.write(json.dumps(result))
+        return 0
+    if mode == "nanmetrics":
+        result = {
+            "run_id": request["run_id"],
+            "status": "succeeded",
+            "echo": _echo_for(request),
+            "diagnostics": ["fake adapter ok"],
+            "metrics": [
+                {
+                    "metric_id": "metric-nan",
+                    "name": "not-a-number",
+                    "value": float("nan"),
+                    "result_kind": "measured",
+                }
+            ],
+        }
+        with open(result_path, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps(result, allow_nan=True))
         return 0
     if mode == "failedmetrics":
         result = {

@@ -7,18 +7,20 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from bizora.contracts.graph import MethodologyGraph
 
+MAX_PAPER_TEXT_LENGTH = 500_000
+
 
 class MethodologyExtractionRequest(BaseModel):
     """Input supplied to a methodology extraction provider."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    paper_text: str = Field(min_length=1)
-    project_id: str = Field(min_length=1)
-    graph_id: str = Field(min_length=1)
+    paper_text: str = Field(min_length=1, max_length=MAX_PAPER_TEXT_LENGTH)
+    project_id: str = Field(min_length=1, max_length=128)
+    graph_id: str = Field(min_length=1, max_length=128)
     source_id: str = Field(min_length=1)
-    created_by: str = Field(min_length=1)
-    title: str | None = None
+    created_by: str = Field(min_length=1, max_length=128)
+    title: str | None = Field(default=None, max_length=300)
 
 
 class MethodologyExtractionResult(BaseModel):

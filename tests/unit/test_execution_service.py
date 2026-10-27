@@ -407,6 +407,28 @@ def test_execute_run_rejects_unusable_result(
     assert "result_invalid" in result.error
 
 
+def test_execute_run_rejects_non_finite_metric(
+    session_factory: Callable[[], Session],
+) -> None:
+    seed_run(session_factory)
+    service = ExecutionService(
+        session_factory,
+        WorkerConfig(worker_id="worker-a", poll_seconds=0.05),
+        argv_factory=argv_for("nanmetrics"),
+    )
+
+    result = service.execute_run("run-1")
+
+    assert result.state == RunState.FAILED
+    assert result.error is not None
+    assert "result_invalid" in result.error
+    session = session_factory()
+    try:
+        assert list_metrics_for_run(session, "run-1") == []
+    finally:
+        session.close()
+
+
 def test_execute_run_rejects_output_overflow(
     session_factory: Callable[[], Session],
 ) -> None:

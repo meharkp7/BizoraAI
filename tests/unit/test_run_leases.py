@@ -190,6 +190,40 @@ def test_second_claim_on_running_run_fails(db_session: Session) -> None:
     assert current.worker_id == "worker-a"
 
 
+def test_claim_rejects_non_positive_ttl(db_session: Session) -> None:
+    save_pending(db_session)
+
+    with pytest.raises(ValueError, match="positive integer"):
+        claim_experiment_run(
+            db_session,
+            run_id="run-1",
+            worker_id="worker-a",
+            now=datetime(2026, 1, 3, tzinfo=UTC),
+            lease_ttl_seconds=0,
+        )
+
+
+def test_heartbeat_rejects_non_positive_ttl(db_session: Session) -> None:
+    save_pending(db_session)
+    claimed = claim_experiment_run(
+        db_session,
+        run_id="run-1",
+        worker_id="worker-a",
+        now=datetime(2026, 1, 3, tzinfo=UTC),
+        lease_ttl_seconds=300,
+    )
+    assert claimed is not None
+
+    with pytest.raises(ValueError, match="positive integer"):
+        heartbeat_experiment_run(
+            db_session,
+            run_id="run-1",
+            worker_id="worker-a",
+            now=datetime(2026, 1, 3, 0, 4, tzinfo=UTC),
+            lease_ttl_seconds=-10,
+        )
+
+
 def test_claim_on_missing_run_returns_none(db_session: Session) -> None:
     claimed = claim_experiment_run(
         db_session,

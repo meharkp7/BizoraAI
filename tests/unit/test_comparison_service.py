@@ -136,6 +136,93 @@ def seed_valid_pair(db_session: Session) -> None:
     )
 
 
+def test_duplicate_metric_name_is_skipped_not_compared(
+    db_session: Session,
+) -> None:
+    seed_valid_pair(db_session)
+    seed_metric(
+        db_session,
+        run_id="run-baseline",
+        metric_id="m-accuracy-duplicate",
+        name="accuracy",
+        value=0.1,
+    )
+    seed_metric(
+        db_session,
+        run_id="run-baseline",
+        metric_id="m-loss",
+        name="loss",
+        value=0.5,
+    )
+    seed_metric(
+        db_session,
+        run_id="run-variant",
+        metric_id="m-loss",
+        name="loss",
+        value=0.4,
+    )
+
+    comparison = ComparisonService.compare_runs(
+        db_session,
+        baseline_run_id="run-baseline",
+        variant_run_id="run-variant",
+    )
+
+    assert comparison.verdict == ComparisonVerdict.VALID
+    assert [metric.name for metric in comparison.metrics] == ["loss"]
+    skipped = {entry.name: entry.reason for entry in comparison.skipped_metrics}
+    assert "accuracy" in skipped
+    assert "uplicated" in skipped["accuracy"]
+
+
+def test_only_duplicate_name_yields_invalid_without_metrics(
+    db_session: Session,
+) -> None:
+    seed_run(
+        db_session,
+        run_id="run-baseline",
+        config=make_config(experiment_id="exp-baseline", graph_version=1),
+    )
+    seed_run(
+        db_session,
+        run_id="run-variant",
+        config=make_config(experiment_id="exp-variant", graph_version=2),
+    )
+    seed_metric(
+        db_session,
+        run_id="run-baseline",
+        metric_id="m-accuracy",
+        name="accuracy",
+        value=0.8,
+    )
+    seed_metric(
+        db_session,
+        run_id="run-variant",
+        metric_id="m-accuracy",
+        name="accuracy",
+        value=0.9,
+    )
+    seed_metric(
+        db_session,
+        run_id="run-variant",
+        metric_id="m-accuracy-duplicate",
+        name="accuracy",
+        value=0.1,
+    )
+
+    comparison = ComparisonService.compare_runs(
+        db_session,
+        baseline_run_id="run-baseline",
+        variant_run_id="run-variant",
+    )
+
+    assert comparison.verdict == ComparisonVerdict.INVALID
+    assert comparison.metrics == ()
+    assert any(
+        entry.name == "accuracy" for entry in comparison.skipped_metrics
+    )
+
+
 def test_valid_comparison_reports_exact_changes(db_session: Session) -> None:
     seed_valid_pair(db_session)
 

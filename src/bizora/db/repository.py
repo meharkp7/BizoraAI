@@ -278,6 +278,8 @@ def claim_experiment_run(
     missing or no longer pending. Callers must pass timezone-aware UTC
     timestamps so lease comparisons stay consistent across databases.
     """
+    if lease_ttl_seconds < 1:
+        raise ValueError("lease_ttl_seconds must be a positive integer.")
     result = session.connection().execute(
         update(ExperimentRunRecord)
         .where(
@@ -315,6 +317,8 @@ def heartbeat_experiment_run(
     Returns the refreshed record, or None when the run is missing,
     finished, expired-and-reaped, or owned by another worker.
     """
+    if lease_ttl_seconds < 1:
+        raise ValueError("lease_ttl_seconds must be a positive integer.")
     result = session.connection().execute(
         update(ExperimentRunRecord)
         .where(
