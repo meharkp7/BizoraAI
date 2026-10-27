@@ -32,6 +32,8 @@ export function CanvasToolbar({
   disabled,
   layoutStatus,
   onResetLayout,
+  view,
+  onViewChange,
 }: {
   takenIds: Set<string>;
   canUndo: boolean;
@@ -42,6 +44,8 @@ export function CanvasToolbar({
   disabled: boolean;
   layoutStatus: LayoutSaveStatus;
   onResetLayout: () => void;
+  view: "2d" | "3d";
+  onViewChange: (view: "2d" | "3d") => void;
 }) {
   const [id, setId] = useState("");
   const [kind, setKind] = useState<NodeKind>("model");
@@ -131,12 +135,33 @@ export function CanvasToolbar({
       ) : null}
       <button
         type="button"
+        className={styles.toolButton}
         onClick={onResetLayout}
         disabled={disabled}
         title="Reset node positions to the automatic layered layout"
       >
         Reset layout
       </button>
+      <div className={styles.viewToggle} role="group" aria-label="Canvas view">
+        <button
+          type="button"
+          onClick={() => onViewChange("2d")}
+          disabled={disabled}
+          aria-pressed={view === "2d"}
+          title="Flat canvas"
+        >
+          2D
+        </button>
+        <button
+          type="button"
+          onClick={() => onViewChange("3d")}
+          disabled={disabled}
+          aria-pressed={view === "3d"}
+          title="3D explorer"
+        >
+          3D
+        </button>
+      </div>
     </div>
   );
 }

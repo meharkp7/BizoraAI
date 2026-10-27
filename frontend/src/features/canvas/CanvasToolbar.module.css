@@ -15,8 +15,24 @@
   border-right: 1px solid var(--color-line-strong);
 }
 
+.viewToggle {
+  display: flex;
+  gap: var(--space-1);
+  margin-left: auto;
+  padding-left: var(--space-3);
+  border-left: 1px solid var(--color-line-strong);
+}
+
+.viewToggle button[aria-pressed="true"] {
+  background: var(--color-ink);
+  color: var(--color-surface);
+  border-color: var(--color-ink);
+}
+
 .history button,
-.addForm button {
+.addForm button,
+.viewToggle button,
+.toolButton {
   padding: var(--space-1) var(--space-3);
   background: transparent;
   color: var(--color-ink);
@@ -27,7 +43,9 @@
 }
 
 .history button:not(:disabled):hover,
-.addForm button:not(:disabled):hover {
+.addForm button:not(:disabled):hover,
+.viewToggle button:not(:disabled):hover,
+.toolButton:not(:disabled):hover {
   border-color: var(--color-accent-strong);
   color: var(--color-accent-strong);
 }

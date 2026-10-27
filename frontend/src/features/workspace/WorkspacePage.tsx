@@ -21,6 +21,7 @@ import type {
 } from "../../lib/types.ts";
 import { EmptyState, ErrorState, LoadingState } from "../../components/states.tsx";
 import { GraphCanvas } from "../canvas/GraphCanvas.tsx";
+import { GraphCanvas3D } from "../canvas/GraphCanvas3D.tsx";
 import { CanvasToolbar } from "../canvas/CanvasToolbar.tsx";
 import type { LayoutSaveStatus, NewNodeSpec } from "../canvas/CanvasToolbar.tsx";
 import { diffStatusMaps } from "../canvas/flowElements.ts";
@@ -155,12 +156,16 @@ export function WorkspacePage({
   projectId,
   graphId,
   version,
+  view,
   onVersionChange,
+  onViewChange,
 }: {
   projectId: string;
   graphId: string;
   version: number;
+  view: "2d" | "3d";
   onVersionChange: (version: number) => void;
+  onViewChange: (view: "2d" | "3d") => void;
 }) {
   const revision = useGraphRevision(projectId, graphId, version);
   const savedLayout = useGraphLayout(projectId, graphId, version);
@@ -235,6 +240,8 @@ export function WorkspacePage({
       projectId={projectId}
       graph={revision.data}
       layoutVersion={version}
+      view={view}
+      onViewChange={onViewChange}
       savedLayout={savedLayout.data ?? null}
       selectedNodeIds={selectedNodeIds}
       selectedEdgeIds={selectedEdgeIds}
@@ -282,6 +289,8 @@ function WorkspaceLoaded({
   projectId,
   graph,
   layoutVersion,
+  view,
+  onViewChange,
   savedLayout,
   selectedNodeIds,
   selectedEdgeIds,
@@ -303,6 +312,8 @@ function WorkspaceLoaded({
   projectId: string;
   graph: MethodologyGraph;
   layoutVersion: number;
+  view: "2d" | "3d";
+  onViewChange: (view: "2d" | "3d") => void;
   savedLayout: GraphLayout | null;
   selectedNodeIds: string[];
   selectedEdgeIds: string[];
@@ -337,6 +348,13 @@ function WorkspaceLoaded({
   } | null>(null);
   const [activeDiff, setActiveDiff] = useState<GraphRevisionDiff | null>(null);
   const saveTimer = useRef<number | null>(null);
+  const canvasSectionRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    // Deep links (?view=3d) land at the top of the page; bring the canvas
+    // into view instead of stranding newcomers above the fold.
+    if (view === "3d") canvasSectionRef.current?.scrollIntoView?.({ block: "nearest" });
+  }, [view]);
 
   useEffect(() => {
     const timer = saveTimer;
@@ -480,7 +498,11 @@ function WorkspaceLoaded({
           />
         </section>
 
-        <section className={`${styles.panel} ${styles.canvasPanel}`} aria-label="Canvas">
+        <section
+          ref={canvasSectionRef}
+          className={`${styles.panel} ${styles.canvasPanel}`}
+          aria-label="Canvas"
+        >
           <CanvasToolbar
             takenIds={takenIds}
             canUndo={canUndo}
@@ -491,17 +513,23 @@ function WorkspaceLoaded({
             disabled={mutating}
             layoutStatus={layoutStatus}
             onResetLayout={handleResetLayout}
+            view={view}
+            onViewChange={onViewChange}
           />
-          <GraphCanvas
-            graph={graph}
-            layout={savedLayout}
-            layoutReset={layoutReset}
-            diffStatuses={diffStatuses}
-            mutating={mutating}
-            onConnectRequest={handleConnect}
-            onDeleteRequest={handleDelete}
-            onNodesMoved={handleNodesMoved}
-          />
+          {view === "3d" ? (
+            <GraphCanvas3D key={`3d-${graph.version}`} graph={graph} layout={savedLayout} />
+          ) : (
+            <GraphCanvas
+              graph={graph}
+              layout={savedLayout}
+              layoutReset={layoutReset}
+              diffStatuses={diffStatuses}
+              mutating={mutating}
+              onConnectRequest={handleConnect}
+              onDeleteRequest={handleDelete}
+              onNodesMoved={handleNodesMoved}
+            />
+          )}
         </section>
 
         <div className={styles.side}>

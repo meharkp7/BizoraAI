@@ -19,7 +19,7 @@ describe("WorkspacePage", () => {
         projectId="project-1"
         graphId="graph-1"
         version={2}
-        onVersionChange={() => {}}
+        view="2d" onViewChange={() => {}} onVersionChange={() => {}}
       />,
       { wrapper },
     );
@@ -45,7 +45,7 @@ describe("WorkspacePage", () => {
         projectId="project-1"
         graphId="graph-1"
         version={2}
-        onVersionChange={onVersionChange}
+        view="2d" onViewChange={() => {}} onVersionChange={onVersionChange}
       />,
       { wrapper },
     );
@@ -62,7 +62,7 @@ describe("WorkspacePage", () => {
         projectId="project-1"
         graphId="graph-1"
         version={9}
-        onVersionChange={() => {}}
+        view="2d" onViewChange={() => {}} onVersionChange={() => {}}
       />,
       { wrapper },
     );
@@ -75,7 +75,7 @@ describe("WorkspacePage", () => {
         projectId="project-1"
         graphId="graph-1"
         version={2}
-        onVersionChange={() => {}}
+        view="2d" onViewChange={() => {}} onVersionChange={() => {}}
       />,
       { wrapper },
     );
@@ -90,7 +90,7 @@ describe("WorkspacePage", () => {
         projectId="project-1"
         graphId="graph-1"
         version={2}
-        onVersionChange={() => {}}
+        view="2d" onViewChange={() => {}} onVersionChange={() => {}}
       />,
       { wrapper },
     );

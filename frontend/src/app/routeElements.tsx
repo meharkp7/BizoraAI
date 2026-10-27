@@ -9,20 +9,40 @@ function useGraphParams(): { projectId: string; graphId: string } {
   return { projectId, graphId };
 }
 
+export type CanvasView = "2d" | "3d";
+
 export function WorkspaceRoute() {
   const { projectId, graphId } = useGraphParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const parsed = Number(searchParams.get("v") ?? "1");
   const version = Number.isInteger(parsed) && parsed >= 1 ? parsed : 1;
+  const view: CanvasView = searchParams.get("view") === "3d" ? "3d" : "2d";
+
+  function updateParams(next: { version?: number; view?: CanvasView }): void {
+    const params = new URLSearchParams(searchParams);
+    const versionValue = next.version ?? version;
+    if (versionValue === 1) {
+      params.delete("v");
+    } else {
+      params.set("v", String(versionValue));
+    }
+    const viewValue = next.view ?? view;
+    if (viewValue === "2d") {
+      params.delete("view");
+    } else {
+      params.set("view", viewValue);
+    }
+    void setSearchParams(params);
+  }
 
   return (
     <WorkspacePage
       projectId={projectId}
       graphId={graphId}
       version={version}
-      onVersionChange={(next) => {
-        void setSearchParams(next === 1 ? {} : { v: String(next) });
-      }}
+      view={view}
+      onVersionChange={(nextVersion) => updateParams({ version: nextVersion })}
+      onViewChange={(nextView) => updateParams({ view: nextView })}
     />
   );
 }
