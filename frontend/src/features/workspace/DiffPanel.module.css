@@ -5,26 +5,30 @@
   padding: var(--space-4);
 }
 
+.panel h2 {
+  margin-bottom: var(--space-3);
+}
+
 .controls {
   display: flex;
   gap: var(--space-3);
   margin-bottom: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-line);
+  flex-wrap: wrap;
 }
 
 .controls label {
   display: grid;
   gap: var(--space-1);
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   font-weight: 600;
+  color: var(--color-ink-soft);
 }
 
 .controls input {
   width: 6rem;
-  padding: var(--space-1) var(--space-2);
-  background: var(--color-surface-raised);
-  color: var(--color-ink);
-  border: 1px solid var(--color-line-strong);
-  border-radius: var(--radius-sm);
+  font-variant-numeric: tabular-nums;
 }
 
 .groups {
@@ -32,7 +36,17 @@
   margin: 0;
   padding: 0;
   display: grid;
-  gap: var(--space-3);
+  gap: 0;
+}
+
+.groups > li {
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.groups > li:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
 }
 
 .groupLabel {
@@ -44,4 +58,5 @@
   margin: var(--space-1) 0 0;
   padding-left: var(--space-4);
   font-size: 0.875rem;
+  color: var(--color-ink-soft);
 }

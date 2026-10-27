@@ -25,6 +25,7 @@ const KIND_SHORT: Record<string, string> = {
   evaluation: "eval",
   output: "out",
   dataset: "data",
+  component: "comp",
 };
 
 export function MethodNode({ data, selected }: NodeProps<MethodNodeType>) {

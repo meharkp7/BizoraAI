@@ -1,34 +1,84 @@
 .canvas {
-  height: 30rem;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-md);
+  height: clamp(28rem, calc(100vh - 26rem), 48rem);
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
   overflow: hidden;
-  background: var(--color-surface);
+  background: var(--color-canvas);
+
+  /* React Flow theme hooks (see @xyflow/react style.css). */
+  --xy-background-pattern-dots-color: var(--color-canvas-dot);
+  --xy-edge-stroke: var(--color-edge);
+  --xy-edge-stroke-width: 1.5;
+  --xy-edge-stroke-selected: var(--color-accent-strong);
+  --xy-connectionline-stroke: var(--color-accent-strong);
+  --xy-minimap-background-color: var(--color-minimap);
+  --xy-minimap-mask-background-color: var(--color-minimap-mask);
+  --xy-minimap-mask-stroke-color: var(--color-accent-strong);
+  --xy-minimap-node-background-color: var(--color-ink-faint);
+  --xy-controls-button-background-color: var(--color-surface);
+  --xy-controls-button-background-color-hover: var(--color-accent-wash);
+  --xy-controls-button-color: var(--color-ink-soft);
+  --xy-controls-button-color-hover: var(--color-ink);
+  --xy-controls-button-border-color: var(--color-line);
+  --xy-controls-box-shadow: var(--shadow-1);
+  --xy-attribution-background-color: transparent;
 }
 
 .canvas[data-mutating="true"] {
   cursor: progress;
 }
 
-/* React Flow control + minimap theming hooks. */
-.canvas :global(.react-flow__controls) {
-  box-shadow: var(--shadow-1);
-}
-
-.canvas :global(.react-flow__controls-button) {
-  background: var(--color-surface-raised);
-  border-bottom: 1px solid var(--color-line);
-}
-
-.canvas :global(.react-flow__controls-button svg) {
-  fill: var(--color-ink-soft);
-}
-
-.canvas :global(.react-flow__minimap) {
-  background: var(--color-surface);
+/* Edge hover/rest accents vars do not cover. */
+.canvas :global(.react-flow__edge:hover .react-flow__edge-path) {
+  stroke: var(--color-ink-faint);
 }
 
 .canvas :global(.react-flow__edge.selected .react-flow__edge-path) {
-  stroke: var(--color-accent);
   stroke-width: 2.5;
+}
+
+.canvas :global(.react-flow__edge-text) {
+  fill: var(--color-ink-soft);
+  font-size: 0.6875rem;
+}
+
+/* Zoom controls: compact cluster, inset from the corner. */
+.canvas :global(.react-flow__controls) {
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  margin: 12px;
+}
+
+.canvas :global(.react-flow__controls-button) {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+/* Minimap: small, inset, never covering the graph. */
+.canvas :global(.react-flow__minimap) {
+  width: 148px;
+  height: 104px;
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  margin: 12px;
+  overflow: hidden;
+}
+
+.canvas :global(.react-flow__attribution) {
+  color: var(--color-ink-faint);
+  margin-right: 176px;
+}
+
+.canvas :global(.react-flow__attribution a) {
+  color: var(--color-ink-faint);
+}
+
+/* Narrow screens: the minimap would cover the graph, so drop it. */
+@media (max-width: 40rem) {
+  .canvas :global(.react-flow__minimap) {
+    display: none;
+  }
+  .canvas :global(.react-flow__attribution) {
+    margin-right: 0;
+  }
 }

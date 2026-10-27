@@ -42,6 +42,12 @@ function WorkspaceNav() {
       >
         Compare
       </NavLink>
+      <NavLink
+        to={`${base}/tables`}
+        className={({ isActive }) => (isActive ? styles.active : undefined)}
+      >
+        Tables
+      </NavLink>
     </nav>
   );
 }

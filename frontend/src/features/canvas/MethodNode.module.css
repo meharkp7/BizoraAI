@@ -7,15 +7,19 @@
   padding: var(--space-2) var(--space-3);
   box-shadow: var(--shadow-1);
   font-size: 0.8125rem;
+  line-height: 1.4;
 }
 
 .selected {
-  border-color: var(--color-accent);
+  border-color: var(--color-accent-strong);
   border-width: 2px;
+  padding: calc(var(--space-2) - 1px) calc(var(--space-3) - 1px);
+  outline: 1px solid var(--color-line-strong);
+  outline-offset: 3px;
 }
 
 .added {
-  outline: 2px solid #2e7d4f;
+  outline: 2px solid var(--color-olive);
   outline-offset: 2px;
 }
 
@@ -31,11 +35,12 @@
 }
 
 .kind {
-  font-size: 0.6875rem;
+  font-size: 0.625rem;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--color-ink-faint);
+  letter-spacing: 0.1em;
+  color: var(--color-accent-strong);
+  white-space: nowrap;
 }
 
 .label {
@@ -57,7 +62,7 @@
 }
 
 .prov.verified {
-  color: var(--color-accent);
+  color: var(--color-olive);
 }
 
 .prov.extracted {
@@ -79,15 +84,27 @@
 }
 
 .diff {
-  font-size: 0.6875rem;
+  font-size: 0.625rem;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
+}
+
+.added .diff {
+  color: var(--color-olive);
+}
+
+.changed .diff {
+  color: var(--color-warn);
 }
 
 .handle {
-  width: 0.625rem;
-  height: 0.625rem;
-  background: var(--color-surface-raised);
-  border: 2px solid var(--color-accent);
+  width: 0.75rem;
+  height: 0.75rem;
+  background: var(--color-canvas);
+  border: 2px solid var(--color-accent-strong);
+}
+
+.handle:hover {
+  background: var(--color-accent-strong);
 }

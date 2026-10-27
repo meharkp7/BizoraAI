@@ -5,6 +5,10 @@
   padding: var(--space-4);
 }
 
+.panel h2 {
+  margin-bottom: var(--space-3);
+}
+
 .hint {
   margin: 0;
   color: var(--color-ink-faint);
@@ -38,19 +42,22 @@
 
 .status {
   font-size: 0.75rem;
-  font-weight: 650;
-  color: var(--color-ink-soft);
+  font-weight: 700;
+  color: var(--color-olive);
 }
 
 .locator {
-  font-size: 0.875rem;
-  color: var(--color-ink-soft);
+  font-size: 0.8125rem;
+  color: var(--color-ink-faint);
 }
 
 .quote {
   margin: var(--space-2) 0 0;
-  padding-left: var(--space-3);
-  border-left: 2px solid var(--color-line-strong);
+  padding-top: var(--space-2);
+  border-top: 2px solid var(--color-accent-strong);
+  font-family: var(--font-display);
+  font-style: italic;
   color: var(--color-ink-soft);
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
+  line-height: 1.5;
 }

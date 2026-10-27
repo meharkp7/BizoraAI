@@ -3,7 +3,25 @@ import type { GraphEdge, GraphNode } from "../../lib/types.ts";
 import styles from "./InspectorPanel.module.css";
 
 function ProvenanceBadge({ value }: { value: string }) {
-  return <span className={styles.badge}>{value}</span>;
+  return <span className={`${styles.badge} ${styles[value] ?? ""}`}>{value}</span>;
+}
+
+function SelectionHead({
+  eyebrow,
+  title,
+  detail,
+}: {
+  eyebrow: string;
+  title: string;
+  detail: string;
+}) {
+  return (
+    <div className={styles.head}>
+      <div className={styles.eyebrow}>{eyebrow}</div>
+      <div className={styles.title}>{title}</div>
+      <div className={`${styles.detail} mono`}>{detail}</div>
+    </div>
+  );
 }
 
 function ConfigEditor({
@@ -85,6 +103,11 @@ export function InspectorPanel({
     return (
       <section className={styles.panel} aria-label="Inspector">
         <h2>Inspector</h2>
+        <SelectionHead
+          eyebrow={`Connection · ${edge.relation}`}
+          title={`${edge.source} → ${edge.target}`}
+          detail={edge.id}
+        />
         <dl className={styles.facts}>
           <dt>Connection</dt>
           <dd className="mono">{edge.id}</dd>
@@ -116,9 +139,12 @@ export function InspectorPanel({
   return (
     <section className={styles.panel} aria-label="Inspector">
       <h2>Inspector</h2>
+      <SelectionHead
+        eyebrow={`Component · ${node.kind}`}
+        title={node.label}
+        detail={node.id}
+      />
       <dl className={styles.facts}>
-        <dt>Component</dt>
-        <dd>{node.label}</dd>
         <dt>ID</dt>
         <dd className="mono">{node.id}</dd>
         <dt>Kind</dt>

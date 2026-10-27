@@ -1,62 +1,79 @@
 .page {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-5);
 }
 
+/* Masthead: serif title over a folio line, double-ruled below. */
 .heading {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: flex-end;
   gap: var(--space-4);
   flex-wrap: wrap;
+  padding-bottom: var(--space-4);
+  border-bottom: 3px double var(--color-line-strong);
 }
 
 .heading h1 {
-  margin-bottom: var(--space-1);
+  margin-bottom: var(--space-2);
 }
 
 .subtitle {
   margin: 0;
   color: var(--color-ink-soft);
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
 }
 
+/* Revision folio: hairline plate with prev / numeral / next. */
 .stepper {
   display: flex;
-  align-items: center;
-  gap: var(--space-2);
+  align-items: stretch;
+  gap: 0;
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  overflow: hidden;
 }
 
 .stepper button {
-  padding: var(--space-1) var(--space-3);
-  background: var(--color-surface);
+  padding: var(--space-2) var(--space-3);
+  background: transparent;
   color: var(--color-ink);
-  border: 1px solid var(--color-line-strong);
-  border-radius: var(--radius-sm);
+  border: none;
   font-weight: 600;
-}
-
-.stepper button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  font-size: 0.875rem;
+  white-space: nowrap;
 }
 
 .stepper button:not(:disabled):hover {
-  border-color: var(--color-accent);
+  background: var(--color-accent-wash);
+}
+
+.stepper button:first-child {
+  border-right: 1px solid var(--color-line);
+}
+
+.stepper button:last-child {
+  border-left: 1px solid var(--color-line);
 }
 
 .versionBadge {
-  min-width: 3rem;
-  text-align: center;
-  padding: var(--space-1) var(--space-2);
-  background: var(--color-accent-wash);
-  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  min-width: 4rem;
+  justify-content: center;
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-mono);
   font-weight: 700;
+  font-size: 0.9375rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-accent-strong);
 }
 
+/* Workbench: contents index, plate-mounted canvas, inspector rail. */
 .grid {
   display: grid;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr) minmax(0, 5fr);
+  grid-template-columns: 14rem minmax(0, 1fr) 20rem;
   gap: var(--space-4);
   align-items: start;
 }
@@ -64,6 +81,9 @@
 @media (max-width: 70rem) {
   .grid {
     grid-template-columns: 1fr;
+  }
+  .canvasPanel {
+    order: -1;
   }
 }
 
@@ -74,33 +94,164 @@
   padding: var(--space-4);
 }
 
+.indexPanel {
+  padding: var(--space-4) var(--space-3);
+  max-height: 48rem;
+  overflow-y: auto;
+}
+
+/* Plate mount: stone mat with an inner hairline frame. */
+.canvasPanel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line-strong);
+  padding: var(--space-3);
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+  box-shadow: var(--shadow-1);
+}
+
 .side {
   display: grid;
   gap: var(--space-4);
+  min-width: 0;
+}
+
+.brief {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+
+.brief h2 {
+  margin-bottom: var(--space-3);
+}
+
+.briefGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+@media (max-width: 70rem) {
+  .briefGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 40rem) {
+  .briefGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.briefGrid h3 {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-ink-soft);
+  margin-bottom: var(--space-2);
+}
+
+.briefGrid p {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.briefList {
+  margin: 0;
+  padding-left: var(--space-4);
+  font-size: 0.875rem;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.unknown {
+  color: var(--color-ink-faint);
+  font-style: italic;
+}
+
+/* Folio section head: label, hairline rule, count. */
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: 0 var(--space-1);
+}
+
+.sectionHead h2 {
+  margin-bottom: 0;
+  order: 0;
+}
+
+.sectionHead::after {
+  content: "";
+  flex: 1;
+  order: 1;
+  border-bottom: 1px solid var(--color-line);
+  transform: translateY(-3px);
+}
+
+.sectionHead .count {
+  order: 2;
+}
+
+.count {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink-faint);
 }
 
 .edgesHeading {
   margin-top: var(--space-4);
 }
 
+/* Ruled contents index with folio numerals. */
 .nodeList {
   list-style: none;
-  margin: 0;
+  margin: var(--space-2) 0 0;
   padding: 0;
   display: grid;
-  gap: var(--space-1);
+  counter-reset: index;
+}
+
+.nodeList li {
+  counter-increment: index;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.nodeList li:first-child {
+  border-top: 1px solid var(--color-line);
 }
 
 .nodeList button {
   width: 100%;
   text-align: left;
   display: grid;
-  gap: 0.125rem;
-  padding: var(--space-2) var(--space-3);
+  grid-template-columns: 2rem 1fr;
+  gap: 0 var(--space-2);
+  padding: var(--space-2) var(--space-1);
   background: transparent;
   color: var(--color-ink);
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  border: none;
+  border-radius: 0;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.nodeList li::marker {
+  content: none;
+}
+
+.nodeList button::before {
+  content: counter(index, decimal-leading-zero);
+  grid-row: span 2;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--color-ink-faint);
+  padding-top: 2px;
 }
 
 .nodeList button:hover {
@@ -109,14 +260,23 @@
 
 .nodeList button.selected {
   background: var(--color-accent-wash);
-  border-color: var(--color-accent);
+}
+
+.nodeList button.selected .nodeLabel {
+  color: var(--color-accent-strong);
 }
 
 .nodeLabel {
   font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .nodeMeta {
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   color: var(--color-ink-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

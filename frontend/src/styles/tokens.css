@@ -1,9 +1,12 @@
-/* Bizora design tokens. Light is default; [data-theme="dark"] overrides.
-   Restrained research-instrument palette: ink, paper, one deep-teal accent. */
+/* Bizora design tokens. Warm editorial studio: ivory paper, charcoal ink,
+   muted copper accent, subtle olive, warm stone hairlines. "Night studio"
+   is the warm-charcoal counterpart — never navy, never purple. */
 
 :root {
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Helvetica Neue",
     Arial, sans-serif;
+  --font-display: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino,
+    Georgia, serif;
   --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
 
   --space-1: 0.25rem;
@@ -14,49 +17,73 @@
   --space-6: 2rem;
   --space-8: 3rem;
 
-  --radius-sm: 4px;
-  --radius-md: 7px;
-  --radius-lg: 11px;
+  --radius-sm: 3px;
+  --radius-md: 5px;
+  --radius-lg: 8px;
 
-  --color-paper: #f7f5f0;
-  --color-surface: #fffdf8;
-  --color-surface-raised: #ffffff;
-  --color-ink: #1c2420;
-  --color-ink-soft: #44514b;
-  --color-ink-faint: #6b768f;
-  --color-line: #ddd7c9;
-  --color-line-strong: #c4bca8;
-  --color-accent: #0e6b5e;
-  --color-accent-ink: #ffffff;
-  --color-accent-wash: #e3efe9;
+  --color-paper: #f4f0e3;
+  --color-surface: #faf7ec;
+  --color-surface-raised: #fffdf6;
+  --color-ink: #23211b;
+  --color-ink-soft: #5b5647;
+  --color-ink-faint: #8b8471;
+  --color-line: #ddd4ba;
+  --color-line-strong: #c6bb9c;
+  --color-accent: #9e5a2e;
+  --color-accent-strong: #8a4d26;
+  --color-accent-ink: #fffdf6;
+  --color-accent-wash: #f0e1cf;
+  --color-olive: #5f6636;
+  --color-olive-wash: #e5e6d1;
+  --color-success: #5f6636;
+  --color-success-wash: #e5e6d1;
   --color-warn: #8a5a00;
-  --color-warn-wash: #f7ecd4;
-  --color-danger: #a83226;
-  --color-danger-wash: #f7e2de;
-  --color-focus: #0e6b5e;
-  --shadow-1: 0 1px 2px rgb(28 36 32 / 0.08);
-  --shadow-2: 0 4px 14px rgb(28 36 32 / 0.1);
+  --color-warn-wash: #f5e8c8;
+  --color-danger: #a83a2a;
+  --color-danger-wash: #f6dfd6;
+  --color-focus: #9e5a2e;
+  --color-canvas: #ebe5d2;
+  --color-canvas-dot: #cbc19e;
+  --color-edge: #9d9682;
+  --color-minimap: #e0d9c2;
+  --color-minimap-mask: rgb(158 90 46 / 0.16);
+  --shadow-1: 0 1px 2px rgb(35 33 27 / 0.1);
+  --shadow-2: 0 10px 28px rgb(35 33 27 / 0.14);
 }
 
 :root[data-theme="dark"] {
-  --color-paper: #141816;
-  --color-surface: #1b211e;
-  --color-surface-raised: #222927;
-  --color-ink: #e8ece7;
-  --color-ink-soft: #b9c2b9;
-  --color-ink-faint: #8b948e;
-  --color-line: #333c38;
-  --color-line-strong: #4a5450;
-  --color-accent: #4cc2a8;
-  --color-accent-ink: #0c1a16;
-  --color-accent-wash: #1e352e;
+  --color-paper: #161411;
+  --color-surface: #1f1b15;
+  --color-surface-raised: #2b261d;
+  --color-ink: #f0e9d8;
+  --color-ink-soft: #b3a98f;
+  --color-ink-faint: #7f7761;
+  --color-line: #38322a;
+  --color-line-strong: #544b3a;
+  --color-accent: #d08a52;
+  --color-accent-strong: #c9854e;
+  --color-accent-ink: #1d130a;
+  --color-accent-wash: #3a2c1e;
+  --color-olive: #a3a86b;
+  --color-olive-wash: #2c2f1c;
+  --color-success: #a3a86b;
+  --color-success-wash: #2c2f1c;
   --color-warn: #d9a441;
-  --color-warn-wash: #38300f;
+  --color-warn-wash: #3a2c10;
   --color-danger: #e08073;
-  --color-danger-wash: #3d2220;
-  --color-focus: #4cc2a8;
-  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.4);
-  --shadow-2: 0 4px 14px rgb(0 0 0 / 0.45);
+  --color-danger-wash: #40201d;
+  --color-focus: #d08a52;
+  --color-canvas: #1a1712;
+  --color-canvas-dot: #484134;
+  --color-edge: #6f6754;
+  --color-minimap: #221e17;
+  --color-minimap-mask: rgb(208 138 82 / 0.2);
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.5);
+  --shadow-2: 0 10px 28px rgb(0 0 0 / 0.5);
+}
+
+::selection {
+  background: var(--color-accent-wash);
 }
 
 @media (prefers-reduced-motion: reduce) {

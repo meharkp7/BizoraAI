@@ -5,16 +5,50 @@
   padding: var(--space-4);
 }
 
+.panel h2 {
+  margin-bottom: var(--space-3);
+}
+
 .hint {
   margin: 0;
   color: var(--color-ink-faint);
   font-size: 0.875rem;
 }
 
+.head {
+  padding-bottom: var(--space-3);
+  margin-bottom: var(--space-2);
+  border-bottom: 3px double var(--color-line-strong);
+}
+
+.eyebrow {
+  font-size: 0.625rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--color-accent-strong);
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin-top: var(--space-1);
+  overflow-wrap: anywhere;
+}
+
+.detail {
+  color: var(--color-ink-faint);
+  font-size: 0.75rem;
+  margin-top: 2px;
+}
+
+/* Ruled ledger rows. */
 .facts {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: var(--space-1) var(--space-3);
+  gap: 0 var(--space-3);
   margin: 0;
   font-size: 0.875rem;
 }
@@ -22,30 +56,49 @@
 .facts dt {
   color: var(--color-ink-faint);
   font-weight: 600;
+  white-space: nowrap;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-line);
 }
 
 .facts dd {
   margin: 0;
   overflow-wrap: anywhere;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-line);
 }
 
 .badge {
   display: inline-block;
   padding: 0 var(--space-2);
   background: var(--color-accent-wash);
+  border: 1px solid var(--color-line-strong);
   color: var(--color-ink);
   border-radius: var(--radius-sm);
   font-size: 0.75rem;
   font-weight: 650;
 }
 
+.badge.verified {
+  background: var(--color-olive-wash);
+  border-color: var(--color-olive);
+}
+
+.badge.inferred {
+  background: var(--color-warn-wash);
+  border-color: var(--color-warn);
+}
+
 .config {
   margin: 0;
   padding-left: var(--space-4);
+  font-size: 0.8125rem;
 }
 
 .editor {
-  margin-top: var(--space-3);
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 3px double var(--color-line-strong);
   display: grid;
   gap: var(--space-2);
 }
@@ -54,11 +107,8 @@
   width: 100%;
   font-family: var(--font-mono);
   font-size: 0.8125rem;
+  line-height: 1.5;
   padding: var(--space-2);
-  background: var(--color-surface-raised);
-  color: var(--color-ink);
-  border: 1px solid var(--color-line-strong);
-  border-radius: var(--radius-sm);
   resize: vertical;
 }
 
@@ -66,20 +116,21 @@
   display: flex;
   gap: var(--space-2);
   align-items: baseline;
+  flex-wrap: wrap;
 }
 
 .editorRow button {
   padding: var(--space-1) var(--space-3);
-  background: var(--color-accent);
+  background: var(--color-accent-strong);
   color: var(--color-accent-ink);
-  border: none;
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
   font-weight: 650;
+  font-size: 0.875rem;
 }
 
-.editorRow button:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
+.editorRow button:not(:disabled):hover {
+  filter: brightness(1.08);
 }
 
 .mergeNote {
