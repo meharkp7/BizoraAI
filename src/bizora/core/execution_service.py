@@ -48,6 +48,7 @@ from bizora.db.repository import (
     get_graph_revision,
     heartbeat_experiment_run,
     list_claimable_runs,
+    reap_expired_leases,
     save_artifact_record,
     save_metric_record,
 )
@@ -213,8 +214,30 @@ class ExecutionService:
             result_path,
         ]
 
+    def recover_expired_leases(self) -> int:
+        """Fail runs whose worker lease expired; return the reaped count.
+
+        Recovery is worker-driven: claiming and executing first reap
+        expired leases, so a crashed worker's runs become terminal failed
+        runs with a structured lease-expired error instead of hanging in
+        running forever. Only still-running rows with an expired lease
+        match, so reaping is idempotent and safe under concurrent
+        workers, repeated startups, and shutdowns. Reaped runs are
+        terminal and are never retried: the interrupted execution may
+        have had side effects and its outcome is uncertain.
+        """
+        error = StructuredError(
+            code=ExecutionErrorCode.LEASE_EXPIRED,
+            message="Worker lease expired before the run finished.",
+        )
+        with self._session() as session:
+            count = reap_expired_leases(session, now=self._utcnow(), error=error.to_record_value())
+            session.commit()
+            return count
+
     def claim_next_available(self) -> str | None:
         """Claim the oldest pending run; return its id or None."""
+        self.recover_expired_leases()
         with self._session() as session:
             candidates = [
                 record.run_id for record in list_claimable_runs(session, limit=10)
@@ -369,6 +392,7 @@ class ExecutionService:
 
     def execute_run(self, run_id: str) -> ExperimentRun:
         """Claim, validate, supervise, and finalize one run."""
+        self.recover_expired_leases()
         config = self._claim_or_adopt(run_id)
         with self._session() as session:
             graph_record = get_graph_revision(
