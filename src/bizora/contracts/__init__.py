@@ -24,7 +24,7 @@ from bizora.contracts.execution import (
 from bizora.contracts.experiment import ExperimentConfig, ResultKind
 from bizora.contracts.graph import GraphEdge, GraphNode, MethodologyGraph, NodeKind, validate_graph
 from bizora.contracts.layout import CameraState, GraphLayout, NodePosition, ViewportState
-from bizora.contracts.patches import GraphPatch, PatchOperation
+from bizora.contracts.patches import GraphPatch, GraphPatchBatch, PatchOperation
 from bizora.contracts.run import (
     ALLOWED_TRANSITIONS,
     TERMINAL_STATES,
@@ -62,6 +62,7 @@ __all__ = [
     "GraphNode",
     "GraphPair",
     "GraphPatch",
+    "GraphPatchBatch",
     "GraphRevisionDiff",
     "MethodologyGraph",
     "MetricComparison",

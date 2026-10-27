@@ -18,7 +18,7 @@ from bizora.contracts.comparison import RunComparison
 from bizora.contracts.diff import GraphRevisionDiff
 from bizora.contracts.graph import MethodologyGraph
 from bizora.contracts.layout import GraphLayout
-from bizora.contracts.patches import GraphPatch
+from bizora.contracts.patches import GraphPatch, GraphPatchBatch
 from bizora.contracts.run import (
     ArtifactRecord,
     CreateExperimentRunRequest,
@@ -229,6 +229,59 @@ def apply_graph_patch(
 
     return MethodologyGraph.model_validate(record.graph_payload)
 
+@router.post(
+    "/api/v1/graphs/{project_id}/{graph_id}/patch-batches",
+    response_model=MethodologyGraph,
+    status_code=status.HTTP_201_CREATED,
+    tags=["graphs"],
+)
+def apply_graph_patch_batch(
+    project_id: str,
+    graph_id: str,
+    batch: GraphPatchBatch,
+    session: Session = DB_SESSION_DEPENDENCY,
+) -> MethodologyGraph:
+    """Apply a validated patch batch and persist one resulting revision."""
+    first = batch.patches[0]
+    if first.base_graph_id != graph_id:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Path graph_id must match the batch base_graph_id.",
+        )
+
+    base_record = get_graph_revision(
+        session,
+        project_id=project_id,
+        graph_id=graph_id,
+        version=first.base_version,
+    )
+
+    if base_record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Base graph revision not found.",
+        )
+
+    base_graph = MethodologyGraph.model_validate(
+        base_record.graph_payload
+    )
+
+    patched_graph = GraphPatchService.apply_patches(
+        base_graph, batch.patches
+    )
+
+    # Re-check the latest persisted snapshot transactionally before saving.
+    record = GraphPersistenceService.create_revision(
+        session,
+        base_graph,
+        created_by=patched_graph.created_by,
+        nodes=patched_graph.nodes,
+        edges=patched_graph.edges,
+        source_ids=patched_graph.source_ids,
+        title=patched_graph.title,
+    )
+
+    return MethodologyGraph.model_validate(record.graph_payload)
 
 @router.get(
     "/api/v1/graphs/{project_id}/{graph_id}/revisions/{version}",

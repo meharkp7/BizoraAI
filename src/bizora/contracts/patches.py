@@ -3,7 +3,7 @@
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class PatchOperation(StrEnum):
@@ -28,3 +28,30 @@ class GraphPatch(BaseModel):
     payload: dict[str, Any] = Field(default_factory=dict)
     rationale: str = Field(min_length=1, max_length=2000)
     requested_by: str = Field(min_length=1, max_length=128)
+
+
+class GraphPatchBatch(BaseModel):
+    """A set of patches applied atomically as one graph revision.
+
+    All patches must target the same base revision and actor so the
+    resulting revision keeps a single unambiguous parent and author.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    patches: tuple[GraphPatch, ...] = Field(min_length=1, max_length=50)
+
+    @model_validator(mode="after")
+    def validate_uniform_base(self) -> "GraphPatchBatch":
+        base_ids = {patch.base_graph_id for patch in self.patches}
+        base_versions = {patch.base_version for patch in self.patches}
+        actors = {patch.requested_by for patch in self.patches}
+        if len(base_ids) != 1 or len(base_versions) != 1:
+            raise ValueError(
+                "all patches in a batch must target the same base revision"
+            )
+        if len(actors) != 1:
+            raise ValueError(
+                "all patches in a batch must share one requested_by actor"
+            )
+        return self
