@@ -6,6 +6,7 @@ import type {
   ExperimentConfig,
   ExperimentRun,
   ExtractedTable,
+  GraphEntities,
   GraphLayout,
   GraphPatch,
   GraphPatchBatch,
@@ -150,6 +151,16 @@ export const api = {
   getLayout(projectId: string, graphId: string, version: number): Promise<GraphLayout> {
     return request(
       `/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/revisions/${version}/layout`,
+    );
+  },
+
+  getGraphEntities(
+    projectId: string,
+    graphId: string,
+    version: number,
+  ): Promise<GraphEntities> {
+    return request(
+      `/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/revisions/${version}/entities`,
     );
   },
 

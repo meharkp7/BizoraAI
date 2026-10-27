@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { NODE_KINDS } from "../../lib/constants.ts";
-import type { GraphEdge, GraphNode, NodeKind } from "../../lib/types.ts";
+import type { EntityResolution, GraphEdge, GraphNode, NodeKind } from "../../lib/types.ts";
+import { categoryLabel, domainLabel, prettyEntityType } from "../canvas/graph3d.ts";
 import type { NodeReplacement } from "./patchBuilders.ts";
 import styles from "./InspectorPanel.module.css";
 
@@ -196,6 +197,7 @@ export function InspectorPanel({
   disabled,
   onUpdateConfig,
   onReplaceNode,
+  entity,
 }: {
   node: GraphNode | null;
   edge: GraphEdge | null;
@@ -203,6 +205,7 @@ export function InspectorPanel({
   disabled?: boolean;
   onUpdateConfig?: (config: Record<string, unknown>) => void;
   onReplaceNode?: (replacement: NodeReplacement) => void;
+  entity?: EntityResolution | null;
 }) {
   if (!node && !edge) {
     return (
@@ -279,6 +282,51 @@ export function InspectorPanel({
         </dd>
         <dt>Confidence</dt>
         <dd>{node.confidence === null ? "unknown" : node.confidence.toFixed(2)}</dd>
+        <dt>System entity</dt>
+        <dd>
+          {entity ? (
+            <>
+              {entity.generic ? (
+                <span className={styles.badge}>generic placeholder</span>
+              ) : (
+                <span>
+                  {entity.display_label} · {prettyEntityType(entity.entity_type)}
+                </span>
+              )}{" "}
+              <span className={styles.entityMeta}>
+                {domainLabel(entity.domain)} · {categoryLabel(entity.category)} ·{" "}
+                {Math.round(entity.confidence * 100)}%
+              </span>
+              {entity.generic ? (
+                <span className={styles.entityNote}>
+                  The paper does not name an exact part here; the 3D view shows a generic
+                  marker rather than guessing.
+                </span>
+              ) : null}
+              {entity.interfaces.length > 0 ? (
+                <span className={styles.entityMeta}>
+                  Interfaces:{" "}
+                  {entity.interfaces
+                    .map((iface) =>
+                      Object.keys(iface.params).length === 0
+                        ? iface.kind
+                        : `${iface.kind} (${Object.entries(iface.params)
+                            .map(([key, value]) => `${key}=${value}`)
+                            .join(", ")})`,
+                    )
+                    .join(" · ")}
+                </span>
+              ) : null}
+              {entity.matched_terms.length > 0 ? (
+                <span className={styles.entityMeta}>
+                  Grounded by: {entity.matched_terms.join(", ")}
+                </span>
+              ) : null}
+            </>
+          ) : (
+            "resolving…"
+          )}
+        </dd>
         <dt>Configuration</dt>
         <dd>
           {configEntries.length === 0 ? (

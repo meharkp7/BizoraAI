@@ -101,6 +101,38 @@ export interface GraphPatch {
   requested_by: string;
 }
 
+export interface InterfaceSpec {
+  name: string;
+  kind: string;
+  params: Record<string, string>;
+}
+
+export interface EntityResolution {
+  node_id: string;
+  domain: string;
+  entity_type: string;
+  display_label: string;
+  generic: boolean;
+  category: string;
+  interfaces: InterfaceSpec[];
+  matched_terms: string[];
+  confidence: number;
+}
+
+export interface DomainClassification {
+  domain: string;
+  confidence: number;
+  signals: string[];
+}
+
+export interface GraphEntities {
+  project_id: string;
+  graph_id: string;
+  version: number;
+  classification: DomainClassification;
+  entities: EntityResolution[];
+}
+
 export interface NodePosition {
   node_id: string;
   x: number;

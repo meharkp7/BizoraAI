@@ -16,6 +16,19 @@ describe("api client", () => {
     expect(graph.nodes).toHaveLength(2);
   });
 
+  it("fetches domain entities for a revision", async () => {
+    const entities = await api.getGraphEntities("project-1", "graph-1", 2);
+    expect(entities.classification.domain).toBe("electronics");
+    expect(entities.entities).toHaveLength(2);
+    expect(entities.entities[0]?.entity_type).toBe("memory-cell");
+  });
+
+  it("reports missing revisions for the entities endpoint", async () => {
+    const error = await api.getGraphEntities("missing", "missing", 1).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(BizoraApiError);
+    expect((error as BizoraApiError).isNotFound).toBe(true);
+  });
+
   it("raises a typed error with code and details on API failures", async () => {
     const error = await api.getGraphRevision("missing", "missing", 1).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(BizoraApiError);

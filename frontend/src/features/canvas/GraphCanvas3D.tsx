@@ -4,15 +4,19 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { CSS2DObject, CSS2DRenderer } from "three/addons/renderers/CSS2DRenderer.js";
 import { ErrorState } from "../../components/states.tsx";
 import { useTheme, useWorkspaceSelection } from "../../lib/store.ts";
-import type { GraphLayout, MethodologyGraph } from "../../lib/types.ts";
+import type { GraphEntities, GraphLayout, MethodologyGraph } from "../../lib/types.ts";
+import { EntityLegend } from "./EntityLegend.tsx";
 import {
   EDGE_COLOR,
   KIND_COLORS,
   SELECT_COLOR,
+  archetypeFor,
   boundingSphere,
   fitDistance,
+  resolutionsByNodeId,
   toWorldPositions,
 } from "./graph3d.ts";
+import type { ArchetypeGeometry } from "./graph3d.ts";
 import styles from "./GraphCanvas3D.module.css";
 
 const NODE_RADIUS = 1.1;
@@ -40,9 +44,11 @@ function webglAvailable(): boolean {
 export function GraphCanvas3D({
   graph,
   layout,
+  entities,
 }: {
   graph: MethodologyGraph;
   layout: GraphLayout | null;
+  entities: GraphEntities | null;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [failed, setFailed] = useState(false);
@@ -106,8 +112,49 @@ export function GraphCanvas3D({
       fill.position.set(center.x - distance, center.y + distance * 0.5, center.z - distance);
       scene.add(fill);
 
-      const sphereGeometry = new THREE.SphereGeometry(NODE_RADIUS, 32, 24);
-      disposables.push(sphereGeometry);
+      const resolutions = resolutionsByNodeId(entities);
+      const geometries = new Map<ArchetypeGeometry, THREE.BufferGeometry>();
+      const geometryFor = (archetype: ArchetypeGeometry): THREE.BufferGeometry => {
+        const cached = geometries.get(archetype);
+        if (cached) return cached;
+        let built: THREE.BufferGeometry;
+        switch (archetype) {
+          case "box":
+            built = new THREE.BoxGeometry(1.7, 1.7, 1.7);
+            break;
+          case "slab":
+            built = new THREE.BoxGeometry(2.4, 0.7, 2.4);
+            break;
+          case "cylinder":
+            built = new THREE.CylinderGeometry(0.85, 0.85, 1.5, 24);
+            break;
+          case "cone":
+            built = new THREE.ConeGeometry(1.0, 1.9, 24);
+            break;
+          case "torus":
+            built = new THREE.TorusGeometry(0.8, 0.34, 16, 28);
+            break;
+          case "octahedron":
+            built = new THREE.OctahedronGeometry(1.2);
+            break;
+          case "tetrahedron":
+            built = new THREE.TetrahedronGeometry(1.35);
+            break;
+          case "icosahedron":
+            built = new THREE.IcosahedronGeometry(1.15);
+            break;
+          case "dodecahedron":
+            built = new THREE.DodecahedronGeometry(1.15);
+            break;
+          case "sphere":
+          default:
+            built = new THREE.SphereGeometry(NODE_RADIUS, 32, 24);
+            break;
+        }
+        geometries.set(archetype, built);
+        disposables.push(built);
+        return built;
+      };
       const kindMaterials = new Map<string, THREE.MeshStandardMaterial>();
       const selectedMaterial = new THREE.MeshStandardMaterial({
         color: SELECT_COLOR,
@@ -134,7 +181,11 @@ export function GraphCanvas3D({
       const nodeTags = new Map<string, { element: HTMLDivElement; marker: CSS2DObject }>();
       for (const node of graph.nodes) {
         const point = positions.get(node.id) ?? { x: 0, y: 0, z: 0 };
-        const mesh = new THREE.Mesh(sphereGeometry, materialFor(node.kind));
+        const resolution = resolutions.get(node.id);
+        const archetype = archetypeFor(
+          resolution && !resolution.generic ? resolution.category : "generic",
+        );
+        const mesh = new THREE.Mesh(geometryFor(archetype), materialFor(node.kind));
         mesh.position.set(point.x, point.y, point.z);
         mesh.userData.nodeId = node.id;
         mesh.userData.kind = node.kind;
@@ -355,7 +406,7 @@ export function GraphCanvas3D({
       labelRenderer?.domElement.remove();
     };
     // Scene lifetime: rebuild per graph object; selection syncs via the store.
-  }, [graph, layout, failed]);
+  }, [graph, layout, entities, failed]);
 
   if (failed) {
     return (
@@ -377,6 +428,7 @@ export function GraphCanvas3D({
           ? "Drag to orbit · Pinch to zoom · Two-finger drag to pan"
           : "Drag to orbit · Scroll to zoom · Right-drag to pan"}
       </p>
+      <EntityLegend entities={entities} />
     </div>
   );
 }

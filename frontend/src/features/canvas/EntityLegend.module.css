@@ -1,0 +1,80 @@
+.legend {
+  position: absolute;
+  right: var(--space-3);
+  top: var(--space-3);
+  z-index: 1;
+  max-width: 15rem;
+  padding: var(--space-2) var(--space-3);
+  background: color-mix(in srgb, var(--color-surface-raised) 92%, transparent);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  pointer-events: auto;
+}
+
+.badge {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-1);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.badgeDot {
+  align-self: center;
+  width: 0.5rem;
+  height: 0.5rem;
+  flex: none;
+  border-radius: 999px;
+  background: var(--color-accent);
+}
+
+.badgeDot[data-generic="true"] {
+  background: var(--color-ink-faint);
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1rem 1fr;
+  grid-template-areas: "glyph name" "glyph types";
+  column-gap: var(--space-2);
+  align-items: center;
+  padding: var(--space-1) 0;
+  border-top: 1px solid var(--color-line);
+}
+
+.row svg {
+  grid-area: glyph;
+}
+
+.glyphShape {
+  fill: none;
+  stroke: var(--color-ink-soft);
+  stroke-width: 1.4;
+}
+
+.name {
+  grid-area: name;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.count {
+  margin-left: var(--space-1);
+  font-weight: 400;
+  color: var(--color-ink-faint);
+}
+
+.types {
+  grid-area: types;
+  font-size: 0.6875rem;
+  color: var(--color-ink-faint);
+}

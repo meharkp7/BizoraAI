@@ -3,6 +3,7 @@ import { setupServer } from "msw/node";
 import {
   comparisonFixture,
   diffFixture,
+  entitiesFixture,
   failedRun,
   graphFixture,
   layoutFixture,
@@ -44,6 +45,20 @@ export const handlers = [
   }),
 
   http.get("/api/v1/graphs/:projectId/:graphId/diff", () => HttpResponse.json(diffFixture)),
+
+  http.get(
+    "/api/v1/graphs/:projectId/:graphId/revisions/:version/entities",
+    ({ params }) => {
+      if (
+        params["projectId"] === "project-1" &&
+        params["graphId"] === "graph-1" &&
+        params["version"] === "2"
+      ) {
+        return HttpResponse.json(entitiesFixture);
+      }
+      return notFound("RESOURCE_NOT_FOUND", "Graph revision not found.");
+    },
+  ),
 
   http.post("/api/v1/graphs/:projectId/:graphId/patches", async ({ request }) => {
     const patch = (await request.json()) as { base_version: number };

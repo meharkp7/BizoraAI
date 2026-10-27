@@ -17,6 +17,8 @@ export const graphKeys = {
     ["graph", projectId, graphId, "revisions", version, "layout"] as const,
   diff: (projectId: string, graphId: string, baseVersion: number, targetVersion: number) =>
     ["graph", projectId, graphId, "diff", baseVersion, targetVersion] as const,
+  entities: (projectId: string, graphId: string, version: number) =>
+    ["graph", projectId, graphId, "revisions", version, "entities"] as const,
 };
 
 export const runKeys = {
@@ -42,6 +44,13 @@ export function useGraphLayout(projectId: string, graphId: string, version: numb
     queryFn: () => api.getLayout(projectId, graphId, version),
     // A missing layout is normal: the canvas falls back to auto-layout.
     retry: false,
+  });
+}
+
+export function useGraphEntities(projectId: string, graphId: string, version: number) {
+  return useQuery({
+    queryKey: graphKeys.entities(projectId, graphId, version),
+    queryFn: () => api.getGraphEntities(projectId, graphId, version),
   });
 }
 

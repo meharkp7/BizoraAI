@@ -2,6 +2,7 @@ import { HttpResponse } from "msw";
 import type {
   ExperimentRun,
   ExtractedTable,
+  GraphEntities,
   GraphLayout,
   GraphRevisionDiff,
   MethodologyGraph,
@@ -10,6 +11,44 @@ import type {
   ParsedPaper,
   RunComparison,
 } from "../lib/types.ts";
+
+export const entitiesFixture: GraphEntities = {
+  project_id: "project-1",
+  graph_id: "graph-1",
+  version: 2,
+  classification: {
+    domain: "electronics",
+    confidence: 0.83,
+    signals: ["sram", "transistor", "bias"],
+  },
+  entities: [
+    {
+      node_id: "input",
+      domain: "electronics",
+      entity_type: "memory-cell",
+      display_label: "Memory cell",
+      generic: false,
+      category: "package",
+      interfaces: [
+        { name: "power", kind: "power", params: {} },
+        { name: "data", kind: "data", params: {} },
+      ],
+      matched_terms: ["sram"],
+      confidence: 0.75,
+    },
+    {
+      node_id: "encoder",
+      domain: "electronics",
+      entity_type: "generic-component",
+      display_label: "Transformer encoder",
+      generic: true,
+      category: "generic",
+      interfaces: [],
+      matched_terms: [],
+      confidence: 0,
+    },
+  ],
+};
 
 export const graphFixture: MethodologyGraph = {
   schema_version: "1.0",

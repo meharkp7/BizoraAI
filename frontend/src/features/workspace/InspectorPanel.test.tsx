@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { graphFixture } from "../../test/fixtures.ts";
+import { entitiesFixture, graphFixture } from "../../test/fixtures.ts";
 import { InspectorPanel } from "./InspectorPanel.tsx";
 
 describe("InspectorPanel replace form", () => {
@@ -47,5 +47,51 @@ describe("InspectorPanel replace form", () => {
 
     expect(onReplaceNode).not.toHaveBeenCalled();
     expect(screen.getByRole("alert")).toHaveTextContent("label is required");
+  });
+});
+
+describe("InspectorPanel system entity", () => {
+  it("shows the resolved entity with interfaces and grounding", () => {
+    render(
+      <InspectorPanel
+        node={graphFixture.nodes[0]}
+        edge={null}
+        entity={entitiesFixture.entities[0] ?? null}
+        formatShape={() => "—"}
+      />,
+    );
+
+    expect(screen.getByText("System entity")).toBeInTheDocument();
+    expect(screen.getByText(/Memory cell · Memory Cell/)).toBeInTheDocument();
+    expect(screen.getByText(/Electronics · Package · 75%/)).toBeInTheDocument();
+    expect(screen.getByText(/Interfaces: power · data/)).toBeInTheDocument();
+    expect(screen.getByText(/Grounded by: sram/)).toBeInTheDocument();
+  });
+
+  it("marks generic placeholders instead of inventing a part", () => {
+    render(
+      <InspectorPanel
+        node={graphFixture.nodes[1]}
+        edge={null}
+        entity={entitiesFixture.entities[1] ?? null}
+        formatShape={() => "—"}
+      />,
+    );
+
+    expect(screen.getByText("generic placeholder")).toBeInTheDocument();
+    expect(screen.getByText(/rather than guessing/)).toBeInTheDocument();
+  });
+
+  it("shows a resolving state while entities load", () => {
+    render(
+      <InspectorPanel
+        node={graphFixture.nodes[0]}
+        edge={null}
+        entity={null}
+        formatShape={() => "—"}
+      />,
+    );
+
+    expect(screen.getByText("resolving…")).toBeInTheDocument();
   });
 });

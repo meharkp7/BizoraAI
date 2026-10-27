@@ -7,7 +7,7 @@ describe("GraphCanvas3D", () => {
   it("explains when WebGL is unavailable instead of crashing", () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
-      render(<GraphCanvas3D graph={graphFixture} layout={null} />);
+      render(<GraphCanvas3D graph={graphFixture} layout={null} entities={null} />);
       expect(screen.getByText("3D view is unavailable.")).toBeInTheDocument();
     } finally {
       error.mockRestore();

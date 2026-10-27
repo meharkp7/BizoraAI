@@ -183,3 +183,18 @@
   font-size: 0.8125rem;
   resize: vertical;
 }
+
+.entityMeta {
+  display: block;
+  margin-top: var(--space-1);
+  font-size: 0.75rem;
+  color: var(--color-ink-faint);
+}
+
+.entityNote {
+  display: block;
+  margin-top: var(--space-1);
+  font-size: 0.75rem;
+  font-style: italic;
+  color: var(--color-ink-soft);
+}

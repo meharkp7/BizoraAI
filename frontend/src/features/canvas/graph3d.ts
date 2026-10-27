@@ -2,7 +2,13 @@
    from the same 2D layout source of truth. No three.js imports here so unit
    tests never need WebGL. */
 
-import type { GraphLayout, MethodologyGraph, NodeKind } from "../../lib/types.ts";
+import type {
+  EntityResolution,
+  GraphEntities,
+  GraphLayout,
+  MethodologyGraph,
+  NodeKind,
+} from "../../lib/types.ts";
 import { layerByNodeId, resolvePositions } from "./layout.ts";
 
 export interface WorldPoint {
@@ -150,6 +156,133 @@ export function fitDistance(
     distance = Math.max(distance, need(corner, right, tanH));
   }
   return distance * margin;
+}
+
+/** Three.js primitive per entity category. Shapes repeat across domains
+ *  only where the domains never share a graph (power/storage cylinders,
+ *  package/compute boxes), so one legend stays unambiguous. Unknown
+ *  categories fall back to the sphere so new backend types never break
+ *  the renderer. */
+export type ArchetypeGeometry =
+  | "sphere"
+  | "box"
+  | "slab"
+  | "cylinder"
+  | "cone"
+  | "torus"
+  | "octahedron"
+  | "tetrahedron"
+  | "icosahedron"
+  | "dodecahedron";
+
+export const CATEGORY_GEOMETRY: Record<string, ArchetypeGeometry> = {
+  package: "box",
+  discrete: "cone",
+  passive: "torus",
+  power: "cylinder",
+  sensor: "octahedron",
+  compute: "box",
+  network: "torus",
+  format: "icosahedron",
+  signal: "tetrahedron",
+  service: "dodecahedron",
+  storage: "cylinder",
+  layer: "slab",
+  generic: "sphere",
+};
+
+export function archetypeFor(category: string | null | undefined): ArchetypeGeometry {
+  if (!category) return "sphere";
+  return CATEGORY_GEOMETRY[category] ?? "sphere";
+}
+
+export const CATEGORY_LABELS: Record<string, string> = {
+  package: "Package",
+  discrete: "Discrete",
+  passive: "Passive",
+  power: "Power",
+  sensor: "Sensor",
+  compute: "Compute",
+  network: "Network",
+  format: "Data format",
+  signal: "Signal stage",
+  service: "Service",
+  storage: "Storage",
+  layer: "Model layer",
+  generic: "Generic",
+};
+
+export function categoryLabel(category: string): string {
+  return CATEGORY_LABELS[category] ?? "Generic";
+}
+
+export const DOMAIN_LABELS: Record<string, string> = {
+  electronics: "Electronics",
+  iot: "IoT system",
+  quantization: "Quantization",
+  "signal-processing": "Signal processing",
+  "distributed-systems": "Distributed system",
+  "deep-learning": "Deep learning",
+  generic: "Generic",
+};
+
+export function domainLabel(domain: string): string {
+  return DOMAIN_LABELS[domain] ?? "Generic";
+}
+
+/** Prettify a kebab-case entity type id for legend display. */
+export function prettyEntityType(entityType: string): string {
+  return entityType
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+export interface LegendEntry {
+  category: string;
+  label: string;
+  geometry: ArchetypeGeometry;
+  count: number;
+  entityTypes: string[];
+}
+
+/** Group resolved entities by visual category for the 3D legend. Generic
+ *  nodes keep their own entry so placeholders stay visibly generic. */
+export function legendEntries(entities: GraphEntities | null): LegendEntry[] {
+  if (!entities) return [];
+  const groups = new Map<string, { count: number; types: Set<string> }>();
+  const order: string[] = [];
+  for (const entity of entities.entities) {
+    const category = entity.generic ? "generic" : entity.category;
+    const group = groups.get(category);
+    if (group) {
+      group.count += 1;
+      group.types.add(entity.entity_type);
+    } else {
+      groups.set(category, { count: 1, types: new Set([entity.entity_type]) });
+      order.push(category);
+    }
+  }
+  return order.map((category) => {
+    const group = groups.get(category) ?? { count: 0, types: new Set<string>() };
+    return {
+      category,
+      label: categoryLabel(category),
+      geometry: archetypeFor(category),
+      count: group.count,
+      entityTypes: [...group.types].sort().map(prettyEntityType),
+    };
+  });
+}
+
+/** Index resolutions by node id for mesh building and the inspector. */
+export function resolutionsByNodeId(
+  entities: GraphEntities | null,
+): Map<string, EntityResolution> {
+  const index = new Map<string, EntityResolution>();
+  if (!entities) return index;
+  for (const entity of entities.entities) index.set(entity.node_id, entity);
+  return index;
 }
 
 /** Center and radius of the smallest sphere containing every node. */

@@ -78,6 +78,40 @@ test.beforeEach(async ({ page }) => {
       await route.fulfill({ json: route.request().postDataJSON() });
     }
   });
+  await page.route("**/api/v1/graphs/**/revisions/*/entities", async (route) => {
+    await route.fulfill({
+      json: {
+        project_id: "project-1",
+        graph_id: "graph-1",
+        version: 2,
+        classification: { domain: "deep-learning", confidence: 0.9, signals: ["transformer"] },
+        entities: [
+          {
+            node_id: "input",
+            domain: "deep-learning",
+            entity_type: "embedding",
+            display_label: "Embedding",
+            generic: false,
+            category: "layer",
+            interfaces: [{ name: "tensor", kind: "tensor", params: {} }],
+            matched_terms: ["embedding"],
+            confidence: 0.75,
+          },
+          {
+            node_id: "encoder",
+            domain: "deep-learning",
+            entity_type: "attention-block",
+            display_label: "Attention block",
+            generic: false,
+            category: "layer",
+            interfaces: [{ name: "tensor", kind: "tensor", params: {} }],
+            matched_terms: ["attention"],
+            confidence: 0.75,
+          },
+        ],
+      },
+    });
+  });
 });
 
 test("3D explorer renders without console errors and toggles views", async ({ page }) => {
@@ -114,6 +148,17 @@ test("3D list selection syncs to the inspector", async ({ page }) => {
   await page.locator("ul[aria-label='Graph nodes'] li").nth(1).click();
   await expect(page.getByRole("button", { name: "Replace component" })).toBeVisible();
   await expect(stage.getByText("Transformer encoder")).toBeVisible();
+});
+
+test("3D legend shows the domain and shape key", async ({ page }) => {
+  await page.goto(WORKSPACE_URL);
+  const stage = page.getByRole("application", { name: /3D methodology graph/ });
+  await expect(stage).toBeVisible();
+  const legend = stage.getByRole("complementary", { name: "3D shape key" });
+  await expect(legend).toBeVisible();
+  await expect(legend.getByText(/Deep learning · 90% confidence/)).toBeVisible();
+  await expect(legend.getByText("Model layer")).toBeVisible();
+  await expect(legend.getByText(/Attention Block/)).toBeVisible();
 });
 
 test("3D shows a gesture hint and tags for selected connections", async ({ page }) => {

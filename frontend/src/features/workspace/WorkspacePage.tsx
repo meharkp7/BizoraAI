@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   useApplyPatch,
   useApplyPatchBatch,
+  useGraphEntities,
   useGraphLayout,
   useGraphRevision,
   useSaveLayout,
@@ -11,6 +12,7 @@ import { WORKSPACE_ACTOR } from "../../lib/constants.ts";
 import { useWorkspaceSelection } from "../../lib/store.ts";
 import type {
   GraphEdge,
+  GraphEntities,
   GraphLayout,
   GraphNode,
   GraphPatch,
@@ -22,6 +24,7 @@ import type {
 import { EmptyState, ErrorState, LoadingState } from "../../components/states.tsx";
 import { GraphCanvas } from "../canvas/GraphCanvas.tsx";
 import { GraphCanvas3D } from "../canvas/GraphCanvas3D.tsx";
+import { DomainBadge } from "../canvas/EntityLegend.tsx";
 import { CanvasToolbar } from "../canvas/CanvasToolbar.tsx";
 import type { LayoutSaveStatus, NewNodeSpec } from "../canvas/CanvasToolbar.tsx";
 import { diffStatusMaps } from "../canvas/flowElements.ts";
@@ -169,6 +172,7 @@ export function WorkspacePage({
 }) {
   const revision = useGraphRevision(projectId, graphId, version);
   const savedLayout = useGraphLayout(projectId, graphId, version);
+  const entities = useGraphEntities(projectId, graphId, version);
   const patch = useApplyPatch(projectId, graphId);
   const batch = useApplyPatchBatch(projectId, graphId);
   const history = useRevisionHistory(version, onVersionChange);
@@ -243,6 +247,7 @@ export function WorkspacePage({
       view={view}
       onViewChange={onViewChange}
       savedLayout={savedLayout.data ?? null}
+      entities={entities.data ?? null}
       selectedNodeIds={selectedNodeIds}
       selectedEdgeIds={selectedEdgeIds}
       mutating={mutating}
@@ -292,6 +297,7 @@ function WorkspaceLoaded({
   view,
   onViewChange,
   savedLayout,
+  entities,
   selectedNodeIds,
   selectedEdgeIds,
   mutating,
@@ -315,6 +321,7 @@ function WorkspaceLoaded({
   view: "2d" | "3d";
   onViewChange: (view: "2d" | "3d") => void;
   savedLayout: GraphLayout | null;
+  entities: GraphEntities | null;
   selectedNodeIds: string[];
   selectedEdgeIds: string[];
   mutating: boolean;
@@ -336,6 +343,9 @@ function WorkspaceLoaded({
     graph.nodes.find((node) => node.id === selectedNodeIds[0]) ?? null;
   const selectedEdge: GraphEdge | null =
     graph.edges.find((edge) => edge.id === selectedEdgeIds[0]) ?? null;
+  const selectedEntity = selectedNode
+    ? (entities?.entities.find((entity) => entity.node_id === selectedNode.id) ?? null)
+    : null;
   const takenIds = useMemo(
     () => new Set([...graph.nodes.map((node) => node.id), ...graph.edges.map((edge) => edge.id)]),
     [graph],
@@ -449,6 +459,7 @@ function WorkspaceLoaded({
             {graph.nodes.length} node{graph.nodes.length === 1 ? "" : "s"} ·{" "}
             {graph.edges.length} edge{graph.edges.length === 1 ? "" : "s"}
           </p>
+          <DomainBadge entities={entities} />
         </div>
         <div className={styles.stepper} role="group" aria-label="Revision">
           <button type="button" disabled={layoutVersion <= 1 || mutating} onClick={onOlder}>
@@ -517,7 +528,12 @@ function WorkspaceLoaded({
             onViewChange={onViewChange}
           />
           {view === "3d" ? (
-            <GraphCanvas3D key={`3d-${graph.version}`} graph={graph} layout={savedLayout} />
+            <GraphCanvas3D
+              key={`3d-${graph.version}`}
+              graph={graph}
+              layout={savedLayout}
+              entities={entities}
+            />
           ) : (
             <GraphCanvas
               graph={graph}
@@ -536,6 +552,7 @@ function WorkspaceLoaded({
           <InspectorPanel
             node={selectedNode}
             edge={selectedEdge}
+            entity={selectedEntity}
             formatShape={formatShape}
             disabled={mutating}
             onUpdateConfig={

@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { graphFixture } from "../../test/fixtures.ts";
-import { KIND_COLORS, boundingSphere, fitDistance, toWorldPositions } from "./graph3d.ts";
+import { entitiesFixture, graphFixture } from "../../test/fixtures.ts";
+import {
+  KIND_COLORS,
+  archetypeFor,
+  boundingSphere,
+  categoryLabel,
+  domainLabel,
+  fitDistance,
+  legendEntries,
+  prettyEntityType,
+  resolutionsByNodeId,
+  toWorldPositions,
+} from "./graph3d.ts";
 
 describe("3D world mapping", () => {
   it("lifts the 2D floor plan into a depth cascade", () => {
@@ -57,5 +68,52 @@ describe("3D world mapping", () => {
     const diagonal = fitDistance(positions, { x: 1, y: 0.85, z: 1 }, 45, 16 / 9, 1.1, 1);
     expect(diagonal).toBeGreaterThan(4 / Math.tan((22.5 * Math.PI) / 180));
     expect(fitDistance(new Map(), { x: 0, y: 0, z: 1 }, 45, 1)).toBe(10);
+  });
+});
+
+describe("entity archetypes", () => {
+  it("maps each category to a distinct primitive within a domain", () => {
+    // Electronics set: every category renders a different shape.
+    const electronics = ["package", "discrete", "power", "sensor", "passive"].map(archetypeFor);
+    expect(new Set(electronics).size).toBe(electronics.length);
+    // Deep-learning set, including the flattened layer slab.
+    expect(archetypeFor("layer")).toBe("slab");
+    expect(archetypeFor("storage")).toBe("cylinder");
+    expect(archetypeFor("service")).toBe("dodecahedron");
+  });
+
+  it("falls back to the sphere for unknown or missing categories", () => {
+    expect(archetypeFor("quantum-foam")).toBe("sphere");
+    expect(archetypeFor(null)).toBe("sphere");
+    expect(archetypeFor(undefined)).toBe("sphere");
+    expect(categoryLabel("quantum-foam")).toBe("Generic");
+    expect(domainLabel("astrophysics")).toBe("Generic");
+  });
+
+  it("groups resolutions into legend entries with generic kept separate", () => {
+    const entries = legendEntries(entitiesFixture);
+    expect(entries).toHaveLength(2);
+    expect(entries[0]).toMatchObject({
+      category: "package",
+      label: "Package",
+      geometry: "box",
+      count: 1,
+      entityTypes: ["Memory Cell"],
+    });
+    expect(entries[1]).toMatchObject({
+      category: "generic",
+      label: "Generic",
+      geometry: "sphere",
+      count: 1,
+    });
+    expect(legendEntries(null)).toEqual([]);
+  });
+
+  it("prettifies entity type ids and indexes resolutions by node", () => {
+    expect(prettyEntityType("memory-cell")).toBe("Memory Cell");
+    const index = resolutionsByNodeId(entitiesFixture);
+    expect(index.get("input")?.entity_type).toBe("memory-cell");
+    expect(index.get("encoder")?.generic).toBe(true);
+    expect(resolutionsByNodeId(null).size).toBe(0);
   });
 });
