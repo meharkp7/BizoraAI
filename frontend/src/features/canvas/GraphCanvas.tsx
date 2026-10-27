@@ -18,7 +18,7 @@ import type {
 } from "@xyflow/react";
 import { useWorkspaceSelection } from "../../lib/store.ts";
 import type { GraphLayout, MethodologyGraph, ViewportState } from "../../lib/types.ts";
-import { toFlowElements } from "./flowElements.ts";
+import { toFlowElements, truncateEdgeLabel } from "./flowElements.ts";
 import type { CanvasDiffStatuses, FlowEdge } from "./flowElements.ts";
 import type { Point } from "./layout.ts";
 import { MethodNode } from "./MethodNode.tsx";
@@ -137,9 +137,10 @@ function FlowView({
       let changed = false;
       const next = current.map((edge) => {
         const selected = selectedEdgeIds.includes(edge.id);
-        if (edge.selected === selected) return edge;
+        const label = selected ? truncateEdgeLabel(edge.data?.fullLabel) : undefined;
+        if (edge.selected === selected && edge.label === label) return edge;
         changed = true;
-        return { ...edge, selected };
+        return { ...edge, selected, label };
       });
       return changed ? next : current;
     });
@@ -163,7 +164,10 @@ function FlowView({
         const diffStatus = diffStatuses?.edges.get(edge.id) ?? null;
         if (edge.data?.diffStatus === diffStatus) return edge;
         changed = true;
-        return { ...edge, data: { ...(edge.data ?? { relation: "" }), diffStatus } };
+        return {
+          ...edge,
+          data: { ...(edge.data ?? { relation: "", fullLabel: null }), diffStatus },
+        };
       });
       return changed ? next : current;
     });

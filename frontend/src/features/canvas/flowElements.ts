@@ -10,7 +10,22 @@ export interface CanvasDiffStatuses {
   edges: Map<string, NodeDiffStatus>;
 }
 
-export type FlowEdge = Edge<{ relation: string; diffStatus: NodeDiffStatus | null }>;
+export type FlowEdge = Edge<{
+  relation: string;
+  diffStatus: NodeDiffStatus | null;
+  fullLabel: string | null;
+}>;
+
+/** Only the selected connection shows its narrative on canvas; everything
+ *  else would collide in dense graphs. Full labels always live in the
+ *  Connections list and the edge inspector. */
+export const MAX_EDGE_LABEL = 40;
+
+export function truncateEdgeLabel(label: string | null | undefined): string | undefined {
+  if (!label) return undefined;
+  if (label.length <= MAX_EDGE_LABEL) return label;
+  return `${label.slice(0, MAX_EDGE_LABEL - 1).trimEnd()}…`;
+}
 
 /** Translate a revision diff into canvas highlight statuses. Removed
  *  elements are absent from the current graph, so only added/changed map. */
@@ -52,10 +67,13 @@ export function toFlowElements(
     id: edge.id,
     source: edge.source,
     target: edge.target,
-    label: edge.label ?? undefined,
+    label: selectedEdgeIds.includes(edge.id)
+      ? truncateEdgeLabel(edge.label)
+      : undefined,
     data: {
       relation: edge.relation,
       diffStatus: diffStatuses?.edges.get(edge.id) ?? null,
+      fullLabel: edge.label ?? null,
     },
     selected: selectedEdgeIds.includes(edge.id),
   }));

@@ -45,6 +45,18 @@ describe("toFlowElements", () => {
     expect(nodes.find((node) => node.id === "input")?.data.diffStatus).toBeNull();
   });
 
+  it("reveals a truncated label only on the selected edge", () => {
+    const long = "reconstruction observed binary observations estimate dominant value";
+    const graph = {
+      ...graphFixture,
+      edges: [{ ...graphFixture.edges[0], label: long }],
+    };
+    const hidden = toFlowElements(graph, null, null, [], []);
+    expect(hidden.edges[0].label).toBeUndefined();
+    const shown = toFlowElements(graph, null, null, [], ["e1"]);
+    expect(shown.edges[0].label).toBe("reconstruction observed binary observat…");
+  });
+
   it("falls back to auto-layout without a saved layout", () => {
     const { nodes } = toFlowElements(graphFixture, null, null, [], []);
     const byId = new Map(nodes.map((node) => [node.id, node.position]));
