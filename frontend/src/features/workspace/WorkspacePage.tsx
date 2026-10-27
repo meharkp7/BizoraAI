@@ -16,6 +16,7 @@ import type {
   GraphPatch,
   GraphRevisionDiff,
   MethodologyGraph,
+  ResearchBrief,
   ViewportState,
 } from "../../lib/types.ts";
 import { EmptyState, ErrorState, LoadingState } from "../../components/states.tsx";
@@ -25,7 +26,7 @@ import type { LayoutSaveStatus, NewNodeSpec } from "../canvas/CanvasToolbar.tsx"
 import { diffStatusMaps } from "../canvas/flowElements.ts";
 import { suggestEdgeId } from "../canvas/ids.ts";
 import type { Point } from "../canvas/layout.ts";
-import { matchesSavedPositions, toNodePositions } from "../canvas/layout.ts";
+import { autoLayout, matchesSavedPositions, toNodePositions } from "../canvas/layout.ts";
 import { PatchStatus } from "../canvas/PatchStatus.tsx";
 import { useRevisionHistory } from "./history.ts";
 import { InspectorPanel } from "./InspectorPanel.tsx";
@@ -36,6 +37,7 @@ import {
   updateConfigPatch,
 } from "./patchBuilders.ts";
 import { EvidencePanel } from "./EvidencePanel.tsx";
+import { RunPanel } from "../runs/RunPanel.tsx";
 import { DiffPanel } from "./DiffPanel.tsx";
 import styles from "./WorkspacePage.module.css";
 
@@ -72,6 +74,45 @@ function NodeList({
         </li>
       ))}
     </ul>
+  );
+}
+
+function BriefList({ items }: { items: string[] }) {
+  if (items.length === 0) {
+    return <p className={styles.unknown}>Not stated in the paper.</p>;
+  }
+  return (
+    <ul className={styles.briefList}>
+      {items.map((item) => (
+        <li key={item}>{item}</li>
+      ))}
+    </ul>
+  );
+}
+
+function ResearchBriefPanel({ brief }: { brief: ResearchBrief }) {
+  return (
+    <section className={styles.brief} aria-label="Research brief">
+      <h2>Research brief</h2>
+      <div className={styles.briefGrid}>
+        <div>
+          <h3>Problem</h3>
+          {brief.problem ? <p>{brief.problem}</p> : <p className={styles.unknown}>Not stated in the paper.</p>}
+        </div>
+        <div>
+          <h3>Objectives</h3>
+          <BriefList items={brief.objectives} />
+        </div>
+        <div>
+          <h3>Findings</h3>
+          <BriefList items={brief.findings} />
+        </div>
+        <div>
+          <h3>Limitations</h3>
+          <BriefList items={brief.limitations} />
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -289,6 +330,10 @@ function WorkspaceLoaded({
   );
   const saveLayout = useSaveLayout(graph.project_id, graph.graph_id, graph.version);
   const [layoutStatus, setLayoutStatus] = useState<LayoutSaveStatus>("idle");
+  const [layoutReset, setLayoutReset] = useState<{
+    id: number;
+    positions: Map<string, Point>;
+  } | null>(null);
   const [activeDiff, setActiveDiff] = useState<GraphRevisionDiff | null>(null);
   const saveTimer = useRef<number | null>(null);
 
@@ -327,6 +372,30 @@ function WorkspaceLoaded({
         },
       );
     }, 800);
+  }
+
+  function handleResetLayout(): void {
+    if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
+    const positions = autoLayout(graph);
+    setLayoutStatus("saving");
+    saveLayout.mutate(
+      {
+        project_id: graph.project_id,
+        graph_id: graph.graph_id,
+        version: graph.version,
+        positions: toNodePositions(graph, positions),
+        viewport: null,
+        camera: savedLayout?.camera ?? null,
+        updated_by: WORKSPACE_ACTOR,
+      },
+      {
+        onSuccess: () => {
+          setLayoutStatus("saved");
+          setLayoutReset({ id: Date.now(), positions });
+        },
+        onError: () => setLayoutStatus("error"),
+      },
+    );
   }
 
   function handleConnect(source: string, target: string): void {
@@ -382,15 +451,27 @@ function WorkspaceLoaded({
         onDismiss={onDismissStatus}
       />
 
+      {graph.brief ? <ResearchBriefPanel brief={graph.brief} /> : null}
+
       <div className={styles.grid}>
-        <section className={styles.panel} aria-label="Components">
-          <h2>Components</h2>
+        <section className={`${styles.panel} ${styles.indexPanel}`} aria-label="Components">
+          <div className={styles.sectionHead}>
+            <h2>Components</h2>
+            <span className={styles.count} aria-hidden="true">
+              {graph.nodes.length}
+            </span>
+          </div>
           <NodeList
             nodes={graph.nodes}
             selectedId={selectedNode?.id ?? null}
             onSelect={(nodeId) => onSelectNodes([nodeId])}
           />
-          <h2 className={styles.edgesHeading}>Connections</h2>
+          <div className={`${styles.sectionHead} ${styles.edgesHeading}`}>
+            <h2>Connections</h2>
+            <span className={styles.count} aria-hidden="true">
+              {graph.edges.length}
+            </span>
+          </div>
           <EdgeList
             edges={graph.edges}
             selectedId={selectedEdge?.id ?? null}
@@ -398,8 +479,7 @@ function WorkspaceLoaded({
           />
         </section>
 
-        <section className={styles.panel} aria-label="Canvas">
-          <h2>Canvas</h2>
+        <section className={`${styles.panel} ${styles.canvasPanel}`} aria-label="Canvas">
           <CanvasToolbar
             takenIds={takenIds}
             canUndo={canUndo}
@@ -409,10 +489,12 @@ function WorkspaceLoaded({
             onAddNode={handleAddNode}
             disabled={mutating}
             layoutStatus={layoutStatus}
+            onResetLayout={handleResetLayout}
           />
           <GraphCanvas
             graph={graph}
             layout={savedLayout}
+            layoutReset={layoutReset}
             diffStatuses={diffStatuses}
             mutating={mutating}
             onConnectRequest={handleConnect}
@@ -434,6 +516,7 @@ function WorkspaceLoaded({
             }
           />
           <EvidencePanel node={selectedNode} edge={selectedEdge} />
+          <RunPanel projectId={projectId} graph={graph} />
         </div>
       </div>
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { GraphEdge, GraphNode, MethodologyGraph } from "../../lib/types.ts";
-import { autoLayout, layerByNodeId, matchesSavedPositions, resolvePositions } from "./layout.ts";
+import { autoLayout, layerByNodeId, matchesSavedPositions, resolvePositions, toNodePositions } from "./layout.ts";
 
 function node(id: string): GraphNode {
   return {
@@ -65,7 +65,7 @@ describe("layered auto-layout", () => {
     expect(layers.has("b")).toBe(true);
     const positions = autoLayout(graph(["b", "a"], []));
     expect(positions.get("a")).toEqual({ x: 0, y: 0 });
-    expect(positions.get("b")).toEqual({ x: 230, y: 0 });
+    expect(positions.get("b")).toEqual({ x: 280, y: 0 });
   });
 
   it("detects position drift against saved layouts", () => {
@@ -88,5 +88,15 @@ describe("layered auto-layout", () => {
     });
     expect(resolved.get("a")).toEqual({ x: 50, y: 60 });
     expect(resolved.get("b")).toEqual({ x: 0, y: 170 });
+  });
+
+  it("serializes missing nodes from auto-layout instead of the origin", () => {
+    const g = graph(["a", "b"], [["e1", "a", "b"]]);
+    // A partial live map (e.g. only dragged nodes) must not stack the rest.
+    const serialized = toNodePositions(g, new Map([["a", { x: 50, y: 60 }]]));
+    expect(serialized).toEqual([
+      { node_id: "a", x: 50, y: 60, z: 0 },
+      { node_id: "b", x: 0, y: 170, z: 0 },
+    ]);
   });
 });

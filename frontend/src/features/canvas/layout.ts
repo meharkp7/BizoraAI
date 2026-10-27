@@ -8,7 +8,7 @@ export interface Point {
   y: number;
 }
 
-const LAYER_DX = 230;
+const LAYER_DX = 280;
 const LAYER_DY = 170;
 
 /** Assign each node a layer by longest-path depth. Terminates always:
@@ -83,13 +83,16 @@ export function resolvePositions(
   return positions;
 }
 
-/** Serialize positioned nodes for the layout API. */
+/** Serialize positioned nodes for the layout API. Nodes missing from the
+ *  live map fall back to auto-layout: defaulting them to the origin would
+ *  stack them on top of each other on the next reload. */
 export function toNodePositions(
   graph: MethodologyGraph,
   positions: Map<string, Point>,
 ): NodePosition[] {
+  const fallback = autoLayout(graph);
   return graph.nodes.map((node) => {
-    const point = positions.get(node.id) ?? { x: 0, y: 0 };
+    const point = positions.get(node.id) ?? fallback.get(node.id) ?? { x: 0, y: 0 };
     return { node_id: node.id, x: point.x, y: point.y, z: 0 };
   });
 }

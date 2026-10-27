@@ -25,9 +25,15 @@ import { MethodNode } from "./MethodNode.tsx";
 import type { MethodNodeType } from "./MethodNode.tsx";
 import styles from "./GraphCanvas.module.css";
 
+export interface LayoutResetRequest {
+  id: number;
+  positions: Map<string, Point>;
+}
+
 export interface GraphCanvasProps {
   graph: MethodologyGraph;
   layout: GraphLayout | null;
+  layoutReset?: LayoutResetRequest | null;
   diffStatuses: CanvasDiffStatuses | null;
   onNodesMoved?: (positions: Map<string, Point>, viewport: ViewportState) => void;
   onConnectRequest?: (source: string, target: string) => void;
@@ -40,6 +46,7 @@ const nodeTypes = { method: MethodNode };
 function FlowView({
   graph,
   layout,
+  layoutReset = null,
   diffStatuses,
   onNodesMoved,
   onConnectRequest,
@@ -47,7 +54,7 @@ function FlowView({
   mutating,
 }: GraphCanvasProps) {
   const { selectedNodeIds, selectedEdgeIds } = useWorkspaceSelection();
-  const { setViewport, getViewport } = useReactFlow();
+  const { setViewport, getViewport, getNodes } = useReactFlow();
 
   // Mount-only snapshot: FlowView remounts per revision via key, and
   // selection/data drift syncs through the effects below.
@@ -68,6 +75,47 @@ function FlowView({
       void setViewport({ x, y, zoom }, { duration: 0 });
     }
   }, [graph.version, savedViewport, setViewport]);
+
+  // Apply saved node positions once per revision, including when the
+  // layout arrives after first paint (the mount snapshot above usually
+  // sees layout=null while the query is still fetching). User drags win:
+  // once nodes are touched, a late layout never clobbers the live
+  // arrangement; the debounced save persists the user's positions instead.
+  const savedPositions = layout?.positions ?? null;
+  const layoutAppliedRef = useRef(false);
+  const nodesTouchedRef = useRef(false);
+  useEffect(() => {
+    if (!savedPositions || layoutAppliedRef.current || nodesTouchedRef.current) return;
+    layoutAppliedRef.current = true;
+    const points = new Map(savedPositions.map((entry) => [entry.node_id, entry]));
+    setNodes((current) =>
+      current.map((node) => {
+        const point = points.get(node.id);
+        if (!point || (node.position.x === point.x && node.position.y === point.y)) {
+          return node;
+        }
+        return { ...node, position: { x: point.x, y: point.y } };
+      }),
+    );
+  }, [savedPositions, setNodes]);
+
+  // Apply an explicit layout reset exactly once per request. The parent
+  // persists the same positions, so the saved layout and canvas agree.
+  const lastResetId = useRef(0);
+  useEffect(() => {
+    if (!layoutReset || layoutReset.id === lastResetId.current) return;
+    lastResetId.current = layoutReset.id;
+    const points = layoutReset.positions;
+    setNodes((current) =>
+      current.map((node) => {
+        const point = points.get(node.id);
+        if (!point || (node.position.x === point.x && node.position.y === point.y)) {
+          return node;
+        }
+        return { ...node, position: { x: point.x, y: point.y } };
+      }),
+    );
+  }, [layoutReset, setNodes]);
 
   // Reflect external (list-driven) selection inside the canvas. The
   // updater returns the previous state when nothing differs so React Flow
@@ -189,16 +237,19 @@ function FlowView({
   );
 
   const handleNodeDragStop: OnNodeDrag<MethodNodeType> = useCallback(
-    (_event, _node, all) => {
+    (_event, _node, _dragged) => {
+      nodesTouchedRef.current = true;
       if (!onNodesMoved) return;
+      // Read full canvas state: the drag callback only carries the dragged
+      // nodes, so serializing it would reset every other node to the origin.
       const positions = new Map<string, Point>();
-      for (const item of all) {
+      for (const item of getNodes()) {
         positions.set(item.id, { x: item.position.x, y: item.position.y });
       }
       const view = getViewport();
       onNodesMoved(positions, { x: view.x, y: view.y, zoom: view.zoom });
     },
-    [onNodesMoved, getViewport],
+    [onNodesMoved, getViewport, getNodes],
   );
 
   return (

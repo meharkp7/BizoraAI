@@ -38,6 +38,44 @@ describe("GraphCanvas", () => {
     expect(useWorkspaceSelection.getState().selectedNodeIds).toEqual(["encoder"]);
   });
 
+  it("applies saved positions that arrive after first paint", () => {
+    useWorkspaceSelection.setState({ selectedNodeIds: [], selectedEdgeIds: [] });
+    const { container, rerender } = render(
+      <GraphCanvas graph={graphFixture} layout={null} diffStatuses={null} />,
+    );
+    const before = (container.querySelector('[data-id="input"]') as HTMLElement).style
+      .transform;
+    // The layout query resolves after mount; reload must restore positions.
+    rerender(<GraphCanvas graph={graphFixture} layout={layoutFixture} diffStatuses={null} />);
+    const after = (container.querySelector('[data-id="input"]') as HTMLElement).style
+      .transform;
+    expect(after).toContain("10px");
+    expect(after).toContain("20px");
+    expect(after).not.toBe(before);
+  });
+
+  it("applies an explicit layout reset exactly once", () => {
+    useWorkspaceSelection.setState({ selectedNodeIds: [], selectedEdgeIds: [] });
+    const { container, rerender } = render(
+      <GraphCanvas graph={graphFixture} layout={layoutFixture} diffStatuses={null} />,
+    );
+    const reset = new Map([
+      ["input", { x: 300, y: 400 }],
+      ["encoder", { x: 10, y: 20 }],
+    ]);
+    rerender(
+      <GraphCanvas
+        graph={graphFixture}
+        layout={layoutFixture}
+        layoutReset={{ id: 7, positions: reset }}
+        diffStatuses={null}
+      />,
+    );
+    const inputNode = container.querySelector('[data-id="input"]') as HTMLElement;
+    expect(inputNode.style.transform).toContain("300px");
+    expect(inputNode.style.transform).toContain("400px");
+  });
+
   it("falls back to auto-layout without saved positions", () => {
     useWorkspaceSelection.setState({ selectedNodeIds: [], selectedEdgeIds: [] });
     const { container } = render(

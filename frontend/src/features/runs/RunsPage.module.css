@@ -1,0 +1,130 @@
+.page {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 60rem;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+
+.head,
+.detailHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.head {
+  margin-bottom: var(--space-2);
+}
+
+.detailHead h1 {
+  margin: 0;
+  font-size: 1.25rem;
+  overflow-wrap: anywhere;
+}
+
+.runLink {
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.badge {
+  padding: 0.125rem var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--color-accent-wash);
+  color: var(--color-ink);
+}
+
+.badge.failed {
+  background: var(--color-danger-wash);
+  color: var(--color-danger);
+}
+
+.badge.running,
+.badge.pending {
+  background: var(--color-warn-wash);
+  color: var(--color-warn);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.facts dt {
+  color: var(--color-ink-faint);
+  font-weight: 600;
+}
+
+.facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.runError,
+.alert {
+  margin: var(--space-3) 0 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-danger-wash);
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+}
+
+.section {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.table th,
+.table td {
+  text-align: left;
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-line);
+}
+
+.table th {
+  color: var(--color-ink-faint);
+  font-weight: 650;
+}
+
+.artifactList {
+  margin: 0;
+  padding-left: var(--space-4);
+  display: grid;
+  gap: var(--space-1);
+  font-size: 0.875rem;
+}
+
+.sha {
+  color: var(--color-ink-faint);
+}

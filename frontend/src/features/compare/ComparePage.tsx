@@ -85,6 +85,43 @@ export function ComparePage() {
             </ul>
           ) : null}
 
+          <p className={styles.hint}>
+            Graphs:{" "}
+            <span className="mono">
+              {comparison.data.graph.baseline_graph_id} v
+              {comparison.data.graph.baseline_graph_version}
+            </span>{" "}
+            vs{" "}
+            <span className="mono">
+              {comparison.data.graph.variant_graph_id} v
+              {comparison.data.graph.variant_graph_version}
+            </span>
+          </p>
+
+          {comparison.data.config_differences.length > 0 ? (
+            <>
+              <h2>Configuration differences</h2>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th scope="col">Field</th>
+                    <th scope="col">Baseline</th>
+                    <th scope="col">Variant</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {comparison.data.config_differences.map((difference) => (
+                    <tr key={difference.field}>
+                      <td className="mono">{difference.field}</td>
+                      <td className="mono">{JSON.stringify(difference.baseline)}</td>
+                      <td className="mono">{JSON.stringify(difference.variant)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          ) : null}
+
           {comparison.data.metrics.length > 0 ? (
             <table className={styles.table}>
               <thead>

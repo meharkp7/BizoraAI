@@ -82,4 +82,20 @@ describe("WorkspacePage", () => {
     const diff = await screen.findByRole("region", { name: "Revision comparison" });
     expect(await within(diff).findByText(/Changed components \(1\)/)).toBeInTheDocument();
   });
+
+  it("renders the research brief with explicit unknowns", async () => {
+    useWorkspaceSelection.setState({ selectedNodeIds: [], selectedEdgeIds: [] });
+    render(
+      <WorkspacePage
+        projectId="project-1"
+        graphId="graph-1"
+        version={2}
+        onVersionChange={() => {}}
+      />,
+      { wrapper },
+    );
+    const brief = await screen.findByRole("region", { name: "Research brief" });
+    expect(within(brief).getByText("Transformers need huge labeled datasets.")).toBeInTheDocument();
+    expect(within(brief).getAllByText("Not stated in the paper.")).toHaveLength(1);
+  });
 });

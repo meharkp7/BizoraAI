@@ -14,6 +14,7 @@ const KINDS: NodeKind[] = [
   "evaluation",
   "output",
   "dataset",
+  "component",
 ];
 
 export interface NewNodeSpec {
@@ -40,6 +41,7 @@ export function CanvasToolbar({
   onAddNode,
   disabled,
   layoutStatus,
+  onResetLayout,
 }: {
   takenIds: Set<string>;
   canUndo: boolean;
@@ -49,6 +51,7 @@ export function CanvasToolbar({
   onAddNode: (spec: NewNodeSpec) => void;
   disabled: boolean;
   layoutStatus: LayoutSaveStatus;
+  onResetLayout: () => void;
 }) {
   const [id, setId] = useState("");
   const [kind, setKind] = useState<NodeKind>("model");
@@ -132,10 +135,18 @@ export function CanvasToolbar({
         </p>
       ) : null}
       {LAYOUT_STATUS_TEXT[layoutStatus] ? (
-        <span className={styles.layoutStatus} role="status">
+        <span className={`${styles.layoutStatus} ${styles[layoutStatus]}`} role="status">
           {LAYOUT_STATUS_TEXT[layoutStatus]}
         </span>
       ) : null}
+      <button
+        type="button"
+        onClick={onResetLayout}
+        disabled={disabled}
+        title="Reset node positions to the automatic layered layout"
+      >
+        Reset layout
+      </button>
     </div>
   );
 }
