@@ -1,0 +1,67 @@
+.page {
+  display: grid;
+  gap: var(--space-6);
+  max-width: 46rem;
+}
+
+.intro h1 {
+  font-size: 1.875rem;
+  max-width: 32rem;
+}
+
+.intro p {
+  color: var(--color-ink-soft);
+  font-size: 1.0625rem;
+  max-width: 38rem;
+}
+
+.opener {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-1);
+}
+
+.form {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.field {
+  display: grid;
+  gap: var(--space-1);
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.field input {
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-raised);
+  color: var(--color-ink);
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+}
+
+.form button {
+  justify-self: start;
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-weight: 650;
+}
+
+.form button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.hint {
+  margin: var(--space-4) 0 0;
+  color: var(--color-ink-faint);
+  font-size: 0.875rem;
+}

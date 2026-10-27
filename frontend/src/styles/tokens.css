@@ -1,0 +1,70 @@
+/* Bizora design tokens. Light is default; [data-theme="dark"] overrides.
+   Restrained research-instrument palette: ink, paper, one deep-teal accent. */
+
+:root {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Helvetica Neue",
+    Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-8: 3rem;
+
+  --radius-sm: 4px;
+  --radius-md: 7px;
+  --radius-lg: 11px;
+
+  --color-paper: #f7f5f0;
+  --color-surface: #fffdf8;
+  --color-surface-raised: #ffffff;
+  --color-ink: #1c2420;
+  --color-ink-soft: #44514b;
+  --color-ink-faint: #6b768f;
+  --color-line: #ddd7c9;
+  --color-line-strong: #c4bca8;
+  --color-accent: #0e6b5e;
+  --color-accent-ink: #ffffff;
+  --color-accent-wash: #e3efe9;
+  --color-warn: #8a5a00;
+  --color-warn-wash: #f7ecd4;
+  --color-danger: #a83226;
+  --color-danger-wash: #f7e2de;
+  --color-focus: #0e6b5e;
+  --shadow-1: 0 1px 2px rgb(28 36 32 / 0.08);
+  --shadow-2: 0 4px 14px rgb(28 36 32 / 0.1);
+}
+
+:root[data-theme="dark"] {
+  --color-paper: #141816;
+  --color-surface: #1b211e;
+  --color-surface-raised: #222927;
+  --color-ink: #e8ece7;
+  --color-ink-soft: #b9c2b9;
+  --color-ink-faint: #8b948e;
+  --color-line: #333c38;
+  --color-line-strong: #4a5450;
+  --color-accent: #4cc2a8;
+  --color-accent-ink: #0c1a16;
+  --color-accent-wash: #1e352e;
+  --color-warn: #d9a441;
+  --color-warn-wash: #38300f;
+  --color-danger: #e08073;
+  --color-danger-wash: #3d2220;
+  --color-focus: #4cc2a8;
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-2: 0 4px 14px rgb(0 0 0 / 0.45);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

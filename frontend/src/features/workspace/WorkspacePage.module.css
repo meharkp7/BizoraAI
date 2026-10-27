@@ -1,0 +1,122 @@
+.page {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.heading h1 {
+  margin-bottom: var(--space-1);
+}
+
+.subtitle {
+  margin: 0;
+  color: var(--color-ink-soft);
+  font-size: 0.875rem;
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.stepper button {
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+}
+
+.stepper button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.stepper button:not(:disabled):hover {
+  border-color: var(--color-accent);
+}
+
+.versionBadge {
+  min-width: 3rem;
+  text-align: center;
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-accent-wash);
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr) minmax(0, 5fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+@media (max-width: 70rem) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+
+.side {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.edgesHeading {
+  margin-top: var(--space-4);
+}
+
+.nodeList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.nodeList button {
+  width: 100%;
+  text-align: left;
+  display: grid;
+  gap: 0.125rem;
+  padding: var(--space-2) var(--space-3);
+  background: transparent;
+  color: var(--color-ink);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+}
+
+.nodeList button:hover {
+  background: var(--color-accent-wash);
+}
+
+.nodeList button.selected {
+  background: var(--color-accent-wash);
+  border-color: var(--color-accent);
+}
+
+.nodeLabel {
+  font-weight: 600;
+}
+
+.nodeMeta {
+  font-size: 0.8125rem;
+  color: var(--color-ink-faint);
+}

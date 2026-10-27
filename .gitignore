@@ -63,3 +63,9 @@ runs/
 secrets/
 credentials/
 .modal/
+
+# Frontend generated output
+node_modules/
+frontend/test-results/
+frontend/playwright-report/
+frontend/playwright/.auth/

@@ -1,0 +1,136 @@
+/* TanStack Query hooks over the Bizora API. */
+
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { api } from "../lib/api.ts";
+import type { GraphLayout, GraphPatch, GraphPatchBatch } from "../lib/types.ts";
+
+export const graphKeys = {
+  revision: (projectId: string, graphId: string, version: number) =>
+    ["graph", projectId, graphId, "revisions", version] as const,
+  layout: (projectId: string, graphId: string, version: number) =>
+    ["graph", projectId, graphId, "revisions", version, "layout"] as const,
+  diff: (projectId: string, graphId: string, baseVersion: number, targetVersion: number) =>
+    ["graph", projectId, graphId, "diff", baseVersion, targetVersion] as const,
+};
+
+export const runKeys = {
+  list: (filters?: { project_id?: string; graph_id?: string; limit?: number }) =>
+    ["runs", filters ?? {}] as const,
+  detail: (runId: string) => ["runs", runId] as const,
+  metrics: (runId: string) => ["runs", runId, "metrics"] as const,
+  artifacts: (runId: string) => ["runs", runId, "artifacts"] as const,
+  comparison: (baselineRunId: string, variantRunId: string) =>
+    ["runs", "comparison", baselineRunId, variantRunId] as const,
+};
+
+export function useGraphRevision(projectId: string, graphId: string, version: number) {
+  return useQuery({
+    queryKey: graphKeys.revision(projectId, graphId, version),
+    queryFn: () => api.getGraphRevision(projectId, graphId, version),
+  });
+}
+
+export function useGraphLayout(projectId: string, graphId: string, version: number) {
+  return useQuery({
+    queryKey: graphKeys.layout(projectId, graphId, version),
+    queryFn: () => api.getLayout(projectId, graphId, version),
+    // A missing layout is normal: the canvas falls back to auto-layout.
+    retry: false,
+  });
+}
+
+export function useSaveLayout(projectId: string, graphId: string, version: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (layout: GraphLayout) => api.saveLayout(layout),
+    onSuccess: (layout) => {
+      queryClient.setQueryData(graphKeys.layout(projectId, graphId, version), layout);
+    },
+  });
+}
+
+export function useRevisionDiff(
+  projectId: string,
+  graphId: string,
+  baseVersion: number,
+  targetVersion: number,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: graphKeys.diff(projectId, graphId, baseVersion, targetVersion),
+    queryFn: () => api.diffRevisions(projectId, graphId, baseVersion, targetVersion),
+    enabled,
+  });
+}
+
+export function useApplyPatch(projectId: string, graphId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (patch: GraphPatch) => api.applyPatch(projectId, graphId, patch),
+    onSuccess: (graph) => {
+      queryClient.setQueryData(
+        graphKeys.revision(projectId, graphId, graph.version),
+        graph,
+      );
+      queryClient.invalidateQueries({ queryKey: ["graph", projectId, graphId] });
+    },
+  });
+}
+
+export function useApplyPatchBatch(projectId: string, graphId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (batch: GraphPatchBatch) => api.applyPatchBatch(projectId, graphId, batch),
+    onSuccess: (graph) => {
+      queryClient.setQueryData(
+        graphKeys.revision(projectId, graphId, graph.version),
+        graph,
+      );
+      queryClient.invalidateQueries({ queryKey: ["graph", projectId, graphId] });
+    },
+  });
+}
+
+export function useRuns(filters?: { project_id?: string; graph_id?: string; limit?: number }) {
+  return useQuery({
+    queryKey: runKeys.list(filters),
+    queryFn: () => api.listRuns(filters),
+  });
+}
+
+export function useRun(runId: string, enabled = true) {
+  return useQuery({
+    queryKey: runKeys.detail(runId),
+    queryFn: () => api.getRun(runId),
+    enabled,
+    // Poll active runs; terminal states settle via refetchOnWindowFocus.
+    refetchInterval: (query) => {
+      const state = query.state.data?.state;
+      return state === "pending" || state === "running" ? 2000 : false;
+    },
+  });
+}
+
+export function useRunMetrics(runId: string, enabled = true) {
+  return useQuery({
+    queryKey: runKeys.metrics(runId),
+    queryFn: () => api.listRunMetrics(runId),
+    enabled,
+  });
+}
+
+export function useRunArtifacts(runId: string, enabled = true) {
+  return useQuery({
+    queryKey: runKeys.artifacts(runId),
+    queryFn: () => api.listRunArtifacts(runId),
+    enabled,
+  });
+}
+
+export function useRunComparison(baselineRunId: string, variantRunId: string, enabled = true) {
+  return useQuery({
+    queryKey: runKeys.comparison(baselineRunId, variantRunId),
+    queryFn: () => api.compareRuns(baselineRunId, variantRunId),
+    enabled,
+  });
+}
