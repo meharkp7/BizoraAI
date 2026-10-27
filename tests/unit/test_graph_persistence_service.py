@@ -164,6 +164,35 @@ def test_create_revision_requires_existing_graph(
     assert exc_info.value.code == ErrorCode.RESOURCE_CONFLICT
 
 
+def test_create_revision_accepts_pre_contract_evolution_row(
+    db_session: Session,
+) -> None:
+    original = make_graph()
+    GraphPersistenceService.create_initial_revision(db_session, original)
+
+    # Simulate a row written before an optional contract field existed.
+    stored = get_latest_graph_revision(
+        db_session,
+        project_id=original.project_id,
+        graph_id=original.graph_id,
+    )
+    assert stored is not None
+    payload = dict(stored.graph_payload)
+    del payload["brief"]
+    stored.graph_payload = payload
+    db_session.commit()
+
+    updated = GraphPersistenceService.create_revision(
+        db_session,
+        original,
+        created_by="researcher-2",
+        title="Evolved row stays editable",
+    )
+
+    assert updated.version == 2
+    assert updated.parent_version == 1
+
+
 def test_initial_revision_rejects_invalid_graph(
     db_session: Session,
 ) -> None:

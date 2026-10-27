@@ -1,6 +1,7 @@
 
 """Application service for transactional graph revision persistence."""
 
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from bizora.contracts.graph import (
@@ -98,9 +99,18 @@ class GraphPersistenceService:
 
             supplied_snapshot = graph.model_dump(mode="json")
 
+            try:
+                canonical_latest = MethodologyGraph.model_validate(
+                    latest.graph_payload
+                ).model_dump(mode="json")
+            except ValidationError:
+                # Rows that predate the current contract keep the legacy
+                # raw comparison instead of failing closed here.
+                canonical_latest = latest.graph_payload
+
             if (
                 latest.version != graph.version
-                or latest.graph_payload != supplied_snapshot
+                or canonical_latest != supplied_snapshot
             ):
                 raise cls._conflict(
                     "The supplied graph is stale; load the latest revision "
