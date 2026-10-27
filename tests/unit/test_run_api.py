@@ -9,8 +9,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
+import bizora.api as api_module
 from bizora.contracts.experiment import ResultKind
-from bizora.contracts.run import ArtifactRecord, MetricRecord
+from bizora.contracts.run import ArtifactRecord, ExperimentRun, MetricRecord
+from bizora.core.errors import BizoraError, ErrorCode
 from bizora.db.base import Base
 from bizora.db.repository import save_artifact_record, save_metric_record
 from bizora.db.session import get_db_session
@@ -145,6 +147,51 @@ def test_create_run_rejects_duplicate_run_id(client: TestClient) -> None:
     assert first.status_code == 201
     assert duplicate.status_code == 409
     assert duplicate.json()["error"]["code"] == "RESOURCE_CONFLICT"
+
+
+def test_execute_run_returns_service_result(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    graph = client.post("/api/v1/graphs", json=make_graph_payload())
+    assert graph.status_code == 201
+    created = create_run(client)
+    assert created.status_code == 201
+    succeeded = ExperimentRun.model_validate(
+        {
+            **created.json(),
+            "state": "succeeded",
+            "started_at": created.json()["created_at"],
+            "finished_at": created.json()["created_at"],
+        }
+    )
+
+    class StubService:
+        def execute_run(self, run_id: str) -> ExperimentRun:
+            assert run_id == "run-api-1"
+            return succeeded
+
+    monkeypatch.setattr(api_module, "get_execution_service", lambda: StubService())
+    response = client.post("/api/v1/experiments/runs/run-api-1/execute")
+
+    assert response.status_code == 200
+    assert response.json()["state"] == "succeeded"
+
+
+def test_execute_run_maps_service_errors(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class MissingService:
+        def execute_run(self, run_id: str) -> ExperimentRun:
+            raise BizoraError(
+                ErrorCode.RESOURCE_NOT_FOUND,
+                "The experiment run does not exist.",
+            )
+
+    monkeypatch.setattr(api_module, "get_execution_service", lambda: MissingService())
+    response = client.post("/api/v1/experiments/runs/missing-run/execute")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "RESOURCE_NOT_FOUND"
 
 
 def test_get_missing_run_returns_404(client: TestClient) -> None:

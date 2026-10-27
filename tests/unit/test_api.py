@@ -9,7 +9,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
-from bizora.api import get_fireworks_provider
+from bizora.api import get_baseten_provider
 from bizora.db.base import Base
 from bizora.db.session import get_db_session
 from bizora.main import app
@@ -325,7 +325,7 @@ def test_apply_graph_patch_rejects_invalid_result(
 def test_extract_graph_persists_initial_revision(
     client: TestClient,
 ) -> None:
-    app.dependency_overrides[get_fireworks_provider] = lambda: (
+    app.dependency_overrides[get_baseten_provider] = lambda: (
         FakeMethodologyProvider(make_graph_payload())
     )
 
@@ -344,7 +344,7 @@ def test_extract_graph_persists_initial_revision(
             },
         )
     finally:
-        app.dependency_overrides.pop(get_fireworks_provider, None)
+        app.dependency_overrides.pop(get_baseten_provider, None)
 
     assert response.status_code == 201
     assert response.json()["version"] == 1
@@ -361,7 +361,7 @@ def test_extract_graph_persists_initial_revision(
 def test_extract_graph_rejects_duplicate_initial_revision(
     client: TestClient,
 ) -> None:
-    app.dependency_overrides[get_fireworks_provider] = lambda: (
+    app.dependency_overrides[get_baseten_provider] = lambda: (
         FakeMethodologyProvider(make_graph_payload())
     )
 
@@ -378,7 +378,7 @@ def test_extract_graph_rejects_duplicate_initial_revision(
         first = client.post("/api/v1/graphs/extract", json=payload)
         duplicate = client.post("/api/v1/graphs/extract", json=payload)
     finally:
-        app.dependency_overrides.pop(get_fireworks_provider, None)
+        app.dependency_overrides.pop(get_baseten_provider, None)
 
     assert first.status_code == 201
     assert duplicate.status_code == 409
@@ -394,7 +394,7 @@ def test_extract_graph_returns_502_on_provider_failure(
         ) -> MethodologyExtractionResult:
             raise FireworksProviderError("simulated provider failure")
 
-    app.dependency_overrides[get_fireworks_provider] = FailingProvider
+    app.dependency_overrides[get_baseten_provider] = FailingProvider
 
     try:
         response = client.post(
@@ -409,7 +409,7 @@ def test_extract_graph_returns_502_on_provider_failure(
             },
         )
     finally:
-        app.dependency_overrides.pop(get_fireworks_provider, None)
+        app.dependency_overrides.pop(get_baseten_provider, None)
 
     assert response.status_code == 502
     assert "simulated provider failure" not in response.text
@@ -425,7 +425,7 @@ def test_extract_graph_returns_503_when_provider_disabled(
     monkeypatch.setattr(
         api,
         "get_settings",
-        lambda: Settings(enable_fireworks=False),
+        lambda: Settings(_env_file=None, BIZORA_ENABLE_BASETEN=False),
     )
 
     response = client.post(
@@ -441,7 +441,7 @@ def test_extract_graph_returns_503_when_provider_disabled(
     )
 
     assert response.status_code == 503
-    assert response.json()["detail"] == "Fireworks provider is disabled."
+    assert response.json()["detail"] == "Baseten provider is disabled."
 
 def test_extract_graph_rejects_invalid_provider_graph(
     client: TestClient,
@@ -455,7 +455,7 @@ def test_extract_graph_rejects_invalid_provider_graph(
         }
     ]
 
-    app.dependency_overrides[get_fireworks_provider] = lambda: (
+    app.dependency_overrides[get_baseten_provider] = lambda: (
         FakeMethodologyProvider(payload)
     )
 
@@ -472,7 +472,7 @@ def test_extract_graph_rejects_invalid_provider_graph(
             },
         )
     finally:
-        app.dependency_overrides.pop(get_fireworks_provider, None)
+        app.dependency_overrides.pop(get_baseten_provider, None)
 
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "INVALID_GRAPH"
@@ -493,7 +493,7 @@ def test_extract_rejects_overlong_title_without_calling_provider(
         ) -> MethodologyExtractionResult:
             raise AssertionError("invalid request must not reach the provider")
 
-    app.dependency_overrides[get_fireworks_provider] = ExplodingProvider
+    app.dependency_overrides[get_baseten_provider] = ExplodingProvider
 
     try:
         response = client.post(
@@ -508,7 +508,7 @@ def test_extract_rejects_overlong_title_without_calling_provider(
             },
         )
     finally:
-        app.dependency_overrides.pop(get_fireworks_provider, None)
+        app.dependency_overrides.pop(get_baseten_provider, None)
 
     assert response.status_code == 422
 
@@ -516,7 +516,7 @@ def test_extract_rejects_overlong_title_without_calling_provider(
 def test_extract_rejects_overlong_project_id(
     client: TestClient,
 ) -> None:
-    app.dependency_overrides[get_fireworks_provider] = lambda: (
+    app.dependency_overrides[get_baseten_provider] = lambda: (
         FakeMethodologyProvider(make_graph_payload())
     )
 
@@ -532,7 +532,7 @@ def test_extract_rejects_overlong_project_id(
             },
         )
     finally:
-        app.dependency_overrides.pop(get_fireworks_provider, None)
+        app.dependency_overrides.pop(get_baseten_provider, None)
 
     assert response.status_code == 422
 
@@ -542,7 +542,7 @@ def test_extract_rejects_enormous_paper_text(
 ) -> None:
     from bizora.providers.base import MAX_PAPER_TEXT_LENGTH
 
-    app.dependency_overrides[get_fireworks_provider] = lambda: (
+    app.dependency_overrides[get_baseten_provider] = lambda: (
         FakeMethodologyProvider(make_graph_payload())
     )
 
@@ -558,6 +558,6 @@ def test_extract_rejects_enormous_paper_text(
             },
         )
     finally:
-        app.dependency_overrides.pop(get_fireworks_provider, None)
+        app.dependency_overrides.pop(get_baseten_provider, None)
 
     assert response.status_code == 422

@@ -19,6 +19,7 @@ class NodeKind(StrEnum):
     EVALUATION = "evaluation"
     OUTPUT = "output"
     DATASET = "dataset"
+    COMPONENT = "component"
 
 
 class RelationKind(StrEnum):
@@ -56,6 +57,21 @@ class GraphEdge(BaseModel):
     provenance: Provenance = Provenance.UNRESOLVED
 
 
+class ResearchBrief(BaseModel):
+    """Paper-level context: what was studied and what was found.
+
+    Every field is optional: absent information stays null or empty and
+    must never be fabricated by extraction providers.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    problem: str | None = Field(default=None, max_length=2000)
+    objectives: tuple[str, ...] = ()
+    findings: tuple[str, ...] = ()
+    limitations: tuple[str, ...] = ()
+
+
 class MethodologyGraph(BaseModel):
     """One immutable graph revision; mutations must create a new version."""
 
@@ -71,6 +87,7 @@ class MethodologyGraph(BaseModel):
     edges: tuple[GraphEdge, ...] = ()
     created_by: str = Field(min_length=1, max_length=128)
     parent_version: int | None = Field(default=None, ge=1)
+    brief: ResearchBrief | None = None
 
     @model_validator(mode="after")
     def validate_version_lineage(self) -> "MethodologyGraph":
@@ -79,11 +96,12 @@ class MethodologyGraph(BaseModel):
         return self
 
 
-def validate_graph(graph: MethodologyGraph, *, require_dag: bool = True) -> list[str]:
+def validate_graph(graph: MethodologyGraph, *, require_dag: bool = False) -> list[str]:
     """Return all graph invariant violations; empty list means structurally valid.
 
-    DAG enforcement applies to the initial feed-forward vision-transformer scope.
-    Future recurrent or cyclic scientific systems must declare a different graph profile.
+    Cycles are legitimate in feedback systems, recurrent architectures, and
+    circuits, so graphs are cyclic-tolerant by default. Pass require_dag=True
+    only for callers that explicitly need the feed-forward profile.
     """
     errors: list[str] = []
     node_ids = [node.id for node in graph.nodes]

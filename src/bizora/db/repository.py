@@ -20,10 +20,12 @@ from bizora.contracts.run import (
     MetricRecord,
     RunState,
 )
+from bizora.contracts.table import ExtractedTable
 from bizora.core.errors import BizoraError, ErrorCode
 from bizora.db.models import (
     ArtifactRecordRow,
     ExperimentRunRecord,
+    ExtractedTableRecord,
     GraphLayoutRecord,
     GraphRevisionRecord,
     MetricRecordRow,
@@ -568,3 +570,72 @@ def save_graph_layout(
         ) from exc
 
     return record
+
+
+def extracted_table_from_record(record: ExtractedTableRecord) -> ExtractedTable:
+    """Convert a persisted table row into its contract."""
+    return ExtractedTable.model_validate(
+        {
+            "table_id": record.table_id,
+            "project_id": record.project_id,
+            "graph_id": record.graph_id,
+            "source_id": record.source_id,
+            "caption": record.caption,
+            "created_by": record.created_by,
+            **record.table_payload,
+        }
+    )
+
+
+def save_extracted_table(
+    session: Session,
+    table: ExtractedTable,
+) -> ExtractedTableRecord:
+    """Stage an extracted table and flush it without committing."""
+    record = ExtractedTableRecord(
+        project_id=table.project_id,
+        graph_id=table.graph_id,
+        table_id=table.table_id,
+        source_id=table.source_id,
+        caption=table.caption,
+        created_by=table.created_by,
+        table_payload={
+            "columns": list(table.columns),
+            "rows": [list(row) for row in table.rows],
+            "page": table.page,
+            "quote": table.quote,
+        },
+    )
+    session.add(record)
+    try:
+        session.flush()
+    except IntegrityError as exc:
+        session.rollback()
+        raise BizoraError(
+            ErrorCode.RESOURCE_CONFLICT,
+            "The extracted table conflicts with an existing database record.",
+            details={
+                "project_id": table.project_id,
+                "graph_id": table.graph_id,
+                "table_id": table.table_id,
+            },
+        ) from exc
+    return record
+
+
+def list_extracted_tables(
+    session: Session,
+    *,
+    project_id: str,
+    graph_id: str,
+) -> list[ExtractedTableRecord]:
+    """List one graph's extracted tables ordered by table id."""
+    statement = (
+        select(ExtractedTableRecord)
+        .where(
+            ExtractedTableRecord.project_id == project_id,
+            ExtractedTableRecord.graph_id == graph_id,
+        )
+        .order_by(ExtractedTableRecord.table_id.asc())
+    )
+    return list(session.scalars(statement))

@@ -172,7 +172,7 @@ def test_batch_result_must_stay_valid() -> None:
                 "edge": {
                     "id": "e3",
                     "source": "output",
-                    "target": "input",
+                    "target": "output",
                 }
             },
         ),

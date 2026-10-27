@@ -53,6 +53,27 @@ def test_revision_increments_version_and_sets_parent() -> None:
     assert revision.created_by == "researcher-2"
 
 
+def test_revision_preserves_research_brief() -> None:
+    original = make_graph().model_copy(
+        update={
+            "brief": {
+                "problem": "Low yield.",
+                "objectives": ["Raise yield"],
+                "findings": [],
+                "limitations": [],
+            }
+        }
+    )
+
+    revision = GraphService.create_revision(
+        original,
+        created_by="researcher-2",
+    )
+
+    assert revision.brief is not None
+    assert revision.brief.problem == "Low yield."
+
+
 def test_revision_preserves_original_graph() -> None:
     original = make_graph()
     original_nodes = original.nodes
@@ -122,6 +143,7 @@ def test_revision_rejects_cycles_in_feed_forward_graphs() -> None:
             original,
             created_by="researcher-2",
             edges=cyclic_edges,
+            require_dag=True,
         )
 
     assert any(

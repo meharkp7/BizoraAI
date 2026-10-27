@@ -17,7 +17,7 @@ class GraphService:
     def validate(
         graph: MethodologyGraph,
         *,
-        require_dag: bool = True,
+        require_dag: bool = False,
     ) -> None:
         """Raise a domain error when the graph violates structural invariants."""
         errors = validate_graph(graph, require_dag=require_dag)
@@ -38,7 +38,7 @@ class GraphService:
         edges: tuple[GraphEdge, ...] | None = None,
         source_ids: tuple[str, ...] | None = None,
         title: str | None = None,
-        require_dag: bool = True,
+        require_dag: bool = False,
     ) -> MethodologyGraph:
         """Create a validated revision with isolated nested node configuration."""
         selected_nodes = nodes if nodes is not None else graph.nodes
@@ -57,6 +57,7 @@ class GraphService:
             edges=tuple(edges) if edges is not None else graph.edges,
             created_by=created_by,
             parent_version=graph.version,
+            brief=graph.brief,
         )
 
         cls.validate(revision, require_dag=require_dag)
