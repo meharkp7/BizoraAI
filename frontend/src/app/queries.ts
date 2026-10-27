@@ -2,7 +2,13 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api.ts";
-import type { GraphLayout, GraphPatch, GraphPatchBatch } from "../lib/types.ts";
+import type {
+  ExperimentConfig,
+  GraphLayout,
+  GraphPatch,
+  GraphPatchBatch,
+  PaperUpload,
+} from "../lib/types.ts";
 
 export const graphKeys = {
   revision: (projectId: string, graphId: string, version: number) =>
@@ -111,6 +117,29 @@ export function useRun(runId: string, enabled = true) {
   });
 }
 
+export function useCreateRun() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ runId, config }: { runId: string; config: ExperimentConfig }) =>
+      api.createRun(runId, config),
+    onSuccess: (run) => {
+      queryClient.setQueryData(runKeys.detail(run.run_id), run);
+      queryClient.invalidateQueries({ queryKey: ["runs"] });
+    },
+  });
+}
+
+export function useExecuteRun() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (runId: string) => api.executeRun(runId),
+    onSuccess: (run) => {
+      queryClient.setQueryData(runKeys.detail(run.run_id), run);
+      queryClient.invalidateQueries({ queryKey: ["runs"] });
+    },
+  });
+}
+
 export function useRunMetrics(runId: string, enabled = true) {
   return useQuery({
     queryKey: runKeys.metrics(runId),
@@ -132,5 +161,36 @@ export function useRunComparison(baselineRunId: string, variantRunId: string, en
     queryKey: runKeys.comparison(baselineRunId, variantRunId),
     queryFn: () => api.compareRuns(baselineRunId, variantRunId),
     enabled,
+  });
+}
+
+export const paperKeys = {
+  tables: (projectId: string, graphId: string) =>
+    ["graph", projectId, graphId, "tables"] as const,
+};
+
+export function useGraphTables(projectId: string, graphId: string) {
+  return useQuery({
+    queryKey: paperKeys.tables(projectId, graphId),
+    queryFn: () => api.listGraphTables(projectId, graphId),
+  });
+}
+
+export function useExtractPaper() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (upload: PaperUpload) => api.extractPaper(upload),
+    onSuccess: (result) => {
+      queryClient.setQueryData(
+        paperKeys.tables(result.graph.project_id, result.graph.graph_id),
+        result.tables,
+      );
+    },
+  });
+}
+
+export function useParsePaper() {
+  return useMutation({
+    mutationFn: (file: File) => api.parsePaper(file),
   });
 }

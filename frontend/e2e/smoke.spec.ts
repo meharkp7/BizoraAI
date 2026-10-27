@@ -83,8 +83,8 @@ test.beforeEach(async ({ page }) => {
 test("home opens a workspace from IDs", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: /made testable/ })).toBeVisible();
-  await page.getByPlaceholder("e.g. vit-paper").fill("project-1");
-  await page.getByPlaceholder("e.g. vit-base").fill("graph-1");
+  await page.getByPlaceholder("e.g. paper-project").fill("project-1");
+  await page.getByPlaceholder("e.g. paper-graph").fill("graph-1");
   await page.getByRole("button", { name: "Open workspace" }).click();
   await expect(page).toHaveURL(/\/g\/project-1\/graph-1$/);
   await expect(page.getByRole("heading", { name: "Vision transformer" })).toBeVisible();

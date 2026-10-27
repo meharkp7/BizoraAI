@@ -1,10 +1,13 @@
 import { HttpResponse } from "msw";
 import type {
   ExperimentRun,
+  ExtractedTable,
   GraphLayout,
   GraphRevisionDiff,
   MethodologyGraph,
   MetricRecord,
+  PaperExtractionResponse,
+  ParsedPaper,
   RunComparison,
 } from "../lib/types.ts";
 
@@ -64,6 +67,12 @@ export const graphFixture: MethodologyGraph = {
   ],
   created_by: "test",
   parent_version: 1,
+  brief: {
+    problem: "Transformers need huge labeled datasets.",
+    objectives: ["Match CNNs with less supervision"],
+    findings: [],
+    limitations: ["Quadratic attention cost"],
+  },
 };
 
 export const layoutFixture: GraphLayout = {
@@ -169,3 +178,55 @@ export const comparisonFixture: RunComparison = {
 export function notFound(code = "RESOURCE_NOT_FOUND", message = "Not found.") {
   return HttpResponse.json({ error: { code, message, details: {} } }, { status: 404 });
 }
+
+export const tableFixture: ExtractedTable = {
+  table_id: "table-1",
+  project_id: "project-1",
+  graph_id: "graph-1",
+  source_id: "paper-1",
+  caption: "CASP14 results.",
+  columns: ["Method", "TM-score"],
+  rows: [
+    ["AlphaFold2", "0.92"],
+    ["Baseline", "0.71"],
+  ],
+  page: 4,
+  quote: "Table 1 reports TM-scores on CASP14 targets.",
+  created_by: "researcher-1",
+};
+
+export const tableFixture2: ExtractedTable = {
+  table_id: "table-2",
+  project_id: "project-1",
+  graph_id: "graph-1",
+  source_id: "paper-1",
+  caption: "Ablation study.",
+  columns: ["Variant", "RMSD"],
+  rows: [["Full model", "1.4"]],
+  page: null,
+  quote: null,
+  created_by: "researcher-1",
+};
+
+export const parsedPaperFixture: ParsedPaper = {
+  filename: "paper.pdf",
+  title: "Vision transformer",
+  authors: ["A. Researcher"],
+  page_count: 12,
+  chars: 42000,
+  sha256: "0".repeat(64),
+  truncated: false,
+  suggested: {
+    project_id: "vision-transformer-00000000",
+    graph_id: "vision-transformer-graph-00000000",
+    source_id: "paper-00000000",
+  },
+};
+
+export const paperExtractionFixture: PaperExtractionResponse = {
+  graph: graphFixture,
+  tables: [tableFixture],
+  warnings: [],
+  page_count: 12,
+  truncated: false,
+};

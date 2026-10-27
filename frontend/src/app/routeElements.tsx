@@ -1,6 +1,7 @@
 import { useParams, useSearchParams } from "react-router";
 import { WorkspacePage } from "../features/workspace/WorkspacePage.tsx";
 import { RunDetailPage, RunsPage } from "../features/runs/RunsPage.tsx";
+import { TablesPage } from "../features/tables/TablesPage.tsx";
 
 function useGraphParams(): { projectId: string; graphId: string } {
   const { projectId, graphId } = useParams();
@@ -35,4 +36,9 @@ export function RunDetailRoute() {
   const { runId } = useParams();
   if (!runId) throw new Error("Missing run route parameter.");
   return <RunDetailPage runId={runId} />;
+}
+
+export function TablesRoute() {
+  const { projectId, graphId } = useGraphParams();
+  return <TablesPage projectId={projectId} graphId={graphId} />;
 }

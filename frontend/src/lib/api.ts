@@ -3,13 +3,18 @@
 import type {
   ArtifactRecord,
   BizoraErrorBody,
+  ExperimentConfig,
   ExperimentRun,
+  ExtractedTable,
   GraphLayout,
   GraphPatch,
   GraphPatchBatch,
   GraphRevisionDiff,
   MethodologyGraph,
   MetricRecord,
+  PaperExtractionResponse,
+  PaperUpload,
+  ParsedPaper,
   RunComparison,
 } from "./types.ts";
 
@@ -47,19 +52,17 @@ function isErrorBody(value: unknown): value is BizoraErrorBody {
   return typeof code === "string" && typeof message === "string";
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  let response: Response;
+async function send(path: string, init?: RequestInit): Promise<Response> {
   try {
-    response = await fetch(`${apiBase()}${path}`, {
-      ...init,
-      headers: { "Content-Type": "application/json", ...init?.headers },
-    });
+    return await fetch(`${apiBase()}${path}`, init);
   } catch (cause) {
     throw new BizoraApiError(0, "NETWORK_UNREACHABLE", "The Bizora API is unreachable.", {
       cause: String(cause),
     });
   }
+}
 
+async function parse<T>(response: Response): Promise<T> {
   if (response.status === 204) return undefined as T;
 
   let body: unknown = null;
@@ -103,6 +106,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   return body as T;
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await send(path, {
+    ...init,
+    headers: { "Content-Type": "application/json", ...init?.headers },
+  });
+  return parse(response);
 }
 
 function encode(value: string): string {
@@ -180,6 +191,19 @@ export const api = {
     return request(`/api/v1/experiments/runs/${encode(runId)}`);
   },
 
+  createRun(runId: string, config: ExperimentConfig): Promise<ExperimentRun> {
+    return request(`/api/v1/experiments/runs`, {
+      method: "POST",
+      body: JSON.stringify({ run_id: runId, config }),
+    });
+  },
+
+  executeRun(runId: string): Promise<ExperimentRun> {
+    return request(`/api/v1/experiments/runs/${encode(runId)}/execute`, {
+      method: "POST",
+    });
+  },
+
   listRunMetrics(runId: string): Promise<MetricRecord[]> {
     return request(`/api/v1/experiments/runs/${encode(runId)}/metrics`);
   },
@@ -194,5 +218,32 @@ export const api = {
       variant_run_id: variantRunId,
     });
     return request(`/api/v1/experiments/comparisons?${params.toString()}`);
+  },
+
+  parsePaper(file: File): Promise<ParsedPaper> {
+    const form = new FormData();
+    form.set("file", file);
+    // No JSON content type: the browser sets the multipart boundary.
+    return send("/api/v1/papers/parse", { method: "POST", body: form }).then((response) =>
+      parse<ParsedPaper>(response),
+    );
+  },
+
+  extractPaper(upload: PaperUpload): Promise<PaperExtractionResponse> {
+    const form = new FormData();
+    form.set("file", upload.file);
+    if (upload.project_id) form.set("project_id", upload.project_id);
+    if (upload.graph_id) form.set("graph_id", upload.graph_id);
+    if (upload.source_id) form.set("source_id", upload.source_id);
+    if (upload.created_by) form.set("created_by", upload.created_by);
+    if (upload.title) form.set("title", upload.title);
+    // No JSON content type: the browser sets the multipart boundary.
+    return send("/api/v1/papers/extract", { method: "POST", body: form }).then((response) =>
+      parse<PaperExtractionResponse>(response),
+    );
+  },
+
+  listGraphTables(projectId: string, graphId: string): Promise<ExtractedTable[]> {
+    return request(`/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/tables`);
   },
 };

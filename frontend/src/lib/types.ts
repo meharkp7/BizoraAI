@@ -10,7 +10,8 @@ export type NodeKind =
   | "optimizer"
   | "evaluation"
   | "output"
-  | "dataset";
+  | "dataset"
+  | "component";
 
 export type RelationKind =
   | "data_flow"
@@ -60,6 +61,13 @@ export interface GraphEdge {
   provenance: Provenance;
 }
 
+export interface ResearchBrief {
+  problem: string | null;
+  objectives: string[];
+  findings: string[];
+  limitations: string[];
+}
+
 export interface MethodologyGraph {
   schema_version: string;
   project_id: string;
@@ -71,6 +79,7 @@ export interface MethodologyGraph {
   edges: GraphEdge[];
   created_by: string;
   parent_version: number | null;
+  brief?: ResearchBrief | null;
 }
 
 export type PatchOperation =
@@ -261,4 +270,51 @@ export interface BizoraErrorBody {
     message: string;
     details: Record<string, unknown>;
   };
+}
+
+export interface ExtractedTable {
+  table_id: string;
+  project_id: string;
+  graph_id: string;
+  source_id: string;
+  caption: string;
+  columns: string[];
+  rows: string[][];
+  page: number | null;
+  quote: string | null;
+  created_by: string;
+}
+
+export interface PaperExtractionResponse {
+  graph: MethodologyGraph;
+  tables: ExtractedTable[];
+  warnings: string[];
+  page_count: number;
+  truncated: boolean;
+}
+
+export interface SuggestedIds {
+  project_id: string;
+  graph_id: string;
+  source_id: string;
+}
+
+export interface ParsedPaper {
+  filename: string;
+  title: string | null;
+  authors: string[];
+  page_count: number;
+  chars: number;
+  sha256: string;
+  truncated: boolean;
+  suggested: SuggestedIds;
+}
+
+export interface PaperUpload {
+  file: File;
+  project_id?: string;
+  graph_id?: string;
+  source_id?: string;
+  created_by?: string;
+  title?: string;
 }

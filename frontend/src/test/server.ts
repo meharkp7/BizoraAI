@@ -8,7 +8,11 @@ import {
   layoutFixture,
   metricsFixture,
   notFound,
+  paperExtractionFixture,
+  parsedPaperFixture,
   succeededRun,
+  tableFixture,
+  tableFixture2,
 } from "./fixtures.ts";
 
 export const handlers = [
@@ -73,6 +77,17 @@ export const handlers = [
   http.get("/api/v1/experiments/runs/:runId/artifacts", () => HttpResponse.json([])),
 
   http.get("/api/v1/experiments/comparisons", () => HttpResponse.json(comparisonFixture)),
+
+  http.get("/api/v1/graphs/:projectId/:graphId/tables", ({ params }) => {
+    if (params["projectId"] === "project-1" && params["graphId"] === "graph-1") {
+      return HttpResponse.json([tableFixture, tableFixture2]);
+    }
+    return HttpResponse.json([]);
+  }),
+
+  http.post("/api/v1/papers/extract", () => HttpResponse.json(paperExtractionFixture, { status: 201 })),
+
+  http.post("/api/v1/papers/parse", () => HttpResponse.json(parsedPaperFixture)),
 ];
 
 export const server = setupServer(...handlers);
