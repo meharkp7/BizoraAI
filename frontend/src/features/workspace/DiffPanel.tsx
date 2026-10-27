@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRevisionDiff } from "../../app/queries.ts";
+import type { GraphRevisionDiff } from "../../lib/types.ts";
 import { EmptyState, ErrorState, LoadingState } from "../../components/states.tsx";
 import styles from "./DiffPanel.module.css";
 
@@ -7,14 +8,20 @@ export function DiffPanel({
   projectId,
   graphId,
   currentVersion,
+  onDiffChange,
 }: {
   projectId: string;
   graphId: string;
   currentVersion: number;
+  onDiffChange?: (diff: GraphRevisionDiff | null) => void;
 }) {
   const [baseVersion, setBaseVersion] = useState(Math.max(1, currentVersion - 1));
   const [targetVersion, setTargetVersion] = useState(currentVersion);
   const diff = useRevisionDiff(projectId, graphId, baseVersion, targetVersion);
+
+  useEffect(() => {
+    onDiffChange?.(diff.data ?? null);
+  }, [diff.data, onDiffChange]);
 
   return (
     <section className={styles.panel} aria-label="Revision comparison">

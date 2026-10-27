@@ -1,9 +1,40 @@
-import { useGraphRevision } from "../../app/queries.ts";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useApplyPatch,
+  useApplyPatchBatch,
+  useGraphLayout,
+  useGraphRevision,
+  useSaveLayout,
+} from "../../app/queries.ts";
 import { BizoraApiError } from "../../lib/api.ts";
+import { WORKSPACE_ACTOR } from "../../lib/constants.ts";
 import { useWorkspaceSelection } from "../../lib/store.ts";
-import type { GraphEdge, GraphNode } from "../../lib/types.ts";
+import type {
+  GraphEdge,
+  GraphLayout,
+  GraphNode,
+  GraphPatch,
+  GraphRevisionDiff,
+  MethodologyGraph,
+  ViewportState,
+} from "../../lib/types.ts";
 import { EmptyState, ErrorState, LoadingState } from "../../components/states.tsx";
+import { GraphCanvas } from "../canvas/GraphCanvas.tsx";
+import { CanvasToolbar } from "../canvas/CanvasToolbar.tsx";
+import type { LayoutSaveStatus, NewNodeSpec } from "../canvas/CanvasToolbar.tsx";
+import { diffStatusMaps } from "../canvas/flowElements.ts";
+import { suggestEdgeId } from "../canvas/ids.ts";
+import type { Point } from "../canvas/layout.ts";
+import { matchesSavedPositions, toNodePositions } from "../canvas/layout.ts";
+import { PatchStatus } from "../canvas/PatchStatus.tsx";
+import { useRevisionHistory } from "./history.ts";
 import { InspectorPanel } from "./InspectorPanel.tsx";
+import {
+  addEdgePatch,
+  addNodePatch,
+  removalBatch,
+  updateConfigPatch,
+} from "./patchBuilders.ts";
 import { EvidencePanel } from "./EvidencePanel.tsx";
 import { DiffPanel } from "./DiffPanel.tsx";
 import styles from "./WorkspacePage.module.css";
@@ -90,8 +121,50 @@ export function WorkspacePage({
   onVersionChange: (version: number) => void;
 }) {
   const revision = useGraphRevision(projectId, graphId, version);
-  const { selectedNodeIds, selectedEdgeIds, selectNodes, selectEdges } =
-    useWorkspaceSelection();
+  const savedLayout = useGraphLayout(projectId, graphId, version);
+  const patch = useApplyPatch(projectId, graphId);
+  const batch = useApplyPatchBatch(projectId, graphId);
+  const history = useRevisionHistory(version, onVersionChange);
+  const [patchError, setPatchError] = useState<BizoraApiError | null>(null);
+  const [savedVersion, setSavedVersion] = useState<number | null>(null);
+  const {
+    selectedNodeIds,
+    selectedEdgeIds,
+    selectNodes,
+    selectEdges,
+    clearSelection,
+  } = useWorkspaceSelection();
+  const mutating = patch.isPending || batch.isPending;
+
+  const historyRef = useRef(history);
+  useEffect(() => {
+    historyRef.current = history;
+  }, [history]);
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent): void {
+      if (!event.ctrlKey && !event.metaKey) return;
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      const key = event.key.toLowerCase();
+      if (key === "z" && !event.shiftKey) {
+        event.preventDefault();
+        historyRef.current.undo();
+      } else if ((key === "z" && event.shiftKey) || key === "y") {
+        event.preventDefault();
+        historyRef.current.redo();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   if (revision.isPending) {
     return <LoadingState label={`Loading revision ${version}…`} />;
@@ -115,11 +188,164 @@ export function WorkspacePage({
     );
   }
 
-  const graph = revision.data;
+  return (
+    <WorkspaceLoaded
+      projectId={projectId}
+      graph={revision.data}
+      layoutVersion={version}
+      savedLayout={savedLayout.data ?? null}
+      selectedNodeIds={selectedNodeIds}
+      selectedEdgeIds={selectedEdgeIds}
+      mutating={mutating}
+      patchError={patchError}
+      savedVersion={savedVersion}
+      canUndo={history.canUndo}
+      canRedo={history.canRedo}
+      onOlder={() => history.go(version - 1)}
+      onNewer={() => history.go(version + 1)}
+      onUndo={history.undo}
+      onRedo={history.redo}
+      onSelectNodes={selectNodes}
+      onSelectEdges={selectEdges}
+      onSubmit={(patches) => {
+        setPatchError(null);
+        setSavedVersion(null);
+        const callbacks = {
+          onSuccess: (next: MethodologyGraph) => {
+            clearSelection();
+            setSavedVersion(next.version);
+            history.go(next.version);
+          },
+          onError: (cause: unknown) => {
+            setPatchError(
+              cause instanceof BizoraApiError
+                ? cause
+                : new BizoraApiError(0, "UNKNOWN", "The change failed.", {}),
+            );
+          },
+        };
+        if (patches.length === 1) patch.mutate(patches[0], callbacks);
+        else batch.mutate({ patches }, callbacks);
+      }}
+      onLocalError={setPatchError}
+      onDismissStatus={() => {
+        setPatchError(null);
+        setSavedVersion(null);
+      }}
+    />
+  );
+}
+
+function WorkspaceLoaded({
+  projectId,
+  graph,
+  layoutVersion,
+  savedLayout,
+  selectedNodeIds,
+  selectedEdgeIds,
+  mutating,
+  patchError,
+  savedVersion,
+  canUndo,
+  canRedo,
+  onOlder,
+  onNewer,
+  onUndo,
+  onRedo,
+  onSelectNodes,
+  onSelectEdges,
+  onSubmit,
+  onLocalError,
+  onDismissStatus,
+}: {
+  projectId: string;
+  graph: MethodologyGraph;
+  layoutVersion: number;
+  savedLayout: GraphLayout | null;
+  selectedNodeIds: string[];
+  selectedEdgeIds: string[];
+  mutating: boolean;
+  patchError: BizoraApiError | null;
+  savedVersion: number | null;
+  canUndo: boolean;
+  canRedo: boolean;
+  onOlder: () => void;
+  onNewer: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
+  onSelectNodes: (nodeIds: string[]) => void;
+  onSelectEdges: (edgeIds: string[]) => void;
+  onSubmit: (patches: GraphPatch[]) => void;
+  onLocalError: (error: BizoraApiError) => void;
+  onDismissStatus: () => void;
+}) {
   const selectedNode: GraphNode | null =
     graph.nodes.find((node) => node.id === selectedNodeIds[0]) ?? null;
   const selectedEdge: GraphEdge | null =
     graph.edges.find((edge) => edge.id === selectedEdgeIds[0]) ?? null;
+  const takenIds = useMemo(
+    () => new Set([...graph.nodes.map((node) => node.id), ...graph.edges.map((edge) => edge.id)]),
+    [graph],
+  );
+  const saveLayout = useSaveLayout(graph.project_id, graph.graph_id, graph.version);
+  const [layoutStatus, setLayoutStatus] = useState<LayoutSaveStatus>("idle");
+  const [activeDiff, setActiveDiff] = useState<GraphRevisionDiff | null>(null);
+  const saveTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    const timer = saveTimer;
+    return () => {
+      if (timer.current !== null) window.clearTimeout(timer.current);
+    };
+  }, []);
+
+  const diffStatuses = useMemo(
+    () => (activeDiff ? diffStatusMaps(activeDiff) : null),
+    [activeDiff],
+  );
+
+  function handleNodesMoved(positions: Map<string, Point>, viewport: ViewportState): void {
+    if (savedLayout && matchesSavedPositions(savedLayout.positions, positions)) {
+      return;
+    }
+    if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
+    setLayoutStatus("saving");
+    saveTimer.current = window.setTimeout(() => {
+      saveLayout.mutate(
+        {
+          project_id: graph.project_id,
+          graph_id: graph.graph_id,
+          version: graph.version,
+          positions: toNodePositions(graph, positions),
+          viewport,
+          camera: savedLayout?.camera ?? null,
+          updated_by: WORKSPACE_ACTOR,
+        },
+        {
+          onSuccess: () => setLayoutStatus("saved"),
+          onError: () => setLayoutStatus("error"),
+        },
+      );
+    }, 800);
+  }
+
+  function handleConnect(source: string, target: string): void {
+    if (source === target) {
+      onLocalError(new BizoraApiError(422, "INVALID_GRAPH_PATCH", "A connection cannot start and end on the same component.", {}));
+      return;
+    }
+    const takenEdges = new Set(graph.edges.map((edge) => edge.id));
+    onSubmit([addEdgePatch(graph, suggestEdgeId(source, target, takenEdges), source, target)]);
+  }
+
+  function handleDelete(nodeIds: string[], edgeIds: string[]): void {
+    if (nodeIds.length === 0 && edgeIds.length === 0) return;
+    onSubmit(removalBatch(graph, nodeIds, edgeIds));
+  }
+
+  function handleAddNode(spec: NewNodeSpec): void {
+    onSubmit([addNodePatch(graph, spec)]);
+  }
 
   return (
     <div className={styles.page}>
@@ -137,21 +363,24 @@ export function WorkspacePage({
           </p>
         </div>
         <div className={styles.stepper} role="group" aria-label="Revision">
-          <button
-            type="button"
-            disabled={version <= 1}
-            onClick={() => onVersionChange(version - 1)}
-          >
+          <button type="button" disabled={layoutVersion <= 1 || mutating} onClick={onOlder}>
             ← Older
           </button>
           <span className={styles.versionBadge} aria-live="polite">
-            v{version}
+            v{layoutVersion}
           </span>
-          <button type="button" onClick={() => onVersionChange(version + 1)}>
+          <button type="button" disabled={mutating} onClick={onNewer}>
             Newer →
           </button>
         </div>
       </div>
+
+      <PatchStatus
+        pending={mutating}
+        error={patchError}
+        savedVersion={savedVersion}
+        onDismiss={onDismissStatus}
+      />
 
       <div className={styles.grid}>
         <section className={styles.panel} aria-label="Components">
@@ -159,31 +388,61 @@ export function WorkspacePage({
           <NodeList
             nodes={graph.nodes}
             selectedId={selectedNode?.id ?? null}
-            onSelect={(nodeId) => selectNodes([nodeId])}
+            onSelect={(nodeId) => onSelectNodes([nodeId])}
           />
           <h2 className={styles.edgesHeading}>Connections</h2>
           <EdgeList
             edges={graph.edges}
             selectedId={selectedEdge?.id ?? null}
-            onSelect={(edgeId) => selectEdges([edgeId])}
+            onSelect={(edgeId) => onSelectEdges([edgeId])}
           />
         </section>
 
         <section className={styles.panel} aria-label="Canvas">
           <h2>Canvas</h2>
-          <EmptyState
-            title="Interactive canvas arrives in Phase E."
-            detail="Selection, layout, and editing bind to this same revision data. Layout persistence is already live in the API."
+          <CanvasToolbar
+            takenIds={takenIds}
+            canUndo={canUndo}
+            canRedo={canRedo}
+            onUndo={onUndo}
+            onRedo={onRedo}
+            onAddNode={handleAddNode}
+            disabled={mutating}
+            layoutStatus={layoutStatus}
+          />
+          <GraphCanvas
+            graph={graph}
+            layout={savedLayout}
+            diffStatuses={diffStatuses}
+            mutating={mutating}
+            onConnectRequest={handleConnect}
+            onDeleteRequest={handleDelete}
+            onNodesMoved={handleNodesMoved}
           />
         </section>
 
         <div className={styles.side}>
-          <InspectorPanel node={selectedNode} edge={selectedEdge} formatShape={formatShape} />
+          <InspectorPanel
+            node={selectedNode}
+            edge={selectedEdge}
+            formatShape={formatShape}
+            disabled={mutating}
+            onUpdateConfig={
+              selectedNode
+                ? (config) => onSubmit([updateConfigPatch(graph, selectedNode, config)])
+                : undefined
+            }
+          />
           <EvidencePanel node={selectedNode} edge={selectedEdge} />
         </div>
       </div>
 
-      <DiffPanel projectId={projectId} graphId={graphId} currentVersion={graph.version} />
+      <DiffPanel
+        projectId={projectId}
+        graphId={graph.graph_id}
+        currentVersion={graph.version}
+        onDiffChange={setActiveDiff}
+      />
     </div>
   );
 }

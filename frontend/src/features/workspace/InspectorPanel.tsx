@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { GraphEdge, GraphNode } from "../../lib/types.ts";
 import styles from "./InspectorPanel.module.css";
 
@@ -5,14 +6,71 @@ function ProvenanceBadge({ value }: { value: string }) {
   return <span className={styles.badge}>{value}</span>;
 }
 
+function ConfigEditor({
+  node,
+  disabled,
+  onApply,
+}: {
+  node: GraphNode;
+  disabled: boolean;
+  onApply: (config: Record<string, unknown>) => void;
+}) {
+  const [text, setText] = useState(() => JSON.stringify(node.config, null, 2));
+  const [error, setError] = useState<string | null>(null);
+
+  function apply(): void {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text) as unknown;
+    } catch {
+      setError("Configuration must be valid JSON.");
+      return;
+    }
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      setError("Configuration must be a JSON object.");
+      return;
+    }
+    setError(null);
+    onApply(parsed as Record<string, unknown>);
+  }
+
+  return (
+    <div className={styles.editor}>
+      <textarea
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+        rows={5}
+        spellCheck={false}
+        aria-label="Node configuration JSON"
+        disabled={disabled}
+      />
+      <div className={styles.editorRow}>
+        <button type="button" onClick={apply} disabled={disabled}>
+          Apply configuration
+        </button>
+        <span className={styles.mergeNote}>Merges into existing keys.</span>
+      </div>
+      {error ? (
+        <p className={styles.editorError} role="alert">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export function InspectorPanel({
   node,
   edge,
   formatShape,
+  disabled,
+  onUpdateConfig,
 }: {
   node: GraphNode | null;
   edge: GraphEdge | null;
   formatShape: (shape: (number | null)[] | null) => string;
+  disabled?: boolean;
+  onUpdateConfig?: (config: Record<string, unknown>) => void;
 }) {
   if (!node && !edge) {
     return (
@@ -97,6 +155,14 @@ export function InspectorPanel({
           )}
         </dd>
       </dl>
+      {onUpdateConfig ? (
+        <ConfigEditor
+          key={node.id}
+          node={node}
+          disabled={disabled === true}
+          onApply={onUpdateConfig}
+        />
+      ) : null}
     </section>
   );
 }

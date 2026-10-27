@@ -1,0 +1,34 @@
+.canvas {
+  height: 30rem;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-surface);
+}
+
+.canvas[data-mutating="true"] {
+  cursor: progress;
+}
+
+/* React Flow control + minimap theming hooks. */
+.canvas :global(.react-flow__controls) {
+  box-shadow: var(--shadow-1);
+}
+
+.canvas :global(.react-flow__controls-button) {
+  background: var(--color-surface-raised);
+  border-bottom: 1px solid var(--color-line);
+}
+
+.canvas :global(.react-flow__controls-button svg) {
+  fill: var(--color-ink-soft);
+}
+
+.canvas :global(.react-flow__minimap) {
+  background: var(--color-surface);
+}
+
+.canvas :global(.react-flow__edge.selected .react-flow__edge-path) {
+  stroke: var(--color-accent);
+  stroke-width: 2.5;
+}

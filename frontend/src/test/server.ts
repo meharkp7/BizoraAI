@@ -41,6 +41,23 @@ export const handlers = [
 
   http.get("/api/v1/graphs/:projectId/:graphId/diff", () => HttpResponse.json(diffFixture)),
 
+  http.post("/api/v1/graphs/:projectId/:graphId/patches", async ({ request }) => {
+    const patch = (await request.json()) as { base_version: number };
+    return HttpResponse.json(
+      { ...graphFixture, version: patch.base_version + 1, parent_version: patch.base_version },
+      { status: 201 },
+    );
+  }),
+
+  http.post("/api/v1/graphs/:projectId/:graphId/patch-batches", async ({ request }) => {
+    const batch = (await request.json()) as { patches: { base_version: number }[] };
+    const base = batch.patches[0]?.base_version ?? 1;
+    return HttpResponse.json(
+      { ...graphFixture, version: base + 1, parent_version: base },
+      { status: 201 },
+    );
+  }),
+
   http.get("/api/v1/experiments/runs", () => HttpResponse.json([succeededRun, failedRun])),
 
   http.get("/api/v1/experiments/runs/:runId", ({ params }) => {
