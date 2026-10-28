@@ -1,6 +1,14 @@
-"""Electronics catalog entries: discretes, ICs, passives, power, measurement."""
+"""Electronics pack data: catalog entries plus detection profile.
+
+Moved verbatim from the former core registry: part names, signals, and
+match terms live here as data, and the generic pack harness interprets
+them without per-part branches.
+"""
 
 from typing import Any
+
+from bizora.core.entity_registry import EntityTypeDef, InterfaceDef
+from bizora.packs.lexical import data_iface, power_iface
 
 POWER = {"name": "power", "kind": "power", "params": {}}
 DATA = {"name": "data", "kind": "data", "params": {}}
@@ -1061,3 +1069,120 @@ COMPONENTS: list[dict[str, Any]] = [
         "evidence": [],
     },
 ]
+
+
+PACK_ID = "electronics"
+PACK_VERSION = "1.0.0"
+DISPLAY = "Electronics"
+THRESHOLD = 2
+
+SIGNALS: tuple[str, ...] = (
+    "transistor",
+    "circuit",
+    "voltage",
+    "sram",
+    "dram",
+    "cmos",
+    "mosfet",
+    "nmos",
+    "pmos",
+    "nbti",
+    "pbti",
+    "leakage",
+    "bias",
+    "inverter",
+    "amplifier",
+    "adc",
+    "dac",
+    "oscillator",
+    "silicon",
+    "spice",
+    "schematic",
+    "resistor",
+    "capacitor",
+    "inductor",
+    "diode",
+)
+
+ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
+    EntityTypeDef(
+        "memory-cell",
+        "Memory cell",
+        "package",
+        ("sram", "dram", "memory cell", "bitcell", "6t"),
+        (power_iface(), data_iface()),
+    ),
+    EntityTypeDef(
+        "transistor",
+        "Transistor",
+        "discrete",
+        ("transistor", "mosfet", "nmos", "pmos", "finfet", "bjt"),
+        (power_iface(), InterfaceDef("gate", "signal"), InterfaceDef("channel", "signal")),
+    ),
+    EntityTypeDef(
+        "logic-gate",
+        "Logic gate",
+        "package",
+        ("inverter", "nand", "nor", "logic gate"),
+        (power_iface(), data_iface()),
+    ),
+    EntityTypeDef(
+        "voltage-source",
+        "Voltage source",
+        "power",
+        ("voltage source", "vdd", "supply", "regulator", "reference"),
+        (power_iface(),),
+    ),
+    EntityTypeDef(
+        "bias-controller",
+        "Bias controller",
+        "package",
+        ("bias", "body bias", "compensation", "back bias"),
+        (power_iface(), InterfaceDef("bias", "analog")),
+    ),
+    EntityTypeDef(
+        "sense-amplifier",
+        "Sense amplifier",
+        "package",
+        ("sense", "sensing", "sense amplifier", "readout", "comparator"),
+        (power_iface(), data_iface(), InterfaceDef("sense", "analog")),
+    ),
+    EntityTypeDef(
+        "measurement",
+        "Measurement",
+        "sensor",
+        ("monitor", "measurement", "meter", "probe", "detector", "current mirror"),
+        (power_iface(), InterfaceDef("sense", "analog")),
+    ),
+    EntityTypeDef(
+        "passive",
+        "Passive component",
+        "passive",
+        ("resistor", "capacitor", "inductor", "resistance", "capacitance"),
+        (power_iface(),),
+    ),
+    EntityTypeDef(
+        "diode",
+        "Diode",
+        "discrete",
+        ("diode", "rectifier", "schottky", "zener", "1n4148"),
+        (
+            InterfaceDef("anode", "signal"),
+            InterfaceDef("cathode", "signal"),
+        ),
+    ),
+    EntityTypeDef(
+        "analog-ic",
+        "Analog IC",
+        "package",
+        ("op-amp", "opamp", "operational amplifier", "timer", "ne555", "lm358"),
+        (power_iface(), InterfaceDef("in", "analog"), InterfaceDef("out", "analog")),
+    ),
+    EntityTypeDef(
+        "data-converter",
+        "Data converter",
+        "package",
+        ("adc", "dac", "data converter", "analog-to-digital", "digital-to-analog"),
+        (power_iface(), InterfaceDef("analog", "analog"), data_iface()),
+    ),
+)

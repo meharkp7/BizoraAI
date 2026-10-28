@@ -26,8 +26,13 @@ from bizora.contracts.domain import (
 )
 from bizora.contracts.graph import GraphNode, MethodologyGraph, NodeKind
 from bizora.core.component_catalog import get_component
-from bizora.core.entity_registry import PROFILES, resolve_generic, resolve_node
-from bizora.core.entity_service import check_replacement, classify_graph, resolve_graph
+from bizora.core.entity_registry import resolve_generic, resolve_node
+from bizora.core.entity_service import (
+    check_replacement,
+    classify_graph,
+    profile_for_domain,
+    resolve_graph,
+)
 from bizora.core.errors import BizoraError, ErrorCode
 
 
@@ -87,7 +92,7 @@ def _resolve_candidate(
 ) -> EntityResolution:
     """Resolve the candidate node through the graph's domain profile."""
     classification = classify_graph(graph)
-    profile = PROFILES.get(classification.domain)
+    profile = profile_for_domain(classification.domain)
     if profile is None or classification.domain == GENERIC_DOMAIN:
         return resolve_generic(candidate.id, candidate.label)
     resolved = resolve_node(

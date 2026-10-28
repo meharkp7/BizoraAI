@@ -9,12 +9,21 @@ from bizora.contracts.domain import (
 )
 from bizora.contracts.graph import GraphNode, MethodologyGraph
 from bizora.core.entity_registry import (
-    PROFILES,
+    DomainProfile,
     check_compatible,
     detect_domain,
     resolve_generic,
     resolve_node,
 )
+from bizora.packs import ProfiledPack, default_registry
+
+
+def profile_for_domain(pack_id: str) -> DomainProfile | None:
+    """Return the detection profile for one routed pack id, or None."""
+    pack = default_registry().get(pack_id)
+    if pack is not None and isinstance(pack, ProfiledPack):
+        return pack.profile
+    return None
 
 
 def _brief_text(graph: MethodologyGraph) -> str:
@@ -31,13 +40,13 @@ def _brief_text(graph: MethodologyGraph) -> str:
 def classify_graph(graph: MethodologyGraph) -> DomainClassification:
     """Detect the research domain behind one graph revision."""
     nodes = tuple((node.label, node.description, node.kind, node.config) for node in graph.nodes)
-    return detect_domain(graph.title, _brief_text(graph), nodes)
+    return detect_domain(graph.title, _brief_text(graph), nodes, default_registry())
 
 
 def resolve_graph(graph: MethodologyGraph) -> GraphEntities:
     """Resolve every node of one graph revision to registry entities."""
     classification = classify_graph(graph)
-    profile = PROFILES.get(classification.domain)
+    profile = profile_for_domain(classification.domain)
     entities: list[EntityResolution] = []
     for node in graph.nodes:
         if profile is None or classification.domain == GENERIC_DOMAIN:
@@ -60,7 +69,7 @@ def check_replacement(
 ) -> ReplacementCompatibility:
     """Check a replacement node against its predecessor's interfaces."""
     classification = classify_graph(graph)
-    profile = PROFILES.get(classification.domain)
+    profile = profile_for_domain(classification.domain)
     existing = next(node for node in graph.nodes if node.id == target_id)
     if profile is None or classification.domain == GENERIC_DOMAIN:
         old = resolve_generic(existing.id, existing.label)

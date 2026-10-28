@@ -1,6 +1,13 @@
-"""Software/distributed-systems catalog entries: services and infrastructure."""
+"""Distributed systems pack: services and infrastructure.
+
+Catalog entries and detection profile moved verbatim from the former
+core registry into pack data, wired to the generic pack harness.
+"""
 
 from typing import Any
+
+from bizora.core.entity_registry import EntityTypeDef, InterfaceDef
+from bizora.packs.lexical import LexicalPack, data_iface
 
 DATA = {"name": "data", "kind": "data", "params": {}}
 CONTROL = {"name": "control", "kind": "protocol", "params": {}}
@@ -283,3 +290,89 @@ COMPONENTS: list[dict[str, Any]] = [
         "evidence": [],
     },
 ]
+
+
+PACK_ID = "distributed-systems"
+PACK_VERSION = "1.0.0"
+DISPLAY = "Distributed systems"
+THRESHOLD = 2
+
+SIGNALS: tuple[str, ...] = (
+    "replica",
+    "replication",
+    "coordinator",
+    "worker",
+    "client",
+    "consensus",
+    "raft",
+    "paxos",
+    "shard",
+    "partition",
+    "fault",
+    "leader",
+    "follower",
+    "quorum",
+    "throughput",
+    "latency",
+    "cluster",
+    "scheduler",
+    "database",
+    "storage engine",
+    "transaction",
+)
+
+ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
+    EntityTypeDef(
+        "client",
+        "Client",
+        "service",
+        ("client", "frontend", "cli", "sdk"),
+        (InterfaceDef("requests", "protocol"),),
+    ),
+    EntityTypeDef(
+        "coordinator",
+        "Coordinator",
+        "service",
+        ("coordinator", "leader", "master", "scheduler", "controller", "gateway"),
+        (InterfaceDef("control", "protocol"), data_iface()),
+    ),
+    EntityTypeDef(
+        "worker",
+        "Worker",
+        "service",
+        ("worker", "executor", "task", "follower", "agent"),
+        (InterfaceDef("control", "protocol"), data_iface()),
+    ),
+    EntityTypeDef(
+        "storage-node",
+        "Storage node",
+        "storage",
+        ("storage", "database", "shard", "disk", "sst", "wal", "log", "cache"),
+        (InterfaceDef("store", "storage"), InterfaceDef("replication", "replication")),
+    ),
+    EntityTypeDef(
+        "message-queue",
+        "Message queue",
+        "network",
+        ("queue", "broker", "kafka", "stream", "pubsub", "topic"),
+        (InterfaceDef("publish", "protocol"), InterfaceDef("subscribe", "protocol")),
+    ),
+    EntityTypeDef(
+        "load-balancer",
+        "Load balancer",
+        "network",
+        ("load balanc", "proxy", "router", "ingress"),
+        (InterfaceDef("frontend", "protocol"), InterfaceDef("backend", "protocol")),
+    ),
+)
+
+pack = LexicalPack(
+    pack_id=PACK_ID,
+    pack_version=PACK_VERSION,
+    display=DISPLAY,
+    signals=SIGNALS,
+    threshold=THRESHOLD,
+    entity_types=ENTITY_TYPES,
+    catalog=COMPONENTS,
+    simulator_adapter_ids=(),
+)
