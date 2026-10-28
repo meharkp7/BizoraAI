@@ -24,6 +24,35 @@ class PdfText:
     doc_author: str | None
 
 
+@dataclass(frozen=True)
+class PdfPageText:
+    """Stripped text of one PDF page (empty when the page has none)."""
+
+    page_number: int
+    text: str
+
+
+def extract_page_texts(data: bytes) -> tuple[PdfPageText, ...]:
+    """Return per-page text for pairing figures with surrounding words."""
+    if not data.startswith(PDF_MAGIC_PREFIX):
+        raise ValueError("The uploaded file is not a PDF document.")
+
+    try:
+        reader = PdfReader(BytesIO(data))
+    except PdfReadError as exc:
+        raise ValueError("The uploaded PDF could not be read.") from exc
+
+    pages: list[PdfPageText] = []
+    for number, page in enumerate(reader.pages[:MAX_PDF_PAGES], start=1):
+        try:
+            text = page.extract_text() or ""
+        except Exception:
+            # One unreadable page must not fail the whole ingest.
+            text = ""
+        pages.append(PdfPageText(page_number=number, text=text.strip()))
+    return tuple(pages)
+
+
 def _clean_metadata(value: object) -> str | None:
     """Return stripped metadata text, or None when absent or blank."""
     if not isinstance(value, str):

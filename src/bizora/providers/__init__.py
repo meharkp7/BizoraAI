@@ -14,6 +14,10 @@ from bizora.providers.fireworks import (
     FireworksMethodologyProvider,
     FireworksProviderError,
 )
+from bizora.providers.muse import (
+    MuseMethodologyProvider,
+    MuseProviderError,
+)
 
 __all__ = [
     "MethodologyExtractionRequest",
@@ -24,4 +28,6 @@ __all__ = [
     "BasetenProviderError",
     "FireworksMethodologyProvider",
     "FireworksProviderError",
+    "MuseMethodologyProvider",
+    "MuseProviderError",
 ]
