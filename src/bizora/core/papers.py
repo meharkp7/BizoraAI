@@ -45,3 +45,16 @@ def suggest_source_id(short_hash: str) -> str:
 def is_valid_source_id(value: str) -> bool:
     """Return whether a source id can appear in evidence references."""
     return len(value) <= 128 and SOURCE_ID_PATTERN.match(value) is not None
+
+
+FIGURE_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]*\Z")
+
+
+def suggest_figure_id(stem: str, page: int, index: int, short_hash: str) -> str:
+    """Suggest a stable, unique figure id for an ingested figure."""
+    return f"{slugify(stem)}-p{page}-f{index}-{short_hash}"
+
+
+def is_valid_figure_id(value: str) -> bool:
+    """Return whether a figure id satisfies the figure contract pattern."""
+    return len(value) <= 128 and FIGURE_ID_PATTERN.match(value) is not None
