@@ -107,17 +107,18 @@ class ProfiledPack(Protocol):
 class ProceduralMeshPack(Protocol):
     """A pack that derives fallback geometry from node config.
 
-    The core calls this only after the asset-registry and package
-    paths yield nothing, so packs without config-driven geometry
-    simply stay out. Returned specs must be honest parameters for
-    the shared mesh builder (real dimensions where the config
-    states them, documented defaults otherwise), never decoration.
+    The core calls this before the generic package path, so packs
+    that know the exact part render their own solids first and packs
+    without config-driven geometry simply return (). Returned specs
+    must be honest parameters for the shared mesh builder (real
+    dimensions where the config states them, documented defaults
+    otherwise), never decoration.
     """
 
     def procedural_spec(
         self, node_config: Mapping[str, Any], resolution: PartResolution
-    ) -> ProceduralSpec | None:
-        """Return generated-geometry params, or None when this node has none."""
+    ) -> tuple[ProceduralSpec, ...]:
+        """Return placed solids for one node, or () when it has none."""
         ...
 
 

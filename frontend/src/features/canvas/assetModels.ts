@@ -120,9 +120,13 @@ export function buildProceduralGeometries(mesh: ProceduralMeshData): THREE.Buffe
 
 export type ProceduralPartRole = "body" | "lead";
 
-/** Material role from the backend part name: the body vs pin leads. */
+/** Dark-plastic assembly solids; every other part renders as metal. */
+const DARK_PART_NAMES = new Set(["body", "pcb", "flange", "housing", "header"]);
+
+/** Material role from the backend part name, ignoring merge suffixes. */
 export function partRole(partName: string): ProceduralPartRole {
-  return partName === "body" ? "body" : "lead";
+  const base = partName.replace(/-\d+$/, "");
+  return DARK_PART_NAMES.has(base) ? "body" : "lead";
 }
 
 /** Assemble one pickable group per mesh: named meshes under one parent. */

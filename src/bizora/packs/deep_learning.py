@@ -2161,18 +2161,20 @@ class DeepLearningPack:
 
     def procedural_spec(
         self, node_config: Mapping[str, Any], resolution: PartResolution
-    ) -> ProceduralSpec | None:
-        """Return the tensor-shape slab for one layer, or None otherwise."""
+    ) -> tuple[ProceduralSpec, ...]:
+        """Return the tensor-shape slab for one layer, or () otherwise."""
         layer_id = _layer_of(resolution)
         if layer_id is None:
-            return None
+            return ()
         width_mm, height_mm = _layer_box_dims(layer_id, node_config)
-        return ProceduralSpec(
-            kind=ProceduralKind.BOX,
-            body_length_mm=width_mm,
-            body_width_mm=_SLAB_THICKNESS_MM,
-            body_height_mm=height_mm,
-            pin_count=0,
+        return (
+            ProceduralSpec(
+                kind=ProceduralKind.BOX,
+                body_length_mm=width_mm,
+                body_width_mm=_SLAB_THICKNESS_MM,
+                body_height_mm=height_mm,
+                pin_count=0,
+            ),
         )
 
     def check_patch(

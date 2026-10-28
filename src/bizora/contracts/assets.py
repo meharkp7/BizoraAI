@@ -115,6 +115,7 @@ class ProceduralKind(StrEnum):
     BOX = "box"
     CYLINDER = "cylinder"
     PIN_FIELD = "pin_field"
+    QFN = "qfn"
 
 
 class ProceduralSpec(BaseModel):
@@ -130,6 +131,16 @@ class ProceduralSpec(BaseModel):
     pin_pitch_mm: float = Field(default=0, ge=0, le=50)
     pin_rows: int = Field(default=1, ge=1, le=16)
     pin_length_mm: float = Field(default=0, ge=0, le=100)
+    offset_mm: tuple[float, float, float] = Field(
+        default=(0.0, 0.0, 0.0),
+        description="Assembly placement of this solid in millimetres.",
+    )
+    body_name: str = Field(
+        default="body",
+        min_length=1,
+        max_length=64,
+        description="Part name for this solid's body in merged assemblies.",
+    )
 
     @model_validator(mode="after")
     def _check_pins_need_pitch(self) -> "ProceduralSpec":

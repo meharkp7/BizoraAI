@@ -37,13 +37,13 @@
     },
     {
       "package": "qfn-32",
-      "kind": "box",
+      "kind": "qfn",
       "body_length_mm": 5.0,
       "body_width_mm": 5.0,
       "body_height_mm": 0.85,
       "pin_count": 32,
       "pin_pitch_mm": 0.5,
-      "pin_rows": 2,
+      "pin_rows": 4,
       "pin_length_mm": 0.4
     },
     {

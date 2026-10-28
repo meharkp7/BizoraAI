@@ -7,6 +7,7 @@ them without per-part branches.
 
 from typing import Any
 
+from bizora.contracts.assets import ProceduralSpec
 from bizora.core.entity_registry import EntityTypeDef, InterfaceDef
 from bizora.packs.lexical import data_iface, power_iface
 
@@ -1072,8 +1073,158 @@ COMPONENTS: list[dict[str, Any]] = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Part visuals: per-part assemblies from package outlines.
+# ---------------------------------------------------------------------------
+#
+# Each row models one catalog part as placed solids in millimetres.
+# Dimensions come from the cited source; representative outlines (a
+# part that ships in several packages modeled in its most common
+# through-hole outline) say so in the outline and note. Rows validate
+# at import so a bad dimension breaks loudly instead of rendering a
+# wrong part.
+
+PART_VISUALS: dict[str, dict[str, Any]] = {
+    "ic-ne555": {
+        "outline": "PDIP-8 (representative)",
+        "source": "Renesas PDIP-8 300mil (9.52 x 6.35 x 3.30 mm, 2.54 mm pitch)",
+        "note": "NE555 also ships in SOIC; PDIP-8 is the representative "
+        "through-hole outline.",
+        "solids": [
+            {
+                "kind": "box",
+                "body_length_mm": 9.52,
+                "body_width_mm": 6.35,
+                "body_height_mm": 3.3,
+                "pin_count": 8,
+                "pin_pitch_mm": 2.54,
+                "pin_rows": 2,
+                "pin_length_mm": 3.0,
+                "body_name": "body",
+            },
+        ],
+    },
+    "ic-lm358": {
+        "outline": "PDIP-8 (representative)",
+        "source": "Renesas PDIP-8 300mil (9.52 x 6.35 x 3.30 mm, 2.54 mm pitch)",
+        "note": "LM358 also ships in SOIC; PDIP-8 is the representative "
+        "through-hole outline.",
+        "solids": [
+            {
+                "kind": "box",
+                "body_length_mm": 9.52,
+                "body_width_mm": 6.35,
+                "body_height_mm": 3.3,
+                "pin_count": 8,
+                "pin_pitch_mm": 2.54,
+                "pin_rows": 2,
+                "pin_length_mm": 3.0,
+                "body_name": "body",
+            },
+        ],
+    },
+    "logic-74hc04": {
+        "outline": "PDIP-14 (representative)",
+        "source": "PDIP-14 300mil (19.18 x 6.35 mm body, 2.54 mm pitch, "
+        "nominal profile height)",
+        "note": "74HC04 also ships in SOIC/TSSOP; PDIP-14 is the "
+        "representative through-hole outline.",
+        "solids": [
+            {
+                "kind": "box",
+                "body_length_mm": 19.18,
+                "body_width_mm": 6.35,
+                "body_height_mm": 4.0,
+                "pin_count": 14,
+                "pin_pitch_mm": 2.54,
+                "pin_rows": 2,
+                "pin_length_mm": 3.0,
+                "body_name": "body",
+            },
+        ],
+    },
+    "reg-lm7805": {
+        "outline": "TO-220",
+        "source": "JEDEC TO-220AB (10.04-10.41 mm wide, 2.54 mm pitch)",
+        "note": "Tab hole omitted; Z-long orientation with centered leads.",
+        "solids": [
+            {
+                "kind": "box",
+                "body_length_mm": 4.6,
+                "body_width_mm": 10.2,
+                "body_height_mm": 9.0,
+                "pin_count": 3,
+                "pin_pitch_mm": 2.54,
+                "pin_rows": 3,
+                "pin_length_mm": 5.0,
+                "body_name": "body",
+            },
+            {
+                "kind": "box",
+                "body_length_mm": 1.4,
+                "body_width_mm": 10.2,
+                "body_height_mm": 6.0,
+                "pin_count": 0,
+                "offset_mm": (-1.6, 9.0, 0.0),
+                "body_name": "tab",
+            },
+        ],
+    },
+    "nmos-irf540n": {
+        "outline": "TO-220",
+        "source": "JEDEC TO-220AB (10.04-10.41 mm wide, 2.54 mm pitch)",
+        "note": "Tab hole omitted; Z-long orientation with centered leads.",
+        "solids": [
+            {
+                "kind": "box",
+                "body_length_mm": 4.6,
+                "body_width_mm": 10.2,
+                "body_height_mm": 9.0,
+                "pin_count": 3,
+                "pin_pitch_mm": 2.54,
+                "pin_rows": 3,
+                "pin_length_mm": 5.0,
+                "body_name": "body",
+            },
+            {
+                "kind": "box",
+                "body_length_mm": 1.4,
+                "body_width_mm": 10.2,
+                "body_height_mm": 6.0,
+                "pin_count": 0,
+                "offset_mm": (-1.6, 9.0, 0.0),
+                "body_name": "tab",
+            },
+        ],
+    },
+    "adc-ads1115": {
+        "outline": "VSSOP-10",
+        "source": "TI VSSOP-10 (3.00 x 3.00 mm, 0.5 mm pitch)",
+        "note": "Height nominal MSOP profile.",
+        "solids": [
+            {
+                "kind": "box",
+                "body_length_mm": 3.0,
+                "body_width_mm": 3.0,
+                "body_height_mm": 1.0,
+                "pin_count": 10,
+                "pin_pitch_mm": 0.5,
+                "pin_rows": 2,
+                "pin_length_mm": 0.4,
+                "body_name": "body",
+            },
+        ],
+    },
+}
+
+VISUAL_SPECS: dict[str, tuple[ProceduralSpec, ...]] = {
+    component_id: tuple(ProceduralSpec.model_validate(solid) for solid in row["solids"])
+    for component_id, row in PART_VISUALS.items()
+}
+
+
 PACK_ID = "electronics"
-PACK_VERSION = "1.0.0"
+PACK_VERSION = "1.1.0"
 DISPLAY = "Electronics"
 THRESHOLD = 2
 

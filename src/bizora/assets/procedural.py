@@ -11,6 +11,7 @@ canvas can build BufferGeometry from directly.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 
 from bizora.contracts.assets import (
     MeshBounds,
@@ -89,10 +90,33 @@ def _cylinder_part(
 
 
 def _pin_grid(spec: ProceduralSpec) -> list[tuple[float, float]]:
-    """Lay pins out along the body edges (dual rows) or as a grid field."""
+    """Lay pins out as a grid field, end caps, a QFN ring, or dual rows.
+
+    Dual rows sit on the width faces and spread down the body length,
+    so long parts (PDIP-28) place pins correctly; two-pin passives
+    terminate as end caps on the length faces.
+    """
     if spec.pin_count == 0:
         return []
     rows = max(spec.pin_rows, 1)
+    if spec.kind is ProceduralKind.QFN:
+        if spec.pin_count % 4 != 0:
+            raise ValueError("QFN pins must divide evenly over four sides.")
+        per_side = spec.pin_count // 4
+        span = (per_side - 1) * spec.pin_pitch_mm
+        ring = []
+        for edge in range(4):
+            for within in range(per_side):
+                offset = -span / 2 + within * spec.pin_pitch_mm
+                if edge == 0:
+                    ring.append((-spec.body_length_mm / 2, offset))
+                elif edge == 1:
+                    ring.append((spec.body_length_mm / 2, offset))
+                elif edge == 2:
+                    ring.append((offset, -spec.body_width_mm / 2))
+                else:
+                    ring.append((offset, spec.body_width_mm / 2))
+        return ring
     if spec.kind is ProceduralKind.PIN_FIELD or rows > 2:
         cols = math.ceil(spec.pin_count / rows)
         width = (cols - 1) * spec.pin_pitch_mm
@@ -104,6 +128,8 @@ def _pin_grid(spec: ProceduralSpec) -> list[tuple[float, float]]:
                 (-width / 2 + col * spec.pin_pitch_mm, -depth / 2 + row * spec.pin_pitch_mm)
             )
         return positions
+    if spec.pin_count == 2:
+        return [(-spec.body_length_mm / 2, 0.0), (spec.body_length_mm / 2, 0.0)]
     per_side = math.ceil(spec.pin_count / 2)
     span = (per_side - 1) * spec.pin_pitch_mm
     positions = []
@@ -111,7 +137,7 @@ def _pin_grid(spec: ProceduralSpec) -> list[tuple[float, float]]:
         side = 1.0 if index % 2 == 0 else -1.0
         slot = index // 2
         along = -span / 2 + slot * spec.pin_pitch_mm if per_side > 1 else 0.0
-        positions.append((side * spec.body_width_mm / 2, along))
+        positions.append((along, side * spec.body_width_mm / 2))
     return positions
 
 
@@ -134,14 +160,28 @@ def _lead_parts(spec: ProceduralSpec) -> tuple[MeshPart, ...]:
     return tuple(parts)
 
 
+def _translate(part: MeshPart, offset: tuple[float, float, float]) -> MeshPart:
+    """Shift one part's vertices by an assembly offset."""
+    ox, oy, oz = offset
+    if ox == 0 and oy == 0 and oz == 0:
+        return part
+    return MeshPart(
+        name=part.name,
+        vertices=tuple((x + ox, y + oy, z + oz) for x, y, z in part.vertices),
+        faces=part.faces,
+    )
+
+
 def build_mesh(spec: ProceduralSpec) -> ProceduralMesh:
     """Generate the full fallback mesh for one procedural spec."""
     if spec.kind is ProceduralKind.CYLINDER:
         radius = min(spec.body_length_mm, spec.body_width_mm) / 2
-        body = _cylinder_part("body", 0, spec.body_height_mm / 2, 0, radius, spec.body_height_mm)
+        body = _cylinder_part(
+            spec.body_name, 0, spec.body_height_mm / 2, 0, radius, spec.body_height_mm
+        )
     else:
         body = _box_part(
-            "body",
+            spec.body_name,
             0,
             spec.body_height_mm / 2,
             0,
@@ -149,12 +189,50 @@ def build_mesh(spec: ProceduralSpec) -> ProceduralMesh:
             spec.body_height_mm,
             spec.body_width_mm,
         )
-    parts = (body, *_lead_parts(spec))
+    parts = tuple(_translate(part, spec.offset_mm) for part in (body, *_lead_parts(spec)))
     xs = [v[0] for part in parts for v in part.vertices]
     ys = [v[1] for part in parts for v in part.vertices]
     zs = [v[2] for part in parts for v in part.vertices]
     return ProceduralMesh(
         spec=spec,
+        parts=parts,
+        bounds=MeshBounds(
+            min_xyz=(min(xs), min(ys), min(zs)),
+            max_xyz=(max(xs), max(ys), max(zs)),
+        ),
+        vertex_count=sum(len(part.vertices) for part in parts),
+        face_count=sum(len(part.faces) for part in parts),
+    )
+
+
+def build_assembly(specs: Sequence[ProceduralSpec]) -> ProceduralMesh:
+    """Merge several placed solids into one mesh for a single visual.
+
+    The first spec is the primary solid recorded on the mesh; part
+    names colliding across solids gain numeric suffixes in build
+    order, so single-solid meshes keep their exact historical names.
+    """
+    solids = list(specs)
+    if not solids:
+        raise ValueError("An assembly needs at least one solid.")
+    merged: list[MeshPart] = []
+    seen: dict[str, int] = {}
+    for spec in solids:
+        for part in build_mesh(spec).parts:
+            seen[part.name] = seen.get(part.name, 0) + 1
+            count = seen[part.name]
+            name = part.name if count == 1 else f"{part.name}-{count}"
+            merged.append(
+                MeshPart(name=name, vertices=part.vertices, faces=part.faces)
+                if name != part.name
+                else part
+            )
+    parts = tuple(merged)
+    xs = [v[0] for part in parts for v in part.vertices]
+    ys = [v[1] for part in parts for v in part.vertices]
+    zs = [v[2] for part in parts for v in part.vertices]
+    return ProceduralMesh(
+        spec=solids[0],
         parts=parts,
         bounds=MeshBounds(
             min_xyz=(min(xs), min(ys), min(zs)),

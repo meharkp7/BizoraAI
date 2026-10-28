@@ -157,6 +157,102 @@ def test_ml_unmatched_nodes_are_skipped() -> None:
     assert render_specs_for_graph(graph) == ()
 
 
+def make_iot_graph(nodes: tuple[GraphNode, ...]) -> MethodologyGraph:
+    return make_graph("ESP32 sensor gateway with MQTT firmware", nodes)
+
+
+def test_iot_module_renders_shielded_assembly() -> None:
+    graph = make_iot_graph((make_node("mcu", "ESP32-WROOM-32 module"),))
+
+    specs = render_specs_for_graph(graph)
+
+    assert len(specs) == 1
+    assert specs[0].label == "ESP32-WROOM-32 module"
+    assert specs[0].fallback_package == "ESP32-WROOM-32"
+    assert specs[0].illustrative is True
+    assert specs[0].mesh is not None
+    names = [part.name for part in specs[0].mesh.parts]
+    assert names[0] == "pcb"
+    assert names[-1] == "can"
+    assert len(names) == 1 + 38 + 1
+    pcb_top = max(v[1] for v in specs[0].mesh.parts[0].vertices)
+    can_bottom = min(v[1] for v in specs[0].mesh.parts[-1].vertices)
+    assert can_bottom == pytest.approx(pcb_top)
+
+
+def test_uno_renders_board_assembly() -> None:
+    graph = make_iot_graph((make_node("board", "Arduino Uno R3"),))
+
+    specs = render_specs_for_graph(graph)
+
+    assert len(specs) == 1
+    assert specs[0].fallback_package == "Arduino Uno R3"
+    assert specs[0].mesh is not None
+    names = [part.name for part in specs[0].mesh.parts]
+    assert names[0] == "pcb"
+    assert "usb" in names
+    assert "body" in names
+    assert len(names) == 1 + 1 + (1 + 28) + 4
+    bounds = specs[0].mesh.bounds
+    assert bounds.min_xyz[0] >= -34.3 and bounds.max_xyz[0] <= 34.3
+    assert bounds.min_xyz[2] >= -26.7 and bounds.max_xyz[2] <= 26.7
+
+
+def test_to220_renders_body_tab_and_leads() -> None:
+    graph = make_graph(
+        "Resistor divider circuit with resistor tolerance",
+        (make_node("q1", "Switching MOSFET", part="IRF540N"),),
+    )
+
+    specs = render_specs_for_graph(graph)
+
+    assert len(specs) == 1
+    assert specs[0].fallback_package == "TO-220"
+    assert specs[0].mesh is not None
+    names = [part.name for part in specs[0].mesh.parts]
+    assert names == ["body", "pin-1", "pin-2", "pin-3", "tab"]
+    body_top = max(v[1] for v in specs[0].mesh.parts[0].vertices)
+    tab_bottom = min(v[1] for v in specs[0].mesh.parts[-1].vertices)
+    assert tab_bottom == pytest.approx(body_top)
+
+
+def test_parts_without_visuals_keep_package_fallback() -> None:
+    graph = make_graph(
+        "Resistor divider circuit with resistor tolerance",
+        (make_node("r1", "Resistor"),),
+    )
+
+    specs = render_specs_for_graph(graph)
+
+    assert len(specs) == 1
+    assert specs[0].fallback_package == "resistor-generic"
+    assert specs[0].mesh is not None
+    assert [part.name for part in specs[0].mesh.parts] == ["body", "pin-1", "pin-2"]
+
+
+def test_all_part_visuals_build_within_mesh_caps() -> None:
+    from bizora.assets.procedural import build_assembly
+    from bizora.packs import electronics, iot
+
+    for module in (electronics, iot):
+        for component_id, solids in module.VISUAL_SPECS.items():
+            mesh = build_assembly(solids)
+            assert len(mesh.parts) <= 64, component_id
+            assert mesh.vertex_count <= 65536, component_id
+
+
+def test_all_part_visuals_carry_outline_source_and_note() -> None:
+    from bizora.packs import electronics, iot
+
+    for module in (electronics, iot):
+        assert module.PART_VISUALS, module.__name__
+        for component_id, row in module.PART_VISUALS.items():
+            assert row["outline"], component_id
+            assert row["source"], component_id
+            assert row["note"], component_id
+            assert row["solids"], component_id
+
+
 def test_unresolved_nodes_are_skipped() -> None:
     graph = make_graph(
         "Resistor divider circuit with voltage readout",

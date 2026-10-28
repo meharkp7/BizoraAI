@@ -9,10 +9,12 @@ lexical harness over unchanged v1 data.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
 
+from bizora.contracts.assets import ProceduralSpec
 from bizora.contracts.graph import GraphNode, MethodologyGraph
 from bizora.contracts.packs import (
     CopilotToolSpec,
@@ -684,6 +686,346 @@ COMPONENTS: list[dict[str, Any]] = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Part visuals: per-part assemblies from datasheet dimensions.
+# ---------------------------------------------------------------------------
+#
+# Each row models one catalog part as placed solids in millimetres.
+# Dimensions come from the cited source; anything the source does not
+# state (sub-placement, omitted pins, representative outlines) is
+# called out in the row note. Rows validate at import so a bad
+# dimension breaks loudly instead of rendering a wrong part.
+
+PART_VISUALS: dict[str, dict[str, Any]] = {
+    "mcu-esp32-wroom32": {
+        "outline": "ESP32-WROOM-32",
+        "source": "Espressif ESP32-WROOM-32 datasheet v2.9 "
+        "(18.00 x 25.50 x 3.10 mm, 38 pins, 1.27 mm pitch)",
+        "note": "Castellated edge pads approximated by edge pins; "
+        "shield-can extent within the datasheet outline; antenna keep-out left bare.",
+        "solids": [
+            {
+                "kind": "box",
+                "body_length_mm": 25.5,
+                "body_width_mm": 18.0,
+                "body_height_mm": 0.8,
+                "pin_count": 38,
+                "pin_pitch_mm": 1.27,
+                "pin_rows": 2,
+                "pin_length_mm": 1.0,
+                "body_name": "pcb",
+            },
+            {
+                "kind": "box",
+                "body_length_mm": 18.0,
+                "body_width_mm": 17.0,
+                "body_height_mm": 2.2,
+                "pin_count": 0,
+                "offset_mm": (-3.25, 0.8, 0.0),
+                "body_name": "can",
+            },
+        ],
+    },
+    "mcu-esp32-devkitc": {
+        "outline": "ESP32-DevKitC V4",
+        "source": "Espressif DevKitC V4 (54.4 x 27.9 mm board, 2x19 headers)",
+        "note": "Female-header below-board stubs, buttons, and passives omitted; "
+        "module pins hidden by soldering.",
+        "solids": [
+            {
+                "kind": "box",
+                "body_length_mm": 54.4,
+                "body_width_mm": 27.9,
+                "body_height_mm": 1.6,
+                "pin_count": 0,
+                "body_name": "pcb",
+            },
+            {
+                "kind": "box",
+                "body_length_mm": 25.5,
+                "body_width_mm": 18.0,
+                "body_height_mm": 0.8,
+                "pin_count": 0,
+                "offset_mm": (-13.45, 1.6, 0.0),
+                "body_name": "pcb",
+            },
+            {
+                "kind": "box",
+                "body_length_mm": 18.0,
+                "body_width_mm": 17.0,
+                "body_height_mm": 2.2,
+                "pin_count": 0,
+                "offset_mm": (-16.7, 2.4, 0.0),
+                "body_name": "can",
+            },
+            {
+                "kind": "box",
+                "body_length_mm": 48.26,
+                "body_width_mm": 2.54,
+                "body_height_mm": 8.5,
+                "pin_count": 0,
+                "offset_mm": (0.0, 1.6, -10.68),
+                "body_name": "header",
+            },
+            {
+                "kind": "box",
+                "body_length_mm": 48.26,
+                "body_width_mm": 2.54,
+                "body_height_mm": 8.5,
+                "pin_count": 0,
+                "offset_mm": (0.0, 1.6, 10.68),
+                "body_name": "header",
+            },
+            {
+                "kind": "box",
+                "body_length_mm": 7.5,
+                "body_width_mm": 5.7,
+                "body_height_mm": 2.8,
+                "pin_count": 0,
+                "offset_mm": (23.45, 1.6, 0.0),
+                "body_name": "usb",
+            },
+        ],
+    },
+    "mcu-arduino-uno": {
+        "outline": "Arduino Uno R3",
+        "source": "Arduino Uno R3 reference (68.6 x 53.4 mm PCB; headers "
+        "6/8/8/10 at 2.54 mm; USB-B ~16 x 12.5 x 11 mm)",
+        "note": "Header positions approximate within the outline; barrel jack "
+        "and small passives omitted.",
+        "solids": [
+            {
+                "kind": "box",
+                "body_length_mm": 68.6,
+                "body_width_mm": 53.4,
+                "body_height_mm": 1.6,
+                "pin_count": 0,
+                "body_name": "pcb",
+            },
+            {
+                "kind": "box",
+                "body_length_mm": 16.0,
+                "body_width_mm": 12.5,
+                "body_height_mm": 11.0,
+                "pin_count": 0,
+                "offset_mm": (-24.0, 1.6, -18.0),
+                "body_name": "usb",
+            },
+            {
+                "kind": "box",
+                "body_length_mm": 34.8,
+                "body_width_mm": 6.35,
+                "body_height_mm": 4.0,
+                "pin_count": 28,
+                "pin_pitch_mm": 2.54,
+                "pin_rows": 2,
+                "pin_length_mm": 2.0,
+                "offset_mm": (5.0, 1.6, 2.0),
+                "body_name": "body",
+            },
+            {
+                "kind": "box",
+                "body_length_mm": 12.7,
+                "body_width_mm": 2.54,
+                "body_height_mm": 8.5,
+                "pin_count": 0,
+                "offset_mm": (-15.0, 1.6, -23.7),
+                "body_name": "header",
+            },
+            {
+                "kind": "box",
+                "body_length_mm": 17.78,
+                "body_width_mm": 2.54,
+                "body_height_mm": 8.5,
+                "pin_count": 0,
+                "offset_mm": (12.0, 1.6, -23.7),
+                "body_name": "header",
+            },
+            {
+                "kind": "box",
+                "body_length_mm": 17.78,
+                "body_width_mm": 2.54,
+                "body_height_mm": 8.5,
+                "pin_count": 0,
+                "offset_mm": (-12.0, 1.6, 23.7),
+                "body_name": "header",
+            },
+            {
+                "kind": "box",
+                "body_length_mm": 22.86,
+                "body_width_mm": 2.54,
+                "body_height_mm": 8.5,
+                "pin_count": 0,
+                "offset_mm": (12.0, 1.6, 23.7),
+                "body_name": "header",
+            },
+        ],
+    },
+    "sensor-hcsr04": {
+        "outline": "HC-SR04",
+        "source": "HC-SR04 dimensions (45 x 20 mm board, 16 mm transducers, "
+        "4-pin header)",
+        "note": "Transducer centers symmetric within the outline (clones vary); "
+        "crystal omitted.",
+        "solids": [
+            {
+                "kind": "box",
+                "body_length_mm": 45.0,
+                "body_width_mm": 20.0,
+                "body_height_mm": 1.6,
+                "pin_count": 0,
+                "body_name": "pcb",
+            },
+            {
+                "kind": "cylinder",
+                "body_length_mm": 16.0,
+                "body_width_mm": 16.0,
+                "body_height_mm": 12.0,
+                "pin_count": 0,
+                "offset_mm": (-13.0, 1.6, 0.0),
+                "body_name": "can",
+            },
+            {
+                "kind": "cylinder",
+                "body_length_mm": 16.0,
+                "body_width_mm": 16.0,
+                "body_height_mm": 12.0,
+                "pin_count": 0,
+                "offset_mm": (13.0, 1.6, 0.0),
+                "body_name": "can",
+            },
+            {
+                "kind": "box",
+                "body_length_mm": 2.54,
+                "body_width_mm": 10.16,
+                "body_height_mm": 2.5,
+                "pin_count": 4,
+                "pin_pitch_mm": 2.54,
+                "pin_rows": 4,
+                "pin_length_mm": 5.0,
+                "offset_mm": (0.0, 1.6, 4.5),
+                "body_name": "header",
+            },
+        ],
+    },
+    "sensor-dht22": {
+        "outline": "DHT22 / AM2302",
+        "source": "Adafruit DHT22 (15.1 x 25 x 7.7 mm body, 4 pins at 0.1 in)",
+        "note": "Single-row leads; lead length typical.",
+        "solids": [
+            {
+                "kind": "box",
+                "body_length_mm": 15.1,
+                "body_width_mm": 25.0,
+                "body_height_mm": 7.7,
+                "pin_count": 4,
+                "pin_pitch_mm": 2.54,
+                "pin_rows": 4,
+                "pin_length_mm": 6.0,
+                "body_name": "body",
+            },
+        ],
+    },
+    "sensor-bme280": {
+        "outline": "BME280 LGA-8",
+        "source": "Bosch BME280 datasheet (2.5 x 2.5 x 0.93 mm metal-lid LGA-8)",
+        "note": "LGA pads face the board and are not modeled; the lid marks "
+        "the sensor cavity.",
+        "solids": [
+            {
+                "kind": "box",
+                "body_length_mm": 2.5,
+                "body_width_mm": 2.5,
+                "body_height_mm": 0.78,
+                "pin_count": 0,
+                "body_name": "body",
+            },
+            {
+                "kind": "box",
+                "body_length_mm": 2.2,
+                "body_width_mm": 2.2,
+                "body_height_mm": 0.15,
+                "pin_count": 0,
+                "offset_mm": (0.0, 0.78, 0.0),
+                "body_name": "lid",
+            },
+        ],
+    },
+    "radio-sx1276": {
+        "outline": "SX1276 QFN-28",
+        "source": "Semtech SX1276 (28-QFN 6 x 6 mm, 0.5 mm pitch)",
+        "note": "Height nominal QFN profile.",
+        "solids": [
+            {
+                "kind": "qfn",
+                "body_length_mm": 6.0,
+                "body_width_mm": 6.0,
+                "body_height_mm": 0.8,
+                "pin_count": 28,
+                "pin_pitch_mm": 0.5,
+                "pin_rows": 4,
+                "pin_length_mm": 0.3,
+                "body_name": "body",
+            },
+        ],
+    },
+    "actuator-sg90": {
+        "outline": "SG90",
+        "source": "Tower Pro SG90 (23.0 x 12.2 x 29.0 mm, 32.3 mm flange span)",
+        "note": "Flange height and shaft approximate; wire omitted.",
+        "solids": [
+            {
+                "kind": "box",
+                "body_length_mm": 23.0,
+                "body_width_mm": 12.2,
+                "body_height_mm": 29.0,
+                "pin_count": 0,
+                "body_name": "body",
+            },
+            {
+                "kind": "box",
+                "body_length_mm": 32.3,
+                "body_width_mm": 12.2,
+                "body_height_mm": 2.5,
+                "pin_count": 0,
+                "offset_mm": (0.0, 22.0, 0.0),
+                "body_name": "flange",
+            },
+            {
+                "kind": "cylinder",
+                "body_length_mm": 4.8,
+                "body_width_mm": 4.8,
+                "body_height_mm": 5.0,
+                "pin_count": 0,
+                "offset_mm": (0.0, 29.0, 0.0),
+                "body_name": "shaft",
+            },
+        ],
+    },
+    "actuator-relay-generic": {
+        "outline": "SRD relay (representative)",
+        "source": "Songle SRD-05VDC-SL-C (19.1 x 15.5 x 15.3 mm, 5 pins)",
+        "note": "Generic module: relay only; module PCB and terminals vary "
+        "by vendor.",
+        "solids": [
+            {
+                "kind": "box",
+                "body_length_mm": 19.1,
+                "body_width_mm": 15.5,
+                "body_height_mm": 15.3,
+                "pin_count": 0,
+                "body_name": "body",
+            },
+        ],
+    },
+}
+
+VISUAL_SPECS: dict[str, tuple[ProceduralSpec, ...]] = {
+    component_id: tuple(ProceduralSpec.model_validate(solid) for solid in row["solids"])
+    for component_id, row in PART_VISUALS.items()
+}
+
+
 PACK_ID = "iot"
 PACK_VERSION = "2.0.0"
 DISPLAY = "IoT systems"
@@ -903,7 +1245,8 @@ class IoTPack:
 
     Everything delegates to the generic lexical harness except
     :meth:`check_patch`, which adds link preflight over the
-    candidate's own config schema and GPIO assignments.
+    candidate's own config schema and GPIO assignments, and the
+    render path, which serves per-part assemblies with part labels.
     """
 
     def __init__(self) -> None:
@@ -962,8 +1305,30 @@ class IoTPack:
         return self._lexical.resolve_part(ref)
 
     def render_spec(self, resolution: PartResolution) -> RenderSpec:
-        """Return the 3D render spec for one resolved part."""
-        return self._lexical.render_spec(resolution)
+        """Label modeled parts with the part name and visual outline."""
+        base = self._lexical.render_spec(resolution)
+        if resolution.asset_key is None or resolution.asset_key not in PART_VISUALS:
+            return base
+        entry = next(
+            (
+                candidate
+                for candidate in self.catalog_entries
+                if candidate.component_id == resolution.asset_key
+            ),
+            None,
+        )
+        if entry is None:  # pragma: no cover - visual keys mirror the catalog
+            return base
+        outline = PART_VISUALS[resolution.asset_key]["outline"]
+        return base.model_copy(update={"label": entry.label, "fallback_package": outline})
+
+    def procedural_spec(
+        self, node_config: Mapping[str, Any], resolution: PartResolution
+    ) -> tuple[ProceduralSpec, ...]:
+        """Return the part assembly for one modeled part, or () otherwise."""
+        if resolution.asset_key is None:
+            return ()
+        return VISUAL_SPECS.get(resolution.asset_key, ())
 
     def check_patch(
         self, graph: MethodologyGraph, patch: GraphPatch

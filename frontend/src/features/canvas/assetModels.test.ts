@@ -153,6 +153,21 @@ describe("procedural fallback geometry", () => {
     expect(partRole("pin-32")).toBe("lead");
   });
 
+  it("routes assembly solids to dark vs metal roles", () => {
+    for (const dark of ["body", "pcb", "flange", "housing", "header"]) {
+      expect(partRole(dark)).toBe("body");
+    }
+    for (const metal of ["can", "usb", "lid", "shaft", "tab", "pin-1"]) {
+      expect(partRole(metal)).toBe("lead");
+    }
+  });
+
+  it("ignores merge suffixes when routing roles", () => {
+    expect(partRole("pcb-2")).toBe("body");
+    expect(partRole("header-3")).toBe("body");
+    expect(partRole("pin-1-2")).toBe("lead");
+  });
+
   it("assembles named child meshes under one group", () => {
     const pin = { ...boxPart, name: "pin-1" };
     const seen: string[] = [];

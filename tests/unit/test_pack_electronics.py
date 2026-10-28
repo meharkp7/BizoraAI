@@ -37,7 +37,7 @@ def test_electronics_pack_implements_the_interface() -> None:
     assert isinstance(electronics, DomainPack)
     assert isinstance(electronics, ProfiledPack)
     assert electronics.pack_id == "electronics"
-    assert electronics.pack_version == "1.0.0"
+    assert electronics.pack_version == "1.1.0"
     assert len(electronics.vocabulary.kinds) == 11
     assert "transistor" in {kind.kind_id for kind in electronics.vocabulary.kinds}
     assert len(electronics.catalog_entries) == 21

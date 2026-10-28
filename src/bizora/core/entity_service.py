@@ -1,6 +1,6 @@
 """Domain detection and entity resolution over methodology graphs."""
 
-from bizora.assets.procedural import build_mesh
+from bizora.assets.procedural import build_assembly, build_mesh
 from bizora.assets.resolver import package_spec
 from bizora.contracts.assets import NodeRenderSpec, ProceduralMesh
 from bizora.contracts.components import ComponentDetail
@@ -127,8 +127,9 @@ def render_specs_for_graph(graph: MethodologyGraph) -> tuple[NodeRenderSpec, ...
     Part identity flows node config -> part ladder -> catalog package ->
     generated mesh, so a replaced node renders the package of its actual
     part. Registry hits with model URIs ride along as measured visuals.
-    Packs with config-driven geometry get the last word through the
-    procedural-mesh hook when the package path yields nothing.
+    Pack assemblies come first: a pack that knows the exact part
+    renders its own solids, and the generic package path only covers
+    parts no pack models.
     """
     pack = pack_for_graph(graph)
     if pack is None:
@@ -152,16 +153,18 @@ def render_specs_for_graph(graph: MethodologyGraph) -> tuple[NodeRenderSpec, ...
         if resolution.level is ResolutionLevel.UNRESOLVED:
             continue
         render = pack.render_spec(resolution)
-        package = _config_text(config, _PACKAGE_KEYS)
-        if package is None and resolution.asset_key is not None:
-            entry = catalog.get(resolution.asset_key)
-            if entry is not None:
-                package = _entry_package(entry)
-        mesh = _procedural_mesh(package)
-        if mesh is None and isinstance(pack, ProceduralMeshPack):
-            procedural = pack.procedural_spec(config, resolution)
-            if procedural is not None:
-                mesh = build_mesh(procedural)
+        mesh = None
+        if isinstance(pack, ProceduralMeshPack):
+            assembly = pack.procedural_spec(config, resolution)
+            if assembly:
+                mesh = build_assembly(assembly)
+        if mesh is None:
+            package = _config_text(config, _PACKAGE_KEYS)
+            if package is None and resolution.asset_key is not None:
+                entry = catalog.get(resolution.asset_key)
+                if entry is not None:
+                    package = _entry_package(entry)
+            mesh = _procedural_mesh(package)
         if not render.asset_uri and mesh is None:
             continue
         specs.append(
