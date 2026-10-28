@@ -1,13 +1,37 @@
 """IoT systems pack: controllers, sensors, radios, actuators, power, cloud.
 
-Catalog entries and detection profile moved verbatim from the former
-core registry into pack data, wired to the generic pack harness.
+Phase 9 upgrades the v1 lexical placeholder with link preflight: swaps
+are validated against the candidate's own config schema (required keys,
+types, enum options) and assigned GPIO pins must be distinct. Detection,
+resolution, rendering, and copilot tools still delegate to the generic
+lexical harness over unchanged v1 data.
 """
 
-from typing import Any
+from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
+from pydantic import ValidationError
+
+from bizora.contracts.graph import GraphNode, MethodologyGraph
+from bizora.contracts.packs import (
+    CopilotToolSpec,
+    DomainTag,
+    PackPreflightFinding,
+    PackPreflightSeverity,
+    PackVocabulary,
+    PartRef,
+    PartResolution,
+    RenderSpec,
+    SimulationPreview,
+)
+from bizora.contracts.patches import GraphPatch, PatchOperation
 from bizora.core.entity_registry import EntityTypeDef, InterfaceDef
 from bizora.packs.lexical import LexicalPack, data_iface, power_iface
+
+if TYPE_CHECKING:
+    from bizora.contracts.components import ComponentDetail, ConfigField
+    from bizora.core.entity_registry import DomainProfile
 
 POWER = {"name": "power", "kind": "power", "params": {}}
 DATA = {"name": "data", "kind": "data", "params": {}}
@@ -661,7 +685,7 @@ COMPONENTS: list[dict[str, Any]] = [
 
 
 PACK_ID = "iot"
-PACK_VERSION = "1.0.0"
+PACK_VERSION = "2.0.0"
 DISPLAY = "IoT systems"
 THRESHOLD = 2
 
@@ -743,13 +767,229 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
     ),
 )
 
-pack = LexicalPack(
-    pack_id=PACK_ID,
-    pack_version=PACK_VERSION,
-    display=DISPLAY,
-    signals=SIGNALS,
-    threshold=THRESHOLD,
-    entity_types=ENTITY_TYPES,
-    catalog=COMPONENTS,
-    simulator_adapter_ids=(),
-)
+# ---------------------------------------------------------------------------
+# Link preflight: candidate config schema plus GPIO distinctness.
+# ---------------------------------------------------------------------------
+
+#: Payload config keys that may name the candidate part.
+_IDENTITY_KEYS = ("model", "part", "part_number")
+
+
+def _match_candidate(
+    entries: tuple[ComponentDetail, ...], config: dict[str, Any]
+) -> ComponentDetail | None:
+    """Return the catalog entry the payload config names, if any.
+
+    Matches are exact part-number (or default-model) strings; anything
+    else means the pack cannot verify the candidate, so the IoT rules
+    stay silent and the lexical interface check still applies.
+    """
+    wanted = {
+        str(config[key]).strip().lower()
+        for key in _IDENTITY_KEYS
+        if isinstance(config.get(key), str) and str(config[key]).strip()
+    }
+    if not wanted:
+        return None
+    for entry in entries:
+        candidates = {str(entry.default_config.get("model", "")).strip().lower()}
+        if entry.part_number:
+            candidates.add(entry.part_number.strip().lower())
+        if wanted & (candidates - {""}):
+            return entry
+    return None
+
+
+def _type_matches(field_type: str, value: object) -> bool:
+    """Return whether a config value fits one schema field type."""
+    if field_type == "string":
+        return isinstance(value, str)
+    if field_type == "number":
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    if field_type == "boolean":
+        return isinstance(value, bool)
+    if field_type == "enum":
+        return isinstance(value, str)
+    return True
+
+
+def _schema_findings(
+    entry: ComponentDetail, config: dict[str, Any]
+) -> list[PackPreflightFinding]:
+    """Validate required keys, types, and enum options (blocking)."""
+    findings: list[PackPreflightFinding] = []
+    fields: tuple[ConfigField, ...] = entry.config_schema
+    for field in fields:
+        if field.key not in config:
+            if field.required:
+                findings.append(
+                    PackPreflightFinding(
+                        rule_id="iot_config_required",
+                        severity=PackPreflightSeverity.BLOCK,
+                        message=(
+                            f"{entry.label} requires '{field.key}' ({field.label}) "
+                            "but the replacement config omits it."
+                        ),
+                    )
+                )
+            continue
+        value = config[field.key]
+        if not _type_matches(field.type, value):
+            findings.append(
+                PackPreflightFinding(
+                    rule_id="iot_config_type",
+                    severity=PackPreflightSeverity.BLOCK,
+                    message=(
+                        f"{entry.label} field '{field.key}' needs {field.type} "
+                        f"but the replacement sets {value!r}."
+                    ),
+                )
+            )
+            continue
+        if (
+            field.type == "enum"
+            and isinstance(value, str)
+            and field.options
+            and value not in field.options
+        ):
+            findings.append(
+                PackPreflightFinding(
+                    rule_id="iot_config_enum",
+                    severity=PackPreflightSeverity.BLOCK,
+                    message=(
+                        f"{entry.label} field '{field.key}' must be one of "
+                        f"{', '.join(field.options)} but the replacement sets {value!r}."
+                    ),
+                )
+            )
+    return findings
+
+
+def _gpio_findings(
+    entry: ComponentDetail, config: dict[str, Any]
+) -> list[PackPreflightFinding]:
+    """Block two pin roles sharing one GPIO number.
+
+    Pack convention: config keys ending in ``_gpio`` denote distinct
+    physical pin assignments, so any duplicate int assignment cannot
+    work as wired.
+    """
+    seen: dict[int, str] = {}
+    findings: list[PackPreflightFinding] = []
+    for key in sorted(config):
+        if not key.endswith("_gpio"):
+            continue
+        value = config[key]
+        if isinstance(value, bool) or not isinstance(value, int):
+            continue
+        if value in seen:
+            findings.append(
+                PackPreflightFinding(
+                    rule_id="iot_gpio_distinct",
+                    severity=PackPreflightSeverity.BLOCK,
+                    message=(
+                        f"{entry.label} assigns GPIO {value} to both "
+                        f"'{seen[value]}' and '{key}'; each role needs its own pin."
+                    ),
+                )
+            )
+        else:
+            seen[value] = key
+    return findings
+
+
+class IoTPack:
+    """Phase-9 IoT pack behind the DomainPack/ProfiledPack protocols.
+
+    Everything delegates to the generic lexical harness except
+    :meth:`check_patch`, which adds link preflight over the
+    candidate's own config schema and GPIO assignments.
+    """
+
+    def __init__(self) -> None:
+        self._lexical = LexicalPack(
+            pack_id=PACK_ID,
+            pack_version=PACK_VERSION,
+            display=DISPLAY,
+            signals=SIGNALS,
+            threshold=THRESHOLD,
+            entity_types=ENTITY_TYPES,
+            catalog=COMPONENTS,
+            simulator_adapter_ids=(),
+        )
+
+    @property
+    def pack_id(self) -> str:
+        """Return the stable pack identifier."""
+        return self._lexical.pack_id
+
+    @property
+    def pack_version(self) -> str:
+        """Return the exact pack version."""
+        return self._lexical.pack_version
+
+    @property
+    def vocabulary(self) -> PackVocabulary:
+        """Return the component vocabulary derived from pack entity types."""
+        return self._lexical.vocabulary
+
+    @property
+    def simulator_adapter_ids(self) -> tuple[str, ...]:
+        """Return adapter ids this pack can run."""
+        return self._lexical.simulator_adapter_ids
+
+    @property
+    def copilot_tools(self) -> tuple[CopilotToolSpec, ...]:
+        """Return the pack-provided tools the copilot may call."""
+        return self._lexical.copilot_tools
+
+    @property
+    def profile(self) -> DomainProfile:
+        """Return the detection signals and entity types this pack handles."""
+        return self._lexical.profile
+
+    @property
+    def catalog_entries(self) -> tuple[ComponentDetail, ...]:
+        """Return the validated catalog entries this pack contributes."""
+        return self._lexical.catalog_entries
+
+    def detect(self, tags: tuple[DomainTag, ...]) -> float:
+        """Score pack affinity: matched signals over the open-vocabulary tags."""
+        return self._lexical.detect(tags)
+
+    def resolve_part(self, ref: PartRef) -> PartResolution:
+        """Resolve one part mention down the exact/family/category ladder."""
+        return self._lexical.resolve_part(ref)
+
+    def render_spec(self, resolution: PartResolution) -> RenderSpec:
+        """Return the 3D render spec for one resolved part."""
+        return self._lexical.render_spec(resolution)
+
+    def check_patch(
+        self, graph: MethodologyGraph, patch: GraphPatch
+    ) -> tuple[PackPreflightFinding, ...]:
+        """Block interface-dropping swaps and invalid link configs."""
+        lexical = self._lexical.check_patch(graph, patch)
+        if patch.operation is not PatchOperation.REPLACE_NODE:
+            return lexical
+        target = next((node for node in graph.nodes if node.id == patch.target_id), None)
+        payload_node = patch.payload.get("node")
+        if target is None or not isinstance(payload_node, dict):
+            return lexical
+        try:
+            candidate = GraphNode.model_validate(payload_node)
+        except ValidationError:
+            return lexical
+        entry = _match_candidate(self.catalog_entries, dict(candidate.config))
+        if entry is None:
+            return lexical
+        config = dict(candidate.config)
+        rules = (*_schema_findings(entry, config), *_gpio_findings(entry, config))
+        return (*lexical, *rules)
+
+    def simulation_preview(self, graph: MethodologyGraph) -> SimulationPreview | None:
+        """Return the wired builder's preview, or None when the pack offers none."""
+        return self._lexical.simulation_preview(graph)
+
+
+pack = IoTPack()
