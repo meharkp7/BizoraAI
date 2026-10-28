@@ -1,0 +1,56 @@
+# Phase 1 CI: backend gates (verified) plus frontend gates (standard
+# repo scripts; not runnable in credential-less Node-less environments).
+# Branch protection ("merges blocked on failure") is a repo setting and
+# must be enabled separately in the hosting provider.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    name: Backend (pytest, ruff, mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install package with dev extras
+        run: pip install -e ".[dev]"
+      - name: Lint
+        run: ruff check .
+      - name: Type-check
+        # NOTE: `mypy tests` is pre-existing broken (duplicate module
+        # mapping for tests/unit vs tests/); new tests are type-checked
+        # individually during review until that is fixed.
+        run: mypy src
+      - name: Test
+        run: pytest -q
+
+  frontend:
+    name: Frontend (vitest, oxlint, tsc, Playwright)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Unit tests
+        run: npm test
+      - name: Type-check and build
+        run: npm run build
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+      - name: End-to-end tests
+        run: npm run test:e2e
