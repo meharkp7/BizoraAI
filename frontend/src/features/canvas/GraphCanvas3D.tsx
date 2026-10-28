@@ -214,12 +214,14 @@ export function GraphCanvas3D({
         tag.className = `${styles.tag} ${styles.tagHidden}`;
         const inner = document.createElement("div");
         inner.className = styles.tagInner;
-        inner.textContent = node.label;
-        tag.appendChild(inner);
+        const name = document.createElement("div");
+        name.textContent = node.label;
+        inner.appendChild(name);
         const spec = specs.get(node.id);
         if (spec) {
-          // Per-node measured-vs-illustrative marker, inline-styled so no
-          // stylesheet change is needed for the indicator.
+          // Per-node measured-vs-illustrative marker inside the lifted
+          // label block, so it floats above the node instead of sitting
+          // centered on the body where the mesh hides it.
           const badge = document.createElement("span");
           const provenance = provenanceOf(spec);
           badge.textContent = provenanceLabel(provenance);
@@ -227,8 +229,9 @@ export function GraphCanvas3D({
           badge.style.display = "block";
           badge.style.fontSize = "11px";
           badge.style.opacity = "0.8";
-          tag.appendChild(badge);
+          inner.appendChild(badge);
         }
+        tag.appendChild(inner);
         const marker = new CSS2DObject(tag);
         marker.visible = false;
         mesh.add(marker);

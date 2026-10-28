@@ -1,10 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
-import { http } from "msw";
+import { HttpResponse, http } from "msw";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import { server } from "../../test/server.ts";
-import { notFound } from "../../test/fixtures.ts";
 import { SimulationPreview } from "./SimulationPreview.tsx";
 
 function wrapper({ children }: { children: ReactNode }) {
@@ -30,7 +29,7 @@ describe("SimulationPreview", () => {
     server.use(
       http.get(
         "/api/v1/graphs/:projectId/:graphId/revisions/:version/simulation-preview",
-        () => notFound("RESOURCE_NOT_FOUND", "No simulation preview for this revision."),
+        () => HttpResponse.json(null),
       ),
     );
     const { container } = render(

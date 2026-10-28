@@ -56,7 +56,11 @@ def build_preview(graph: MethodologyGraph) -> SimulationPreview | None:
         sections=(
             SimulationPreviewSection(heading="Netlist", lines=tuple(netlist_lines)),
             SimulationPreviewSection(
-                heading=f"Bill of materials ({bom.total_quantity} parts)",
+                heading=(
+                    f"Bill of materials ({bom.total_quantity} part)"
+                    if bom.total_quantity == 1
+                    else f"Bill of materials ({bom.total_quantity} parts)"
+                ),
                 lines=tuple(bom_lines),
             ),
         ),

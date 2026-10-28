@@ -175,7 +175,7 @@ export const api = {
     projectId: string,
     graphId: string,
     version: number,
-  ): Promise<SimulationPreview> {
+  ): Promise<SimulationPreview | null> {
     return request(
       `/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/revisions/${version}/simulation-preview`,
     );

@@ -48,11 +48,12 @@ from bizora.contracts.table import (
     ParsedPaper,
     SuggestedIds,
 )
+from bizora.copilot.tools import CopilotContext
 from bizora.core.comparison_service import ComparisonService
 from bizora.core.component_catalog import get_component, search_components
 from bizora.core.component_service import preflight_replacement
 from bizora.core.config import get_settings
-from bizora.core.copilot_service import answer_copilot
+from bizora.core.copilot_service import answer_copilot_async
 from bizora.core.diff_service import RevisionDiffService
 from bizora.core.entity_service import preview_graph, render_specs_for_graph, resolve_graph
 from bizora.core.errors import BizoraError, ErrorCode
@@ -86,6 +87,9 @@ from bizora.db.repository import (
     list_metrics_for_run,
     metric_record_from_row,
 )
+from bizora.db.repository import (
+    get_experiment_run as get_experiment_run_record,
+)
 from bizora.db.session import get_db_session, get_session_factory
 from bizora.providers.base import (
     MethodologyExtractionRequest,
@@ -93,7 +97,9 @@ from bizora.providers.base import (
     MethodologyProviderError,
 )
 from bizora.providers.baseten import BasetenMethodologyProvider
+from bizora.providers.copilot import CopilotProvider
 from bizora.providers.fireworks import FireworksMethodologyProvider
+from bizora.providers.muse_copilot import MuseCopilotProvider
 from bizora.providers.tables import TableExtractionRequest
 
 logger = logging.getLogger(__name__)
@@ -615,7 +621,7 @@ def get_graph_entities(
 
 @router.get(
     "/api/v1/graphs/{project_id}/{graph_id}/revisions/{version}/simulation-preview",
-    response_model=SimulationPreview,
+    response_model=SimulationPreview | None,
     tags=["graphs"],
 )
 def get_simulation_preview(
@@ -623,8 +629,12 @@ def get_simulation_preview(
     graph_id: str,
     version: int,
     session: Session = DB_SESSION_DEPENDENCY,
-) -> SimulationPreview:
-    """Return the routed pack's simulation preview for one revision."""
+) -> SimulationPreview | None:
+    """Return the routed pack's simulation preview, or null when absent.
+
+    A missing preview is a normal state (most graphs have none), so it
+    returns 200 null instead of 404 noise; unknown revisions still 404.
+    """
     if version < 1:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -645,13 +655,7 @@ def get_simulation_preview(
         )
 
     graph = MethodologyGraph.model_validate(record.graph_payload)
-    preview = preview_graph(graph)
-    if preview is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No simulation preview for this revision.",
-        )
-    return preview
+    return preview_graph(graph)
 
 
 @router.get(
@@ -762,12 +766,25 @@ def preflight_node_replacement(
     return preflight_replacement(graph, node_id, request.component_id, request.config)
 
 
+def _copilot_provider_or_none() -> CopilotProvider | None:
+    """Return the LLM copilot provider, or None when no key is configured.
+
+    Without a provider the route stays on the deterministic fast path;
+    the key itself is never logged or returned.
+    """
+    try:
+        return MuseCopilotProvider()
+    except ValueError:
+        logger.info("Copilot LLM provider unavailable; using deterministic fast path.")
+        return None
+
+
 @router.post(
     "/api/v1/graphs/{project_id}/{graph_id}/revisions/{version}/copilot",
     response_model=CopilotResponse,
     tags=["graphs"],
 )
-def ask_copilot(
+async def ask_copilot(
     project_id: str,
     graph_id: str,
     version: int,
@@ -776,7 +793,46 @@ def ask_copilot(
 ) -> CopilotResponse:
     """Answer one copilot message against the catalog and graph state."""
     graph = _revision_or_404(session, project_id, graph_id, version)
-    return answer_copilot(graph, request.message, request.selected_node_id)
+
+    def load_revision(target: int) -> MethodologyGraph | None:
+        record = get_graph_revision(
+            session, project_id=project_id, graph_id=graph_id, version=target
+        )
+        if record is None:
+            return None
+        return MethodologyGraph.model_validate(record.graph_payload)
+
+    def list_runs() -> list[ExperimentRun]:
+        return [
+            experiment_run_from_record(record)
+            for record in list_experiment_runs(session, project_id=project_id, graph_id=graph_id)
+        ]
+
+    def get_run(run_id: str) -> ExperimentRun | None:
+        record = get_experiment_run_record(session, run_id)
+        if record is None:
+            return None
+        return experiment_run_from_record(record)
+
+    def list_metrics(run_id: str) -> list[MetricRecord]:
+        return [metric_record_from_row(row) for row in list_metrics_for_run(session, run_id)]
+
+    context = CopilotContext(
+        graph=graph,
+        selected_node_id=request.selected_node_id,
+        load_revision=load_revision,
+        list_runs=list_runs,
+        get_run=get_run,
+        list_metrics=list_metrics,
+    )
+    return await answer_copilot_async(
+        graph,
+        request.message,
+        request.selected_node_id,
+        provider=_copilot_provider_or_none(),
+        context=context,
+        mode="auto",
+    )
 
 
 @router.get(

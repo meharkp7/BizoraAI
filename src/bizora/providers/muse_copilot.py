@@ -49,7 +49,9 @@ def _message_to_input_items(message: CopilotMessage) -> list[dict[str, Any]]:
                 "output": message.content,
             }
         ]
-    if message.role == "assistant" and message.tool_calls:
+    if message.role == "assistant":
+        # The Responses API rejects `input_text` on assistant messages;
+        # assistant turns (with or without tool calls) use `output_text`.
         items: list[dict[str, Any]] = []
         if message.content.strip():
             items.append(

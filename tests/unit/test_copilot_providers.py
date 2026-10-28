@@ -121,6 +121,42 @@ def test_muse_chat_sends_tool_results_as_function_outputs() -> None:
     asyncio.run(run_test())
 
 
+def test_muse_chat_sends_plain_assistant_turns_as_output_text() -> None:
+    """Assistant turns without tool calls must not use `input_text`.
+
+    Regression test: the Responses API rejects `input_text` content on
+    assistant messages, which broke the final-answer call of the tool
+    loop (it always appends a plain assistant turn to the history).
+    """
+
+    async def run_test() -> None:
+        seen: list[dict[str, object]] = []
+        payload = _responses_payload(
+            [
+                {
+                    "type": "message",
+                    "content": [{"type": "output_text", "text": "Final."}],
+                }
+            ]
+        )
+        provider = MuseCopilotProvider(api_key="test-key", client=_client_for(payload, seen))
+        history = [
+            CopilotMessage(role="user", content="Why?"),
+            CopilotMessage(role="assistant", content="Because."),
+            CopilotMessage(role="user", content="Summarize."),
+        ]
+
+        turn = await provider.chat(history, [])
+
+        assert turn.content == "Final."
+        input_items = seen[0]["input"]
+        assistant_items = [item for item in input_items if item.get("role") == "assistant"]
+        assert len(assistant_items) == 1
+        assert assistant_items[0]["content"] == [{"type": "output_text", "text": "Because."}]
+
+    asyncio.run(run_test())
+
+
 def test_muse_chat_structured_answer_omits_tools() -> None:
     async def run_test() -> None:
         seen: list[dict[str, object]] = []

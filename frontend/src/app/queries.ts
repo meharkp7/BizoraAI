@@ -1,7 +1,7 @@
 /* TanStack Query hooks over the Bizora API. */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BizoraApiError, api } from "../lib/api.ts";
+import { api } from "../lib/api.ts";
 import type {
   ExperimentConfig,
   GraphLayout,
@@ -61,15 +61,9 @@ export function useGraphEntities(projectId: string, graphId: string, version: nu
 export function useSimulationPreview(projectId: string, graphId: string, version: number) {
   return useQuery({
     queryKey: graphKeys.preview(projectId, graphId, version),
-    queryFn: async () => {
-      try {
-        return await api.getSimulationPreview(projectId, graphId, version);
-      } catch (error) {
-        // No preview for this revision is normal: the panel stays hidden.
-        if (error instanceof BizoraApiError && error.isNotFound) return null;
-        throw error;
-      }
-    },
+    // The endpoint returns null for revisions without a preview, so a
+    // missing preview never errors; real failures surface to the panel.
+    queryFn: () => api.getSimulationPreview(projectId, graphId, version),
     retry: false,
   });
 }
