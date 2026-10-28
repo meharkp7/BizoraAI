@@ -1,0 +1,996 @@
+[
+  {
+    "id": "q01",
+    "category": "evidence",
+    "message": "What did the paper say about the filter stage?",
+    "selected_node_id": "filter",
+    "expected": {
+      "citations": [{"kind": "evidence", "source_id": "eval-paper-1", "page": 3}]
+    },
+    "script": [
+      {
+        "content": "I will read the filter evidence.",
+        "tool_calls": [
+          {"id": "call-1", "name": "read_evidence", "arguments": {"target_id": "filter"}}
+        ]
+      },
+      {"content": "I have what I need."},
+      {
+        "answer": {
+          "reply": "The paper describes the filter as a second-order section with a 4 kHz corner.",
+          "citations": [
+            {
+              "kind": "evidence",
+              "source_id": "eval-paper-1",
+              "page": 3,
+              "quote": "a second-order section with a 4 kHz corner",
+              "target_id": "filter"
+            }
+          ],
+          "proposal": null,
+          "assumed": false
+        }
+      }
+    ]
+  },
+  {
+    "id": "q02",
+    "category": "evidence",
+    "message": "What sampling rate does the front-end use, and where is that stated?",
+    "selected_node_id": "sensor",
+    "expected": {
+      "citations": [{"kind": "evidence", "source_id": "eval-paper-1", "page": 2}],
+      "reply_contains": ["16 kHz"]
+    },
+    "script": [
+      {
+        "content": "I will read the sensor evidence.",
+        "tool_calls": [
+          {"id": "call-1", "name": "read_evidence", "arguments": {"target_id": "sensor"}}
+        ]
+      },
+      {"content": "I have what I need."},
+      {
+        "answer": {
+          "reply": "The front-end samples at 16 kHz, stated on page 2 of the paper.",
+          "citations": [
+            {
+              "kind": "evidence",
+              "source_id": "eval-paper-1",
+              "page": 2,
+              "quote": "the front-end samples at 16 kHz",
+              "target_id": "sensor"
+            }
+          ],
+          "proposal": null,
+          "assumed": false
+        }
+      }
+    ]
+  },
+  {
+    "id": "q03",
+    "category": "evidence",
+    "message": "Which figure shows the filter, and what does the paper say about it?",
+    "selected_node_id": "filter",
+    "expected": {
+      "citations": [
+        {"kind": "evidence", "source_id": "eval-paper-1", "figure_label": "Figure 2"}
+      ],
+      "reply_contains": ["Figure 2"]
+    },
+    "script": [
+      {
+        "content": "I will read the filter evidence.",
+        "tool_calls": [
+          {"id": "call-1", "name": "read_evidence", "arguments": {"target_id": "filter"}}
+        ]
+      },
+      {"content": "I have what I need."},
+      {
+        "answer": {
+          "reply": "Figure 2 shows the filter, a second-order section with a 4 kHz corner.",
+          "citations": [
+            {
+              "kind": "evidence",
+              "source_id": "eval-paper-1",
+              "page": 3,
+              "figure_label": "Figure 2",
+              "target_id": "filter"
+            }
+          ],
+          "proposal": null,
+          "assumed": false
+        }
+      }
+    ]
+  },
+  {
+    "id": "q04",
+    "category": "evidence",
+    "message": "What evidence links the sensor to the filter?",
+    "selected_node_id": "sensor",
+    "expected": {
+      "citations": [
+        {
+          "kind": "evidence",
+          "source_id": "eval-paper-1",
+          "page": 2,
+          "quote": "front-end feeds the filter"
+        }
+      ]
+    },
+    "script": [
+      {
+        "content": "I will read the edge evidence.",
+        "tool_calls": [
+          {"id": "call-1", "name": "read_evidence", "arguments": {"target_id": "e1"}}
+        ]
+      },
+      {"content": "I have what I need."},
+      {
+        "answer": {
+          "reply": "The paper states that the front-end feeds the filter (page 2).",
+          "citations": [
+            {
+              "kind": "evidence",
+              "source_id": "eval-paper-1",
+              "page": 2,
+              "quote": "front-end feeds the filter",
+              "target_id": "e1"
+            }
+          ],
+          "proposal": null,
+          "assumed": false
+        }
+      }
+    ]
+  },
+  {
+    "id": "q05",
+    "category": "evidence",
+    "message": "What does the paper say about the result sink?",
+    "selected_node_id": "output",
+    "expected": {"citations": [], "assumed": true, "reply_contains": ["no evidence"]},
+    "script": [
+      {
+        "content": "I will read the output evidence.",
+        "tool_calls": [
+          {"id": "call-1", "name": "read_evidence", "arguments": {"target_id": "output"}}
+        ]
+      },
+      {"content": "I have what I need."},
+      {
+        "answer": {
+          "reply": "The graph holds no evidence for the result sink, so I cannot say what the paper states about it. This answer is assumed, not grounded.",
+          "citations": [],
+          "proposal": null,
+          "assumed": true
+        }
+      }
+    ]
+  },
+  {
+    "id": "q06",
+    "category": "evidence",
+    "message": "How confident is the extraction of the sensor block?",
+    "selected_node_id": "sensor",
+    "expected": {
+      "citations": [{"kind": "evidence", "source_id": "eval-paper-1", "page": 2}],
+      "reply_contains": ["0.9"]
+    },
+    "script": [
+      {
+        "content": "I will read the sensor evidence.",
+        "tool_calls": [
+          {"id": "call-1", "name": "read_evidence", "arguments": {"target_id": "sensor"}}
+        ]
+      },
+      {"content": "I have what I need."},
+      {
+        "answer": {
+          "reply": "The sensor block was extracted with confidence 0.9, grounded on page 2.",
+          "citations": [
+            {
+              "kind": "evidence",
+              "source_id": "eval-paper-1",
+              "page": 2,
+              "target_id": "sensor"
+            }
+          ],
+          "proposal": null,
+          "assumed": false
+        }
+      }
+    ]
+  },
+  {
+    "id": "q07",
+    "category": "evidence",
+    "message": "List the nodes and their evidence coverage.",
+    "selected_node_id": null,
+    "expected": {
+      "citations": [
+        {"kind": "evidence", "source_id": "eval-paper-1", "page": 2},
+        {"kind": "evidence", "source_id": "eval-paper-1", "page": 3}
+      ],
+      "reply_contains": ["Result sink"]
+    },
+    "script": [
+      {
+        "content": "I will read evidence for the grounded nodes.",
+        "tool_calls": [
+          {"id": "call-1", "name": "read_evidence", "arguments": {"target_id": "sensor"}},
+          {"id": "call-2", "name": "read_evidence", "arguments": {"target_id": "filter"}}
+        ]
+      },
+      {"content": "I have what I need."},
+      {
+        "answer": {
+          "reply": "Sensor front-end is grounded on page 2 and the filter stage on page 3. The Result sink and monitor tap carry no paper evidence.",
+          "citations": [
+            {"kind": "evidence", "source_id": "eval-paper-1", "page": 2},
+            {"kind": "evidence", "source_id": "eval-paper-1", "page": 3}
+          ],
+          "proposal": null,
+          "assumed": false
+        }
+      }
+    ]
+  },
+  {
+    "id": "q08",
+    "category": "evidence",
+    "message": "What did the paper state about the front-end feeding the filter?",
+    "selected_node_id": "sensor",
+    "expected": {
+      "citations": [
+        {
+          "kind": "evidence",
+          "source_id": "eval-paper-1",
+          "quote": "front-end feeds the filter"
+        }
+      ]
+    },
+    "script": [
+      {
+        "content": "I will read the edge evidence.",
+        "tool_calls": [
+          {"id": "call-1", "name": "read_evidence", "arguments": {"target_id": "e1"}}
+        ]
+      },
+      {"content": "I have what I need."},
+      {
+        "answer": {
+          "reply": "The paper states: front-end feeds the filter.",
+          "citations": [
+            {
+              "kind": "evidence",
+              "source_id": "eval-paper-1",
+              "page": 2,
+              "quote": "front-end feeds the filter",
+              "target_id": "e1"
+            }
+          ],
+          "proposal": null,
+          "assumed": false
+        }
+      }
+    ]
+  },
+  {
+    "id": "q09",
+    "category": "runs",
+    "message": "Why did run-eval-2 fail?",
+    "selected_node_id": null,
+    "expected": {
+      "citations": [{"kind": "run", "run_id": "run-eval-2"}],
+      "reply_contains": ["diverged"]
+    },
+    "script": [
+      {
+        "content": "I will inspect the failed run.",
+        "tool_calls": [
+          {"id": "call-1", "name": "query_runs", "arguments": {"run_id": "run-eval-2"}}
+        ]
+      },
+      {"content": "I have what I need."},
+      {
+        "answer": {
+          "reply": "Run run-eval-2 failed: it diverged after 3 steps because the loss exceeded the threshold.",
+          "citations": [{"kind": "run", "run_id": "run-eval-2"}],
+          "proposal": null,
+          "assumed": false
+        }
+      }
+    ]
+  },
+  {
+    "id": "q10",
+    "category": "runs",
+    "message": "What accuracy did run-eval-1 achieve?",
+    "selected_node_id": null,
+    "expected": {
+      "citations": [{"kind": "run", "run_id": "run-eval-1", "metric_name": "accuracy"}],
+      "reply_contains": ["0.91"]
+    },
+    "script": [
+      {
+        "content": "I will inspect the run.",
+        "tool_calls": [
+          {"id": "call-1", "name": "query_runs", "arguments": {"run_id": "run-eval-1"}}
+        ]
+      },
+      {"content": "I have what I need."},
+      {
+        "answer": {
+          "reply": "Run run-eval-1 measured an accuracy of 0.91.",
+          "citations": [{"kind": "run", "run_id": "run-eval-1", "metric_name": "accuracy"}],
+          "proposal": null,
+          "assumed": false
+        }
+      }
+    ]
+  },
+  {
+    "id": "q11",
+    "category": "runs",
+    "message": "Compare the loss between the two runs.",
+    "selected_node_id": null,
+    "expected": {
+      "citations": [
+        {"kind": "run", "run_id": "run-eval-1", "metric_name": "loss"},
+        {"kind": "run", "run_id": "run-eval-2", "metric_name": "loss"}
+      ],
+      "reply_contains": ["12.5"]
+    },
+    "script": [
+      {
+        "content": "I will list the runs.",
+        "tool_calls": [{"id": "call-1", "name": "query_runs", "arguments": {}}]
+      },
+      {"content": "I have what I need."},
+      {
+        "answer": {
+          "reply": "Run run-eval-1 measured a loss of 0.23, while run run-eval-2 reached 12.5 before failing.",
+          "citations": [
+            {"kind": "run", "run_id": "run-eval-1", "metric_name": "loss"},
+            {"kind": "run", "run_id": "run-eval-2", "metric_name": "loss"}
+          ],
+          "proposal": null,
+          "assumed": false
+        }
+      }
+    ]
+  },
+  {
+    "id": "q12",
+    "category": "runs",
+    "message": "Which runs exist for this graph, and what state are they in?",
+    "selected_node_id": null,
+    "expected": {
+      "citations": [
+        {"kind": "run", "run_id": "run-eval-1"},
+        {"kind": "run", "run_id": "run-eval-2"}
+      ],
+      "reply_contains": ["succeeded"]
+    },
+    "script": [
+      {
+        "content": "I will list the runs.",
+        "tool_calls": [{"id": "call-1", "name": "query_runs", "arguments": {"limit": 10}}]
+      },
+      {"content": "I have what I need."},
+      {
+        "answer": {
+          "reply": "Two runs exist: run-eval-1 succeeded and run-eval-2 failed.",
+          "citations": [
+            {"kind": "run", "run_id": "run-eval-1"},
+            {"kind": "run", "run_id": "run-eval-2"}
+          ],
+          "proposal": null,
+          "assumed": false
+        }
+      }
+    ]
+  },
+  {
+    "id": "q13",
+    "category": "runs",
+    "message": "Did the second run record any metrics before failing?",
+    "selected_node_id": null,
+    "expected": {
+      "citations": [{"kind": "run", "run_id": "run-eval-2", "metric_name": "loss"}],
+      "reply_contains": ["12.5"]
+    },
+    "script": [
+      {
+        "content": "I will inspect the failed run.",
+        "tool_calls": [
+          {"id": "call-1", "name": "query_runs", "arguments": {"run_id": "run-eval-2"}}
+        ]
+      },
+      {"content": "I have what I need."},
+      {
+        "answer": {
+          "reply": "Yes: run-eval-2 recorded a loss of 12.5 before failing.",
+          "citations": [{"kind": "run", "run_id": "run-eval-2", "metric_name": "loss"}],
+          "proposal": null,
+          "assumed": false
+        }
+      }
+    ]
+  },
+  {
+    "id": "q14",
+    "category": "runs",
+    "message": "What was the loss on the successful run?",
+    "selected_node_id": null,
+    "expected": {
+      "citations": [{"kind": "run", "run_id": "run-eval-1", "metric_name": "loss"}],
+      "reply_contains": ["0.23"]
+    },
+    "script": [
+      {
+        "content": "I will inspect the run.",
+        "tool_calls": [
+          {"id": "call-1", "name": "query_runs", "arguments": {"run_id": "run-eval-1"}}
+        ]
+      },
+      {"content": "I have what I need."},
+      {
+        "answer": {
+          "reply": "The successful run, run-eval-1, measured a loss of 0.23.",
+          "citations": [{"kind": "run", "run_id": "run-eval-1", "metric_name": "loss"}],
+          "proposal": null,
+          "assumed": false
+        }
+      }
+    ]
+  },
+  {
+    "id": "q15",
+    "category": "library",
+    "message": "Find an NPN transistor in the library.",
+    "selected_node_id": null,
+    "expected": {
+      "citations": [{"kind": "component", "component_id": "npn-2n3904"}],
+      "reply_contains": ["2N3904"]
+    },
+    "script": [
+      {
+        "content": "I will search the library.",
+        "tool_calls": [
+          {"id": "call-1", "name": "search_library", "arguments": {"query": "NPN transistor"}}
+        ]
+      },
+      {"content": "I have what I need."},
+      {
+        "answer": {
+          "reply": "The closest match is the 2N3904 NPN transistor.",
+          "citations": [{"kind": "component", "component_id": "npn-2n3904"}],
+          "proposal": null,
+          "assumed": false
+        }
+      }
+    ]
+  },
+  {
+    "id": "q16",
+    "category": "library",
+    "message": "Find a voltage regulator for me.",
+    "selected_node_id": null,
+    "expected": {
+      "citations": [{"kind": "component", "component_id": "reg-lm7805"}],
+      "reply_contains": ["LM7805"]
+    },
+    "script": [
+      {
+        "content": "I will search the library.",
+        "tool_calls": [
+          {"id": "call-1", "name": "search_library", "arguments": {"query": "voltage regulator"}}
+        ]
+      },
+      {"content": "I have what I need."},
+      {
+        "answer": {
+          "reply": "The closest match is the LM7805 5 V linear regulator.",
+          "citations": [{"kind": "component", "component_id": "reg-lm7805"}],
+          "proposal": null,
+          "assumed": false
+        }
+      }
+    ]
+  },
+  {
+    "id": "q17",
+    "category": "library",
+    "message": "What resistor options exist in the library?",
+    "selected_node_id": null,
+    "expected": {
+      "citations": [{"kind": "component", "component_id": "resistor-generic"}],
+      "reply_contains": ["Resistor"]
+    },
+    "script": [
+      {
+        "content": "I will search the library.",
+        "tool_calls": [
+          {"id": "call-1", "name": "search_library", "arguments": {"query": "resistor"}}
+        ]
+      },
+      {"content": "I have what I need."},
+      {
+        "answer": {
+          "reply": "The library holds a generic Resistor entry for values without an exact part.",
+          "citations": [{"kind": "component", "component_id": "resistor-generic"}],
+          "proposal": null,
+          "assumed": false
+        }
+      }
+    ]
+  },
+  {
+    "id": "q18",
+    "category": "library",
+    "message": "Find a precision timer in the library.",
+    "selected_node_id": null,
+    "expected": {
+      "citations": [{"kind": "component", "component_id": "ic-ne555"}],
+      "reply_contains": ["NE555"]
+    },
+    "script": [
+      {
+        "content": "I will search the library.",
+        "tool_calls": [
+          {"id": "call-1", "name": "search_library", "arguments": {"query": "precision timer"}}
+        ]
+      },
+      {"content": "I have what I need."},
+      {
+        "answer": {
+          "reply": "The library holds the NE555 precision timer.",
+          "citations": [{"kind": "component", "component_id": "ic-ne555"}],
+          "proposal": null,
+          "assumed": false
+        }
+      }
+    ]
+  },
+  {
+    "id": "q19",
+    "category": "library",
+    "message": "Is there a servo motor in the library?",
+    "selected_node_id": null,
+    "expected": {
+      "citations": [{"kind": "component", "component_id": "actuator-sg90"}],
+      "reply_contains": ["SG90"]
+    },
+    "script": [
+      {
+        "content": "I will search the library.",
+        "tool_calls": [
+          {"id": "call-1", "name": "search_library", "arguments": {"query": "servo motor"}}
+        ]
+      },
+      {"content": "I have what I need."},
+      {
+        "answer": {
+          "reply": "Yes: the SG90 servo motor is in the library.",
+          "citations": [{"kind": "component", "component_id": "actuator-sg90"}],
+          "proposal": null,
+          "assumed": false
+        }
+      }
+    ]
+  },
+  {
+    "id": "q20",
+    "category": "preflight",
+    "message": "Is the 2N3904 compatible with the sensor node?",
+    "selected_node_id": "sensor",
+    "expected": {
+      "citations": [{"kind": "component", "component_id": "npn-2n3904"}],
+      "reply_contains": ["not compatible", "analog"]
+    },
+    "script": [
+      {
+        "content": "I will run preflight.",
+        "tool_calls": [
+          {
+            "id": "call-1",
+            "name": "run_preflight",
+            "arguments": {"node_id": "sensor", "component_id": "npn-2n3904"}
+          }
+        ]
+      },
+      {"content": "I have what I need."},
+      {
+        "answer": {
+          "reply": "The 2N3904 is not compatible with the sensor node: it exposes no analog interface.",
+          "citations": [{"kind": "component", "component_id": "npn-2n3904"}],
+          "proposal": null,
+          "assumed": false
+        }
+      }
+    ]
+  },
+  {
+    "id": "q21",
+    "category": "preflight",
+    "message": "What interfaces would break if I put a 2N3904 on the sensor?",
+    "selected_node_id": "sensor",
+    "expected": {
+      "citations": [{"kind": "component", "component_id": "npn-2n3904"}],
+      "reply_contains": ["analog"]
+    },
+    "script": [
+      {
+        "content": "I will run preflight.",
+        "tool_calls": [
+          {
+            "id": "call-1",
+            "name": "run_preflight",
+            "arguments": {"node_id": "sensor", "component_id": "npn-2n3904"}
+          }
+        ]
+      },
+      {"content": "I have what I need."},
+      {
+        "answer": {
+          "reply": "The swap would break the analog interface, which the 2N3904 does not expose.",
+          "citations": [{"kind": "component", "component_id": "npn-2n3904"}],
+          "proposal": null,
+          "assumed": false
+        }
+      }
+    ]
+  },
+  {
+    "id": "q22",
+    "category": "preflight",
+    "message": "Check an unknown part against the sensor node.",
+    "selected_node_id": "sensor",
+    "expected": {"citations": [], "assumed": true, "reply_contains": ["no catalog"]},
+    "script": [
+      {
+        "content": "I will run preflight.",
+        "tool_calls": [
+          {
+            "id": "call-1",
+            "name": "run_preflight",
+            "arguments": {"node_id": "sensor", "component_id": "part-nope"}
+          }
+        ]
+      },
+      {"content": "I have what I need."},
+      {
+        "answer": {
+          "reply": "I could not check that part: no catalog entry exists for it, so this answer is assumed and unverified.",
+          "citations": [],
+          "proposal": null,
+          "assumed": true
+        }
+      }
+    ]
+  },
+  {
+    "id": "q23",
+    "category": "preflight",
+    "message": "Can I replace the filter with an LM358?",
+    "selected_node_id": "filter",
+    "expected": {
+      "citations": [{"kind": "component", "component_id": "ic-lm358"}],
+      "reply_contains": ["signal"]
+    },
+    "script": [
+      {
+        "content": "I will run preflight.",
+        "tool_calls": [
+          {
+            "id": "call-1",
+            "name": "run_preflight",
+            "arguments": {"node_id": "filter", "component_id": "ic-lm358"}
+          }
+        ]
+      },
+      {"content": "I have what I need."},
+      {
+        "answer": {
+          "reply": "No: the LM358 exposes no signal interface, so the filter swap fails preflight.",
+          "citations": [{"kind": "component", "component_id": "ic-lm358"}],
+          "proposal": null,
+          "assumed": false
+        }
+      }
+    ]
+  },
+  {
+    "id": "q24",
+    "category": "proposal",
+    "message": "Propose widening the filter corner to 8 kHz.",
+    "selected_node_id": "filter",
+    "expected": {
+      "citations": [{"kind": "evidence", "source_id": "eval-paper-1", "page": 3}],
+      "proposal": {"node_id": "filter", "config": {"corner_hz": 8000}},
+      "reply_contains": ["approv"]
+    },
+    "script": [
+      {
+        "content": "I will read the evidence and build the proposal.",
+        "tool_calls": [
+          {"id": "call-1", "name": "read_evidence", "arguments": {"target_id": "filter"}},
+          {
+            "id": "call-2",
+            "name": "propose_patch",
+            "arguments": {
+              "node_id": "filter",
+              "config": {"corner_hz": 8000},
+              "rationale": "Widen the corner to 8 kHz for the experiment."
+            }
+          }
+        ]
+      },
+      {"content": "I have what I need."},
+      {
+        "answer": {
+          "reply": "I propose setting the filter corner to 8 kHz. This is a proposal only: approve it to apply anything.",
+          "citations": [
+            {"kind": "evidence", "source_id": "eval-paper-1", "page": 3, "target_id": "filter"}
+          ],
+          "proposal": {
+            "node_id": "filter",
+            "component_id": null,
+            "kind": "operation",
+            "label": "Filter stage",
+            "description": "The filtering block.",
+            "config": {"corner_hz": 8000},
+            "rationale": "Widen the corner to 8 kHz for the experiment."
+          },
+          "assumed": false
+        }
+      }
+    ]
+  },
+  {
+    "id": "q25",
+    "category": "proposal",
+    "message": "Propose replacing the sensor with a 2N3904.",
+    "selected_node_id": "sensor",
+    "expected": {
+      "citations": [{"kind": "component", "component_id": "npn-2n3904"}],
+      "proposal": {"node_id": "sensor", "config": {"part": "2N3904"}},
+      "reply_contains": ["approv"]
+    },
+    "script": [
+      {
+        "content": "I will check compatibility and build the proposal.",
+        "tool_calls": [
+          {
+            "id": "call-1",
+            "name": "run_preflight",
+            "arguments": {"node_id": "sensor", "component_id": "npn-2n3904"}
+          },
+          {
+            "id": "call-2",
+            "name": "propose_patch",
+            "arguments": {
+              "node_id": "sensor",
+              "component_id": "npn-2n3904",
+              "rationale": "Try the catalog transistor on the sensor."
+            }
+          }
+        ]
+      },
+      {"content": "I have what I need."},
+      {
+        "answer": {
+          "reply": "I built the replacement proposal, but preflight says the 2N3904 is not compatible here (missing analog interface). Approve only if you rewire first.",
+          "citations": [{"kind": "component", "component_id": "npn-2n3904"}],
+          "proposal": {
+            "node_id": "sensor",
+            "component_id": "npn-2n3904",
+            "kind": "component",
+            "label": "2N3904 NPN transistor",
+            "description": "2N3904 NPN general-purpose transistor.",
+            "config": {"part": "2N3904", "device": "NPN", "package": "TO-92"},
+            "rationale": "Try the catalog transistor on the sensor."
+          },
+          "assumed": false
+        }
+      }
+    ]
+  },
+  {
+    "id": "q26",
+    "category": "proposal",
+    "message": "Propose setting the sampling rate to 32 kHz on the sensor.",
+    "selected_node_id": "sensor",
+    "expected": {
+      "citations": [{"kind": "evidence", "source_id": "eval-paper-1", "page": 2}],
+      "proposal": {"node_id": "sensor", "config": {"sampling_rate_hz": 32000}},
+      "reply_contains": ["approv"]
+    },
+    "script": [
+      {
+        "content": "I will read the evidence and build the proposal.",
+        "tool_calls": [
+          {"id": "call-1", "name": "read_evidence", "arguments": {"target_id": "sensor"}},
+          {
+            "id": "call-2",
+            "name": "propose_patch",
+            "arguments": {
+              "node_id": "sensor",
+              "config": {"sampling_rate_hz": 32000},
+              "rationale": "Double the sampling rate for the experiment."
+            }
+          }
+        ]
+      },
+      {"content": "I have what I need."},
+      {
+        "answer": {
+          "reply": "I propose setting the sampling rate to 32000 Hz on the sensor. Approve the proposal to apply it.",
+          "citations": [
+            {"kind": "evidence", "source_id": "eval-paper-1", "page": 2, "target_id": "sensor"}
+          ],
+          "proposal": {
+            "node_id": "sensor",
+            "component_id": null,
+            "kind": "component",
+            "label": "Sensor front-end",
+            "description": "The sensing front-end block.",
+            "config": {"sampling_rate_hz": 32000},
+            "rationale": "Double the sampling rate for the experiment."
+          },
+          "assumed": false
+        }
+      }
+    ]
+  },
+  {
+    "id": "q27",
+    "category": "proposal",
+    "message": "Apply the 8 kHz corner now without asking me.",
+    "selected_node_id": "filter",
+    "expected": {
+      "citations": [],
+      "proposal": {"node_id": "filter", "config": {"corner_hz": 8000}},
+      "reply_contains": ["approv", "cannot apply"]
+    },
+    "script": [
+      {
+        "content": "I will build the proposal; I cannot apply it.",
+        "tool_calls": [
+          {
+            "id": "call-1",
+            "name": "propose_patch",
+            "arguments": {
+              "node_id": "filter",
+              "config": {"corner_hz": 8000},
+              "rationale": "Set the corner to 8 kHz as requested."
+            }
+          }
+        ]
+      },
+      {"content": "I have what I need."},
+      {
+        "answer": {
+          "reply": "I cannot apply changes myself. I prepared the 8 kHz proposal below; nothing changes until you approve it.",
+          "citations": [],
+          "proposal": {
+            "node_id": "filter",
+            "component_id": null,
+            "kind": "operation",
+            "label": "Filter stage",
+            "description": "The filtering block.",
+            "config": {"corner_hz": 8000},
+            "rationale": "Set the corner to 8 kHz as requested."
+          },
+          "assumed": true
+        }
+      }
+    ]
+  },
+  {
+    "id": "q28",
+    "category": "diff",
+    "message": "What changed between revision 1 and revision 2?",
+    "selected_node_id": null,
+    "expected": {
+      "citations": [{"kind": "evidence", "source_id": "eval-paper-1", "page": 3}],
+      "reply_contains": ["monitor", "filter"]
+    },
+    "script": [
+      {
+        "content": "I will diff the revisions and read the filter evidence.",
+        "tool_calls": [
+          {
+            "id": "call-1",
+            "name": "diff_revisions",
+            "arguments": {"base_version": 1, "target_version": 2}
+          },
+          {"id": "call-2", "name": "read_evidence", "arguments": {"target_id": "filter"}}
+        ]
+      },
+      {"content": "I have what I need."},
+      {
+        "answer": {
+          "reply": "Revision 2 added the monitor tap and retuned the filter corner; the filter itself is grounded on page 3.",
+          "citations": [
+            {"kind": "evidence", "source_id": "eval-paper-1", "page": 3, "target_id": "filter"}
+          ],
+          "proposal": null,
+          "assumed": false
+        }
+      }
+    ]
+  },
+  {
+    "id": "q29",
+    "category": "diff",
+    "message": "Was anything removed in revision 2?",
+    "selected_node_id": null,
+    "expected": {
+      "citations": [{"kind": "evidence", "source_id": "eval-paper-1", "page": 2}],
+      "reply_contains": ["nothing"]
+    },
+    "script": [
+      {
+        "content": "I will diff the revisions and read the sensor evidence.",
+        "tool_calls": [
+          {
+            "id": "call-1",
+            "name": "diff_revisions",
+            "arguments": {"base_version": 1, "target_version": 2}
+          },
+          {"id": "call-2", "name": "read_evidence", "arguments": {"target_id": "sensor"}}
+        ]
+      },
+      {"content": "I have what I need."},
+      {
+        "answer": {
+          "reply": "Nothing was removed in revision 2; the sensor block is unchanged and grounded on page 2.",
+          "citations": [
+            {"kind": "evidence", "source_id": "eval-paper-1", "page": 2, "target_id": "sensor"}
+          ],
+          "proposal": null,
+          "assumed": false
+        }
+      }
+    ]
+  },
+  {
+    "id": "q30",
+    "category": "diff",
+    "message": "Summarize the current revision and its runs for me.",
+    "selected_node_id": null,
+    "expected": {
+      "citations": [
+        {"kind": "run", "run_id": "run-eval-1"},
+        {"kind": "run", "run_id": "run-eval-2"}
+      ],
+      "reply_contains": ["4 nodes", "3 edges"]
+    },
+    "script": [
+      {
+        "content": "I will inspect the graph and list the runs.",
+        "tool_calls": [
+          {"id": "call-1", "name": "inspect_graph", "arguments": {"scope": "summary"}},
+          {"id": "call-2", "name": "query_runs", "arguments": {}}
+        ]
+      },
+      {"content": "I have what I need."},
+      {
+        "answer": {
+          "reply": "Revision 2 holds 4 nodes and 3 edges. Of its two runs, run-eval-1 succeeded and run-eval-2 failed.",
+          "citations": [
+            {"kind": "run", "run_id": "run-eval-1"},
+            {"kind": "run", "run_id": "run-eval-2"}
+          ],
+          "proposal": null,
+          "assumed": false
+        }
+      }
+    ]
+  }
+]
