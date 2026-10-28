@@ -20,6 +20,7 @@ import type {
   MetricRecord,
   NodeRenderSpec,
   PaperExtractionResponse,
+  PaperReportedMetric,
   PaperUpload,
   ParsedPaper,
   RunComparison,
@@ -248,6 +249,15 @@ export const api = {
 
   listRunArtifacts(runId: string): Promise<ArtifactRecord[]> {
     return request(`/api/v1/experiments/runs/${encode(runId)}/artifacts`);
+  },
+
+  listRunReportedMetrics(runId: string, names: string[]): Promise<PaperReportedMetric[]> {
+    const params = new URLSearchParams();
+    for (const name of names) params.append("names", name);
+    const query = params.toString();
+    return request(
+      `/api/v1/experiments/runs/${encode(runId)}/reported-metrics${query ? `?${query}` : ""}`,
+    );
   },
 
   compareRuns(baselineRunId: string, variantRunId: string): Promise<RunComparison> {

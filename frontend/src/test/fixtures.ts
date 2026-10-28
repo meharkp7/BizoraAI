@@ -14,6 +14,7 @@ import type {
   MetricRecord,
   NodeRenderSpec,
   PaperExtractionResponse,
+  PaperReportedMetric,
   ParsedPaper,
   RunComparison,
   SimulationPreview,
@@ -221,6 +222,20 @@ export const comparisonFixture: RunComparison = {
   skipped_metrics: [],
   config_differences: [],
 };
+
+export const reportedMetricsFixture: PaperReportedMetric[] = [
+  {
+    name: "accuracy",
+    raw_value: "0.89",
+    value: 0.89,
+    unit: null,
+    source_id: "paper-1",
+    table_id: "table-1",
+    page: 4,
+    quote: "Ours: 0.89 (Accuracy)",
+    locator: "Table table-1: column 'Accuracy' row 1 ('Ours')",
+  },
+];
 
 export function notFound(code = "RESOURCE_NOT_FOUND", message = "Not found.") {
   return HttpResponse.json({ error: { code, message, details: {} } }, { status: 404 });

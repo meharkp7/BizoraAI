@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import { useRunComparison } from "../../app/queries.ts";
+import { useRunComparison, useRunReportedMetrics } from "../../app/queries.ts";
 import type { ComparisonVerdict } from "../../lib/types.ts";
 import { EmptyState, ErrorState, LoadingState } from "../../components/states.tsx";
 import { MeasuredVsReportedTable } from "./MeasuredVsReportedTable.tsx";
@@ -19,6 +19,17 @@ export function ComparePage() {
     submitted?.baseline ?? "",
     submitted?.variant ?? "",
     submitted !== null,
+  );
+  const measuredNames = useMemo(
+    () => comparison.data?.metrics.map((metric) => metric.name) ?? [],
+    [comparison.data],
+  );
+  // Paper numbers come from the baseline run's graph: that is the paper
+  // whose claims the comparison checks the variant against.
+  const reported = useRunReportedMetrics(
+    submitted?.baseline ?? "",
+    measuredNames,
+    submitted !== null && comparison.isSuccess,
   );
 
   function compare(event: FormEvent): void {
@@ -153,7 +164,10 @@ export function ComparePage() {
             <p className={styles.hint}>No shared measured metrics to report.</p>
           )}
 
-          <MeasuredVsReportedTable comparison={comparison.data} reported={[]} />
+          <MeasuredVsReportedTable
+            comparison={comparison.data}
+            reported={reported.data ?? []}
+          />
 
           {comparison.data.skipped_metrics.length > 0 ? (
             <>

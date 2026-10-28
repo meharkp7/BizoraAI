@@ -60,4 +60,20 @@ describe("formatReportedSource", () => {
     };
     expect(formatReportedSource(bare)).toBe("paper-1");
   });
+
+  it("keeps the short form when a locator is present", () => {
+    const located: PaperReportedMetric = {
+      ...reported("accuracy", "91%"),
+      locator: "Table table-1: column 'Accuracy' row 1",
+    };
+    expect(formatReportedSource(located)).toBe("table-1, p.4");
+    const locatorOnly: PaperReportedMetric = {
+      ...located,
+      table_id: null,
+      page: null,
+    };
+    expect(formatReportedSource(locatorOnly)).toBe(
+      "Table table-1: column 'Accuracy' row 1",
+    );
+  });
 });

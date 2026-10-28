@@ -317,6 +317,19 @@ export interface ExtractedTable {
   created_by: string;
 }
 
+/** One number quoted from the paper; mirrors backend PaperReportedMetric JSON. */
+export interface PaperReportedMetric {
+  name: string;
+  raw_value: string;
+  value: number | null;
+  unit: string | null;
+  source_id: string;
+  table_id: string | null;
+  page: number | null;
+  quote: string | null;
+  locator: string | null;
+}
+
 export interface PaperExtractionResponse {
   graph: MethodologyGraph;
   tables: ExtractedTable[];

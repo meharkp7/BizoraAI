@@ -13,9 +13,9 @@ import styles from "./MeasuredVsReportedTable.module.css";
  * assumes matching datasets and conditions the UI cannot verify.
  *
  * Rendered inside ComparePage next to the measured comparison.
- * Reported entries are still empty: no backend endpoint derives
- * paper-reported metrics from extracted tables yet, so the column
- * honestly reports that nothing is linked until fetching lands.
+ * Reported entries come from the baseline run's graph tables via the
+ * run reported-metrics endpoint; an empty list honestly reports that
+ * no paper numbers are linked for these metrics.
  */
 export function MeasuredVsReportedTable({
   comparison,
@@ -76,7 +76,10 @@ export function MeasuredVsReportedTable({
                           {entry.raw_value}
                           {entry.unit !== null && entry.unit !== "" ? ` ${entry.unit}` : ""}
                         </span>{" "}
-                        <span className={styles.source}>
+                        <span
+                          className={styles.source}
+                          title={entry.locator ?? undefined}
+                        >
                           ({formatReportedSource(entry)})
                         </span>
                         {entry.quote !== null ? (

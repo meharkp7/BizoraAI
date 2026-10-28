@@ -33,6 +33,8 @@ export const runKeys = {
   artifacts: (runId: string) => ["runs", runId, "artifacts"] as const,
   comparison: (baselineRunId: string, variantRunId: string) =>
     ["runs", "comparison", baselineRunId, variantRunId] as const,
+  reportedMetrics: (runId: string, names: readonly string[]) =>
+    ["runs", runId, "reported-metrics", ...names] as const,
 };
 
 export function useGraphRevision(projectId: string, graphId: string, version: number) {
@@ -184,6 +186,14 @@ export function useRunComparison(baselineRunId: string, variantRunId: string, en
     queryKey: runKeys.comparison(baselineRunId, variantRunId),
     queryFn: () => api.compareRuns(baselineRunId, variantRunId),
     enabled,
+  });
+}
+
+export function useRunReportedMetrics(runId: string, names: readonly string[], enabled = true) {
+  return useQuery({
+    queryKey: runKeys.reportedMetrics(runId, names),
+    queryFn: () => api.listRunReportedMetrics(runId, [...names]),
+    enabled: enabled && names.length > 0,
   });
 }
 

@@ -36,12 +36,18 @@ export function buildReportedRows(
   });
 }
 
-/** Short evidence citation for one reported entry. */
+/** Short evidence citation for one reported entry.
+
+The locator already embeds the table id and cell position, so it
+rides as a tooltip on the citation span instead of joining the
+short text (which would repeat the table reference). */
 export function formatReportedSource(entry: PaperReportedMetric): string {
   const parts: string[] = [];
   if (entry.table_id !== null) parts.push(entry.table_id);
   if (entry.page !== null) parts.push(`p.${entry.page}`);
-  if (entry.locator !== null) parts.push(entry.locator);
-  if (parts.length === 0) parts.push(entry.source_id);
+  if (parts.length === 0) {
+    if (entry.locator !== null) return entry.locator;
+    parts.push(entry.source_id);
+  }
   return parts.join(", ");
 }

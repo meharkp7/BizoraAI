@@ -1,7 +1,7 @@
 """HTTP routes for the Bizora API."""
 
 import logging
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import (
     APIRouter,
@@ -42,6 +42,7 @@ from bizora.contracts.run import (
     MetricRecord,
     TransitionExperimentRunRequest,
 )
+from bizora.contracts.streaming import PaperReportedMetric
 from bizora.contracts.table import (
     ExtractedTable,
     PaperExtractionResponse,
@@ -73,6 +74,7 @@ from bizora.core.papers import (
 )
 from bizora.core.patch_service import GraphPatchService
 from bizora.core.pdf import PdfText, extract_text_from_pdf
+from bizora.core.reported_service import reported_metrics_for_tables
 from bizora.core.run_service import ExperimentRunService
 from bizora.core.table_persistence_service import TablePersistenceService
 from bizora.db.repository import (
@@ -1040,6 +1042,29 @@ def list_run_artifacts(
     """List one run's persisted artifact records."""
     ExperimentRunService.get_run(session, run_id)
     return [artifact_record_from_row(row) for row in list_artifacts_for_run(session, run_id)]
+
+
+@router.get(
+    "/api/v1/experiments/runs/{run_id}/reported-metrics",
+    response_model=list[PaperReportedMetric],
+    tags=["experiments"],
+)
+def list_run_reported_metrics(
+    run_id: str,
+    session: Session = DB_SESSION_DEPENDENCY,
+    names: Annotated[list[str] | None, Query()] = None,
+) -> list[PaperReportedMetric]:
+    """Quote the named metrics from the run's graph tables, with evidence."""
+    run = ExperimentRunService.get_run(session, run_id)
+    tables = [
+        extracted_table_from_record(record)
+        for record in list_extracted_tables(
+            session,
+            project_id=run.config.project_id,
+            graph_id=run.config.graph_id,
+        )
+    ]
+    return list(reported_metrics_for_tables(tables, names or []))
 
 
 @router.post(

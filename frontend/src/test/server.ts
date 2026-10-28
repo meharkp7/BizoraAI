@@ -19,6 +19,7 @@ import {
   pendingRun,
   preflightFixture,
   renderSpecsFixture,
+  reportedMetricsFixture,
   simulationPreviewFixture,
   succeededRun,
   tableFixture,
@@ -102,6 +103,14 @@ export const handlers = [
   http.get("/api/v1/experiments/runs/:runId/artifacts", () => HttpResponse.json([])),
 
   http.get("/api/v1/experiments/comparisons", () => HttpResponse.json(comparisonFixture)),
+
+  http.get("/api/v1/experiments/runs/:runId/reported-metrics", ({ request }) => {
+    const url = new URL(request.url);
+    const names = url.searchParams.getAll("names");
+    return HttpResponse.json(
+      reportedMetricsFixture.filter((entry) => names.includes(entry.name)),
+    );
+  }),
 
   http.get("/api/v1/graphs/:projectId/:graphId/tables", ({ params }) => {
     if (params["projectId"] === "project-1" && params["graphId"] === "graph-1") {
