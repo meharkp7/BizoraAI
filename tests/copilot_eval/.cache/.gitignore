@@ -1,0 +1,4 @@
+# Live eval transcripts and reports stay local; the committed
+# fixtures are the recorded scripts in questions.json.
+*
+!.gitignore

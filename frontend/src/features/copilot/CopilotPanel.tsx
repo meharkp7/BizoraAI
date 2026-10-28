@@ -12,6 +12,7 @@ import type {
 } from "../../lib/types.ts";
 import { replaceNodePatch, updateConfigPatch } from "../workspace/patchBuilders.ts";
 import styles from "./CopilotPanel.module.css";
+import { EvidenceCard } from "./EvidenceCard.tsx";
 
 interface Turn {
   id: number;
@@ -43,6 +44,8 @@ function ProposalActions({
   const node = graph.nodes.find((candidate) => candidate.id === proposal.node_id);
   if (!node) return <p className={styles.dismissed}>The proposed node is no longer here.</p>;
   return (
+    <>
+    <p className={styles.gateNote}>Nothing is applied until you approve.</p>
     <div className={styles.proposalActions}>
       <button
         type="button"
@@ -69,6 +72,7 @@ function ProposalActions({
         Dismiss
       </button>
     </div>
+    </>
   );
 }
 
@@ -90,6 +94,9 @@ function CardView({
   onDismissProposal: () => void;
 }) {
   const { openComponent } = useLibrarySelection();
+  if (card.kind === "evidence" || card.kind === "info") {
+    return <EvidenceCard card={card} />;
+  }
   return (
     <div className={styles.card}>
       <div className={styles.cardTitle}>{card.title}</div>
@@ -178,8 +185,9 @@ export function CopilotPanel({
       <div className={styles.turns} aria-live="polite">
         {turns.length === 0 ? (
           <p className={styles.hint}>
-            Ask to find, compare, or replace components — for example, “compare NF4 vs FP16”.
-            Proposals wait for your approval.
+            Ask to find, compare, or replace components — for example, “compare NF4 vs FP16” —
+            or ask what the paper or the runs say. Answers cite their evidence, and proposals
+            wait for your approval.
           </p>
         ) : null}
         {turns.map((turn) => (

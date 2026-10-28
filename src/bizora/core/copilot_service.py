@@ -20,6 +20,8 @@ from bizora.contracts.components import (
 )
 from bizora.contracts.domain import EntityResolution, GraphEntities
 from bizora.contracts.graph import GraphNode, MethodologyGraph
+from bizora.copilot.service import CopilotRunReport, answer_with_llm
+from bizora.copilot.tools import CopilotContext
 from bizora.core.component_catalog import (
     CATALOG,
     get_component,
@@ -28,6 +30,7 @@ from bizora.core.component_catalog import (
 from bizora.core.component_service import build_replacement_node, preflight_replacement
 from bizora.core.entity_service import resolve_graph
 from bizora.core.errors import BizoraError
+from bizora.providers.copilot import CopilotProvider
 
 COMPARE_SPLIT = re.compile(
     r"\s+(?:vs\.?|versus|against|and|or|with|compared?\s+to)\s+", re.IGNORECASE
@@ -413,3 +416,82 @@ def answer_copilot(
             cards=tuple(fallback_cards),
         )
     return CopilotResponse(reply=HELP_TEXT, cards=())
+
+
+# --- LLM copilot routing: deterministic engine stays as fast path + fallback ---
+
+# Messages that need grounded reasoning (paper evidence, runs, diffs,
+# explanations) go to the LLM when a provider is configured. Short
+# library commands keep the deterministic fast path. These are generic
+# question words, not domain, paper, or part names.
+LLM_QUESTION_HINTS = (
+    "why",
+    "what did",
+    "what does",
+    "which",
+    "how",
+    "explain",
+    "diverge",
+    "fail",
+    "evidence",
+    "paper say",
+    "paper state",
+    "run ",
+    "runs",
+    "metric",
+    "differ",
+    "difference",
+    "changed between",
+    "?",
+)
+
+
+def wants_llm_answer(message: str) -> bool:
+    """Return whether a message looks like a grounded question for the LLM."""
+    lowered = message.strip().lower()
+    if SET_PATTERN.search(message) or REPLACE_PATTERN.search(message):
+        # Explicit commands stay on the deterministic fast path.
+        return False
+    return any(hint in lowered for hint in LLM_QUESTION_HINTS)
+
+
+def build_default_context(
+    graph: MethodologyGraph, selected_node_id: str | None = None
+) -> CopilotContext:
+    """Build a graph-only context (no runs or older revisions)."""
+    return CopilotContext(graph=graph, selected_node_id=selected_node_id)
+
+
+async def answer_copilot_async(
+    graph: MethodologyGraph,
+    message: str,
+    selected_node_id: str | None = None,
+    *,
+    provider: CopilotProvider | None = None,
+    context: CopilotContext | None = None,
+    mode: str = "auto",
+    report: CopilotRunReport | None = None,
+) -> CopilotResponse:
+    """Answer one message, routing between the fast path and the LLM.
+
+    ``mode`` is ``auto`` (LLM for grounded questions, fast path
+    otherwise), ``fast`` (deterministic engine only), or ``llm``
+    (LLM only, falling back to the deterministic engine when the
+    provider fails or is missing).
+    """
+    if mode not in ("auto", "fast", "llm"):
+        raise ValueError("mode must be one of: auto, fast, llm.")
+    use_llm = provider is not None and (
+        mode == "llm" or (mode == "auto" and wants_llm_answer(message))
+    )
+    if not use_llm or provider is None:
+        return answer_copilot(graph, message, selected_node_id)
+    active_context = (
+        context if context is not None else build_default_context(graph, selected_node_id)
+    )
+    try:
+        return await answer_with_llm(message, active_context, provider, report=report)
+    except Exception:
+        if report is not None:
+            report.fallback = True
+        return answer_copilot(graph, message, selected_node_id)
