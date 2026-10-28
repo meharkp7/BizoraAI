@@ -1,0 +1,30 @@
+.page {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: var(--space-4);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.title {
+  margin: 0;
+}
+
+.subtitle {
+  margin: var(--space-1) 0 0;
+  color: var(--color-ink-faint);
+  font-size: 0.875rem;
+}
+
+.back {
+  font-size: 0.875rem;
+  white-space: nowrap;
+}

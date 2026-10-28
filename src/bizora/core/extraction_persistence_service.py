@@ -3,6 +3,7 @@
 
 from sqlalchemy.orm import Session
 
+from bizora.contracts.assumptions import annotate_graph
 from bizora.contracts.graph import MethodologyGraph
 from bizora.core.errors import BizoraError, ErrorCode
 from bizora.core.extraction_service import MethodologyExtractionService
@@ -28,6 +29,10 @@ class ExtractionPersistenceService:
             provider,
             request,
         )
+        # Idempotent: extract_draft already annotates, but the persisted
+        # payload must always carry visible assumed flags, so ensure the
+        # marking here too before the initial revision is written.
+        graph = annotate_graph(graph)
 
         if graph.version != 1 or graph.parent_version is not None:
             raise BizoraError(

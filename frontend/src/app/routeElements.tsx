@@ -1,4 +1,5 @@
 import { useParams, useSearchParams } from "react-router";
+import { CorrectionPage } from "../features/correction/CorrectionPage.tsx";
 import { WorkspacePage } from "../features/workspace/WorkspacePage.tsx";
 import { RunDetailPage, RunsPage } from "../features/runs/RunsPage.tsx";
 import { TablesPage } from "../features/tables/TablesPage.tsx";
@@ -61,4 +62,12 @@ export function RunDetailRoute() {
 export function TablesRoute() {
   const { projectId, graphId } = useGraphParams();
   return <TablesPage projectId={projectId} graphId={graphId} />;
+}
+
+export function CorrectionRoute() {
+  const { projectId, graphId } = useGraphParams();
+  const [searchParams] = useSearchParams();
+  const parsed = Number(searchParams.get("v") ?? "1");
+  const version = Number.isInteger(parsed) && parsed >= 1 ? parsed : 1;
+  return <CorrectionPage projectId={projectId} graphId={graphId} version={version} />;
 }

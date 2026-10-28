@@ -1,6 +1,7 @@
 
 """Orchestrate methodology extraction and graph validation."""
 
+from bizora.contracts.assumptions import annotate_graph
 from bizora.contracts.graph import MethodologyGraph
 from bizora.core.errors import BizoraError, ErrorCode, GraphValidationError
 from bizora.core.graph_service import GraphService
@@ -21,7 +22,9 @@ class MethodologyExtractionService:
         """Extract a draft and validate it without persisting it."""
 
         result = await provider.extract_methodology(request)
-        graph = result.draft_graph
+        # Mark every claim without evidence as assumed (with a reason) so
+        # the draft visibly distinguishes fact from inference (R2).
+        graph = annotate_graph(result.draft_graph)
 
         # Ensure the provider returned a graph for the requested resource.
         if (
