@@ -350,3 +350,113 @@ export interface PaperUpload {
   created_by?: string;
   title?: string;
 }
+
+export interface ComponentSpec {
+  name: string;
+  value: string;
+  unit: string | null;
+  typical: boolean;
+}
+
+export interface ComponentPin {
+  designator: string;
+  name: string;
+  function: string | null;
+}
+
+export type ConfigFieldType = "string" | "number" | "boolean" | "enum";
+
+export interface ConfigField {
+  key: string;
+  label: string;
+  type: ConfigFieldType;
+  default: unknown;
+  options: string[];
+  unit: string | null;
+  required: boolean;
+  description: string | null;
+}
+
+export interface ComponentEvidence {
+  source: string;
+  note: string | null;
+}
+
+export interface ComponentSummary {
+  component_id: string;
+  domain: string;
+  entity_type: string;
+  category: string;
+  kind: string;
+  label: string;
+  generic: boolean;
+  manufacturer: string | null;
+  part_number: string | null;
+  headline: string;
+}
+
+export interface ComponentDetail extends ComponentSummary {
+  description: string;
+  datasheet_url: string | null;
+  reference_url: string | null;
+  specs: ComponentSpec[];
+  pinout: ComponentPin[];
+  interfaces: InterfaceSpec[];
+  constraints: Record<string, string>;
+  config_schema: ConfigField[];
+  default_config: Record<string, unknown>;
+  evidence: ComponentEvidence[];
+}
+
+export interface MissingInterface {
+  kind: string;
+  reason: string;
+}
+
+export interface ConstraintWarning {
+  code: string;
+  message: string;
+}
+
+export interface CompatibilityPreflight {
+  compatible: boolean;
+  target_node_id: string;
+  component_id: string;
+  missing_interfaces: MissingInterface[];
+  preserved_edge_ids: string[];
+  warnings: ConstraintWarning[];
+  candidate: EntityResolution;
+  candidate_label: string;
+}
+
+export interface CopilotProposal {
+  node_id: string;
+  component_id: string | null;
+  kind: string;
+  label: string;
+  description: string | null;
+  config: Record<string, unknown>;
+  rationale: string;
+}
+
+export type CopilotCardKind = "component" | "comparison" | "proposal" | "evidence" | "info";
+
+export interface CopilotCard {
+  kind: CopilotCardKind;
+  title: string;
+  body: string;
+  component_ids: string[];
+  node_id: string | null;
+}
+
+export interface CopilotResponse {
+  reply: string;
+  cards: CopilotCard[];
+  proposal: CopilotProposal | null;
+}
+
+export interface AdapterSummary {
+  adapter_id: string;
+  adapter_version: string;
+  description: string;
+}

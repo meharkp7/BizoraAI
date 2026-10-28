@@ -198,6 +198,7 @@ export function InspectorPanel({
   onUpdateConfig,
   onReplaceNode,
   entity,
+  entityError = null,
 }: {
   node: GraphNode | null;
   edge: GraphEdge | null;
@@ -206,6 +207,7 @@ export function InspectorPanel({
   onUpdateConfig?: (config: Record<string, unknown>) => void;
   onReplaceNode?: (replacement: NodeReplacement) => void;
   entity?: EntityResolution | null;
+  entityError?: string | null;
 }) {
   if (!node && !edge) {
     return (
@@ -284,7 +286,11 @@ export function InspectorPanel({
         <dd>{node.confidence === null ? "unknown" : node.confidence.toFixed(2)}</dd>
         <dt>System entity</dt>
         <dd>
-          {entity ? (
+          {entityError ? (
+            <span className={styles.entityNote} role="alert">
+              Identities unavailable ({entityError}); restart the backend and retry.
+            </span>
+          ) : entity ? (
             <>
               {entity.generic ? (
                 <span className={styles.badge}>generic placeholder</span>

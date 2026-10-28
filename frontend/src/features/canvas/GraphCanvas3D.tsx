@@ -45,10 +45,14 @@ export function GraphCanvas3D({
   graph,
   layout,
   entities,
+  entitiesPending = false,
+  entitiesError = null,
 }: {
   graph: MethodologyGraph;
   layout: GraphLayout | null;
   entities: GraphEntities | null;
+  entitiesPending?: boolean;
+  entitiesError?: string | null;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [failed, setFailed] = useState(false);
@@ -428,6 +432,15 @@ export function GraphCanvas3D({
           ? "Drag to orbit · Pinch to zoom · Two-finger drag to pan"
           : "Drag to orbit · Scroll to zoom · Right-drag to pan"}
       </p>
+      {entitiesError ? (
+        <p className={styles.entitiesWarning} role="alert">
+          Component identities unavailable ({entitiesError}); showing generic markers.
+        </p>
+      ) : entitiesPending ? (
+        <p className={styles.entitiesNote} role="status">
+          Resolving component identities…
+        </p>
+      ) : null}
       <EntityLegend entities={entities} />
     </div>
   );

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { Link } from "react-router";
-import { useCreateRun, useExecuteRun } from "../../app/queries.ts";
+import { useAdapters, useCreateRun, useExecuteRun } from "../../app/queries.ts";
 import type { ExperimentConfig, MethodologyGraph } from "../../lib/types.ts";
 import styles from "./RunPanel.module.css";
 
@@ -26,6 +26,7 @@ export function RunPanel({
   const [finishedRunId, setFinishedRunId] = useState<string | null>(null);
   const createRun = useCreateRun();
   const executeRun = useExecuteRun();
+  const adapters = useAdapters();
   const busy = createRun.isPending || executeRun.isPending;
 
   function submit(event: FormEvent): void {
@@ -77,6 +78,17 @@ export function RunPanel({
       <p className={styles.hint}>
         Validate v{graph.version} with the deterministic adapter and inspect the
         persisted run.
+      </p>
+      <p className={styles.hint}>
+        Connected adapters:{" "}
+        {adapters.data
+          ? adapters.data.map((adapter) => adapter.adapter_id).join(", ")
+          : "loading…"}
+      </p>
+      <p className={styles.hint}>
+        Domain simulators (SPICE-class circuit simulation, hardware-in-the-loop,
+        LLM inference) are not connected; this run performs genuine deterministic
+        validation only, never a simulated experiment.
       </p>
       <form className={styles.form} onSubmit={submit}>
         <label>

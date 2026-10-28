@@ -9,7 +9,7 @@ import {
 } from "../../app/queries.ts";
 import { BizoraApiError } from "../../lib/api.ts";
 import { WORKSPACE_ACTOR } from "../../lib/constants.ts";
-import { useWorkspaceSelection } from "../../lib/store.ts";
+import { useLibrarySelection, useWorkspaceSelection } from "../../lib/store.ts";
 import type {
   GraphEdge,
   GraphEntities,
@@ -25,6 +25,9 @@ import { EmptyState, ErrorState, LoadingState } from "../../components/states.ts
 import { GraphCanvas } from "../canvas/GraphCanvas.tsx";
 import { GraphCanvas3D } from "../canvas/GraphCanvas3D.tsx";
 import { DomainBadge } from "../canvas/EntityLegend.tsx";
+import { CopilotPanel } from "../copilot/CopilotPanel.tsx";
+import { ComponentDetailView } from "../library/ComponentDetail.tsx";
+import { LibraryPanel } from "../library/LibraryPanel.tsx";
 import { CanvasToolbar } from "../canvas/CanvasToolbar.tsx";
 import type { LayoutSaveStatus, NewNodeSpec } from "../canvas/CanvasToolbar.tsx";
 import { diffStatusMaps } from "../canvas/flowElements.ts";
@@ -155,6 +158,80 @@ function EdgeList({
   );
 }
 
+function IndexPanel({
+  graph,
+  selectedNode,
+  selectedEdge,
+  mutating,
+  onSelectNodes,
+  onSelectEdges,
+  onSubmit,
+}: {
+  graph: MethodologyGraph;
+  selectedNode: GraphNode | null;
+  selectedEdge: GraphEdge | null;
+  mutating: boolean;
+  onSelectNodes: (nodeIds: string[]) => void;
+  onSelectEdges: (edgeIds: string[]) => void;
+  onSubmit: (patches: GraphPatch[]) => void;
+}) {
+  const { indexTab, setIndexTab, selectedComponentId } = useLibrarySelection();
+  return (
+    <section className={`${styles.panel} ${styles.indexPanel}`} aria-label="Index">
+      <div className={styles.tabs} role="tablist" aria-label="Index tabs">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={indexTab === "graph"}
+          className={indexTab === "graph" ? styles.activeTab : undefined}
+          onClick={() => setIndexTab("graph")}
+        >
+          Graph
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={indexTab === "library"}
+          className={indexTab === "library" ? styles.activeTab : undefined}
+          onClick={() => setIndexTab("library")}
+        >
+          Library
+        </button>
+      </div>
+      {indexTab === "graph" ? (
+        <>
+          <div className={styles.sectionHead}>
+            <h2>Components</h2>
+            <span className={styles.count} aria-hidden="true">
+              {graph.nodes.length}
+            </span>
+          </div>
+          <NodeList
+            nodes={graph.nodes}
+            selectedId={selectedNode?.id ?? null}
+            onSelect={(nodeId) => onSelectNodes([nodeId])}
+          />
+          <div className={`${styles.sectionHead} ${styles.edgesHeading}`}>
+            <h2>Connections</h2>
+            <span className={styles.count} aria-hidden="true">
+              {graph.edges.length}
+            </span>
+          </div>
+          <EdgeList
+            edges={graph.edges}
+            selectedId={selectedEdge?.id ?? null}
+            onSelect={(edgeId) => onSelectEdges([edgeId])}
+          />
+        </>
+      ) : selectedComponentId ? (
+        <ComponentDetailView graph={graph} onSubmit={onSubmit} disabled={mutating} />
+      ) : (
+        <LibraryPanel />
+      )}
+    </section>
+  );
+}
+
 export function WorkspacePage({
   projectId,
   graphId,
@@ -248,6 +325,8 @@ export function WorkspacePage({
       onViewChange={onViewChange}
       savedLayout={savedLayout.data ?? null}
       entities={entities.data ?? null}
+      entitiesPending={entities.isPending}
+      entitiesError={entities.error instanceof Error ? entities.error.message : null}
       selectedNodeIds={selectedNodeIds}
       selectedEdgeIds={selectedEdgeIds}
       mutating={mutating}
@@ -298,6 +377,8 @@ function WorkspaceLoaded({
   onViewChange,
   savedLayout,
   entities,
+  entitiesPending,
+  entitiesError,
   selectedNodeIds,
   selectedEdgeIds,
   mutating,
@@ -322,6 +403,8 @@ function WorkspaceLoaded({
   onViewChange: (view: "2d" | "3d") => void;
   savedLayout: GraphLayout | null;
   entities: GraphEntities | null;
+  entitiesPending: boolean;
+  entitiesError: string | null;
   selectedNodeIds: string[];
   selectedEdgeIds: string[];
   mutating: boolean;
@@ -460,6 +543,12 @@ function WorkspaceLoaded({
             {graph.edges.length} edge{graph.edges.length === 1 ? "" : "s"}
           </p>
           <DomainBadge entities={entities} />
+          {entitiesError ? (
+            <p className={styles.entitiesError} role="alert">
+              Component identities unavailable ({entitiesError}). The 3D view shows
+              generic markers until the backend serves them again.
+            </p>
+          ) : null}
         </div>
         <div className={styles.stepper} role="group" aria-label="Revision">
           <button type="button" disabled={layoutVersion <= 1 || mutating} onClick={onOlder}>
@@ -484,30 +573,15 @@ function WorkspaceLoaded({
       {graph.brief ? <ResearchBriefPanel brief={graph.brief} /> : null}
 
       <div className={styles.grid}>
-        <section className={`${styles.panel} ${styles.indexPanel}`} aria-label="Components">
-          <div className={styles.sectionHead}>
-            <h2>Components</h2>
-            <span className={styles.count} aria-hidden="true">
-              {graph.nodes.length}
-            </span>
-          </div>
-          <NodeList
-            nodes={graph.nodes}
-            selectedId={selectedNode?.id ?? null}
-            onSelect={(nodeId) => onSelectNodes([nodeId])}
-          />
-          <div className={`${styles.sectionHead} ${styles.edgesHeading}`}>
-            <h2>Connections</h2>
-            <span className={styles.count} aria-hidden="true">
-              {graph.edges.length}
-            </span>
-          </div>
-          <EdgeList
-            edges={graph.edges}
-            selectedId={selectedEdge?.id ?? null}
-            onSelect={(edgeId) => onSelectEdges([edgeId])}
-          />
-        </section>
+        <IndexPanel
+          graph={graph}
+          selectedNode={selectedNode}
+          selectedEdge={selectedEdge}
+          mutating={mutating}
+          onSelectNodes={onSelectNodes}
+          onSelectEdges={onSelectEdges}
+          onSubmit={onSubmit}
+        />
 
         <section
           ref={canvasSectionRef}
@@ -533,6 +607,8 @@ function WorkspaceLoaded({
               graph={graph}
               layout={savedLayout}
               entities={entities}
+              entitiesPending={entitiesPending}
+              entitiesError={entitiesError}
             />
           ) : (
             <GraphCanvas
@@ -553,6 +629,7 @@ function WorkspaceLoaded({
             node={selectedNode}
             edge={selectedEdge}
             entity={selectedEntity}
+            entityError={entitiesError}
             formatShape={formatShape}
             disabled={mutating}
             onUpdateConfig={
@@ -569,6 +646,12 @@ function WorkspaceLoaded({
           />
           <EvidencePanel node={selectedNode} edge={selectedEdge} />
           <RunPanel projectId={projectId} graph={graph} />
+          <CopilotPanel
+            projectId={projectId}
+            graph={graph}
+            disabled={mutating}
+            onSubmit={onSubmit}
+          />
         </div>
       </div>
 

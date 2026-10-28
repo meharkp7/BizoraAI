@@ -1,0 +1,122 @@
+.library {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.filters {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.searchField {
+  display: grid;
+  gap: var(--space-1);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.searchField input {
+  padding: var(--space-2);
+  font-size: 0.875rem;
+  background: var(--color-surface-raised);
+  color: var(--color-ink);
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+}
+
+.filterRow {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+}
+
+.filterRow label {
+  display: grid;
+  gap: var(--space-1);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-ink-soft);
+}
+
+.filterRow select {
+  padding: var(--space-1) var(--space-2);
+  font-size: 0.8125rem;
+  background: var(--color-surface-raised);
+  color: var(--color-ink);
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+}
+
+.results {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-2);
+  max-height: 32rem;
+  overflow-y: auto;
+}
+
+.results button {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.results button:hover {
+  border-color: var(--color-line-strong);
+}
+
+.results button.selected {
+  border-color: var(--color-accent-strong);
+  background: var(--color-accent-wash);
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.cardLabel {
+  flex: 1;
+  font-weight: 650;
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+
+.cardMeta {
+  font-size: 0.75rem;
+  color: var(--color-ink-faint);
+}
+
+.cardHeadline {
+  font-size: 0.8125rem;
+  color: var(--color-ink-soft);
+}
+
+.badge {
+  display: inline-block;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.badge.exact {
+  background: var(--color-olive-wash);
+  border-color: var(--color-olive);
+}
+
+.badge.generic {
+  background: var(--color-surface-raised);
+  color: var(--color-ink-soft);
+}

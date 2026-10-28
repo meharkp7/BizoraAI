@@ -1,0 +1,26 @@
+.diagram {
+  width: 100%;
+  height: auto;
+  margin-top: var(--space-2);
+}
+
+.body {
+  fill: var(--color-surface-raised);
+  stroke: var(--color-line-strong);
+  stroke-width: 1.5;
+}
+
+.stub {
+  stroke: var(--color-ink-soft);
+  stroke-width: 1.5;
+}
+
+.pad {
+  fill: var(--color-accent-strong);
+}
+
+.label {
+  font-size: 11px;
+  fill: var(--color-ink-soft);
+  font-family: var(--font-sans);
+}

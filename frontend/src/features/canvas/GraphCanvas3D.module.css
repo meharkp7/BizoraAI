@@ -50,3 +50,19 @@
   color: var(--color-ink-faint);
   pointer-events: none;
 }
+
+.entitiesNote,
+.entitiesWarning {
+  position: absolute;
+  left: var(--space-3);
+  top: var(--space-2);
+  z-index: 1;
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-ink-faint);
+  pointer-events: none;
+}
+
+.entitiesWarning {
+  color: var(--color-danger);
+}

@@ -1,8 +1,13 @@
 /* Typed client for the Bizora backend API. */
 
 import type {
+  AdapterSummary,
   ArtifactRecord,
   BizoraErrorBody,
+  CompatibilityPreflight,
+  ComponentDetail,
+  ComponentSummary,
+  CopilotResponse,
   ExperimentConfig,
   ExperimentRun,
   ExtractedTable,
@@ -256,5 +261,60 @@ export const api = {
 
   listGraphTables(projectId: string, graphId: string): Promise<ExtractedTable[]> {
     return request(`/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/tables`);
+  },
+
+  listComponents(filters?: {
+    q?: string;
+    domain?: string;
+    category?: string;
+    generic?: boolean;
+    limit?: number;
+  }): Promise<ComponentSummary[]> {
+    const params = new URLSearchParams();
+    if (filters?.q) params.set("q", filters.q);
+    if (filters?.domain) params.set("domain", filters.domain);
+    if (filters?.category) params.set("category", filters.category);
+    if (filters?.generic !== undefined) params.set("generic", String(filters.generic));
+    if (filters?.limit !== undefined) params.set("limit", String(filters.limit));
+    const query = params.toString();
+    return request(`/api/v1/components${query ? `?${query}` : ""}`);
+  },
+
+  getComponent(componentId: string): Promise<ComponentDetail> {
+    return request(`/api/v1/components/${encode(componentId)}`);
+  },
+
+  preflightReplacement(
+    projectId: string,
+    graphId: string,
+    version: number,
+    nodeId: string,
+    componentId: string,
+    config: Record<string, unknown> = {},
+  ): Promise<CompatibilityPreflight> {
+    return request(
+      `/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/revisions/${version}/nodes/${encode(nodeId)}/preflight`,
+      { method: "POST", body: JSON.stringify({ component_id: componentId, config }) },
+    );
+  },
+
+  askCopilot(
+    projectId: string,
+    graphId: string,
+    version: number,
+    message: string,
+    selectedNodeId: string | null,
+  ): Promise<CopilotResponse> {
+    return request(
+      `/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/revisions/${version}/copilot`,
+      {
+        method: "POST",
+        body: JSON.stringify({ message, selected_node_id: selectedNodeId }),
+      },
+    );
+  },
+
+  listAdapters(): Promise<AdapterSummary[]> {
+    return request(`/api/v1/experiments/adapters`);
   },
 };

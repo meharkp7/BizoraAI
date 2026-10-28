@@ -1,5 +1,10 @@
 import { HttpResponse } from "msw";
 import type {
+  AdapterSummary,
+  CompatibilityPreflight,
+  ComponentDetail,
+  ComponentSummary,
+  CopilotResponse,
   ExperimentRun,
   ExtractedTable,
   GraphEntities,
@@ -269,3 +274,107 @@ export const paperExtractionFixture: PaperExtractionResponse = {
   page_count: 12,
   truncated: false,
 };
+
+export const componentSummaryFixture: ComponentSummary = {
+  component_id: "npn-2n3904",
+  domain: "electronics",
+  entity_type: "transistor",
+  category: "discrete",
+  kind: "component",
+  label: "2N3904 NPN transistor",
+  generic: false,
+  manufacturer: "onsemi",
+  part_number: "2N3904",
+  headline: "NPN general-purpose amplifier, 40 V / 200 mA, TO-92",
+};
+
+export const componentGenericFixture: ComponentSummary = {
+  component_id: "resistor-generic",
+  domain: "electronics",
+  entity_type: "passive",
+  category: "passive",
+  kind: "component",
+  label: "Resistor (generic)",
+  generic: true,
+  manufacturer: null,
+  part_number: null,
+  headline: "Generic resistor with settable resistance and footprint",
+};
+
+export const componentDetailFixture: ComponentDetail = {
+  ...componentSummaryFixture,
+  description: "2N3904 NPN general-purpose transistor for switching and small-signal amplification.",
+  datasheet_url: null,
+  reference_url: null,
+  specs: [
+    { name: "Polarity", value: "NPN", unit: null, typical: false },
+    { name: "Collector current (max)", value: "200", unit: "mA", typical: false },
+  ],
+  pinout: [
+    { designator: "1", name: "Emitter", function: "NPN emitter terminal" },
+    { designator: "2", name: "Base", function: "Control terminal" },
+    { designator: "3", name: "Collector", function: "NPN collector terminal" },
+  ],
+  interfaces: [
+    { name: "power", kind: "power", params: {} },
+    { name: "gate", kind: "signal", params: {} },
+  ],
+  constraints: { max_current_mA: "200" },
+  config_schema: [
+    {
+      key: "part",
+      label: "Part number",
+      type: "string",
+      default: "2N3904",
+      options: [],
+      unit: null,
+      required: true,
+      description: "Exact manufacturer part number.",
+    },
+  ],
+  default_config: { part: "2N3904" },
+  evidence: [{ source: "onsemi 2N3904 datasheet (2N3903/D)", note: "Electrical ratings." }],
+};
+
+export const preflightFixture: CompatibilityPreflight = {
+  compatible: true,
+  target_node_id: "encoder",
+  component_id: "npn-2n3904",
+  missing_interfaces: [],
+  preserved_edge_ids: ["e1"],
+  warnings: [],
+  candidate: {
+    node_id: "encoder",
+    domain: "electronics",
+    entity_type: "transistor",
+    display_label: "2N3904 NPN transistor",
+    generic: false,
+    category: "discrete",
+    interfaces: [{ name: "power", kind: "power", params: {} }],
+    matched_terms: ["transistor"],
+    confidence: 0.75,
+  },
+  candidate_label: "2N3904 NPN transistor",
+};
+
+export const copilotFixture: CopilotResponse = {
+  reply: "Closest library matches: 2N3904 NPN transistor.",
+  cards: [
+    {
+      kind: "component",
+      title: "2N3904 NPN transistor",
+      body: "Exact part 2N3904 (onsemi)",
+      component_ids: ["npn-2n3904"],
+      node_id: null,
+    },
+  ],
+  proposal: null,
+};
+
+export const adaptersFixture: AdapterSummary[] = [
+  {
+    adapter_id: "bizora.deterministic-test",
+    adapter_version: "0.1.0",
+    description: "Validate inputs and echo reproducibility fields without external effects.",
+  },
+];

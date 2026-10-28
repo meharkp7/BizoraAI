@@ -1,7 +1,12 @@
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import {
+  adaptersFixture,
   comparisonFixture,
+  componentDetailFixture,
+  componentGenericFixture,
+  componentSummaryFixture,
+  copilotFixture,
   diffFixture,
   entitiesFixture,
   failedRun,
@@ -11,6 +16,7 @@ import {
   notFound,
   paperExtractionFixture,
   parsedPaperFixture,
+  preflightFixture,
   succeededRun,
   tableFixture,
   tableFixture2,
@@ -103,6 +109,37 @@ export const handlers = [
   http.post("/api/v1/papers/extract", () => HttpResponse.json(paperExtractionFixture, { status: 201 })),
 
   http.post("/api/v1/papers/parse", () => HttpResponse.json(parsedPaperFixture)),
+
+  http.get("/api/v1/components", ({ request }) => {
+    const url = new URL(request.url);
+    const query = (url.searchParams.get("q") ?? "").toLowerCase();
+    const generic = url.searchParams.get("generic");
+    let entries = [componentSummaryFixture, componentGenericFixture];
+    if (query !== "") {
+      entries = entries.filter((entry) => entry.label.toLowerCase().includes(query));
+    }
+    if (generic === "true") entries = entries.filter((entry) => entry.generic);
+    if (generic === "false") entries = entries.filter((entry) => !entry.generic);
+    return HttpResponse.json(entries);
+  }),
+
+  http.get("/api/v1/components/:componentId", ({ params }) => {
+    if (params["componentId"] === "npn-2n3904") {
+      return HttpResponse.json(componentDetailFixture);
+    }
+    return notFound("RESOURCE_NOT_FOUND", "Component not found.");
+  }),
+
+  http.post(
+    "/api/v1/graphs/:projectId/:graphId/revisions/:version/nodes/:nodeId/preflight",
+    () => HttpResponse.json(preflightFixture),
+  ),
+
+  http.post("/api/v1/graphs/:projectId/:graphId/revisions/:version/copilot", () =>
+    HttpResponse.json(copilotFixture),
+  ),
+
+  http.get("/api/v1/experiments/adapters", () => HttpResponse.json(adaptersFixture)),
 ];
 
 export const server = setupServer(...handlers);

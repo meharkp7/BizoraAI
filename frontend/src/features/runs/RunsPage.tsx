@@ -124,6 +124,36 @@ export function RunDetailPage({ runId }: { runId: string }) {
         </div>
       ) : null}
 
+      <section className={styles.section} aria-label="Run record">
+        <h2>Run record</h2>
+        <dl className={styles.facts}>
+          <dt>Experiment</dt>
+          <dd className="mono">{data.config.experiment_id}</dd>
+          <dt>Graph</dt>
+          <dd>
+            <span className="mono">{data.config.graph_id}</span> v{data.config.graph_version}
+          </dd>
+          <dt>Adapter</dt>
+          <dd className="mono">
+            {data.config.adapter_id} {data.config.adapter_version}
+          </dd>
+          <dt>Seed</dt>
+          <dd className="mono">{data.config.seed}</dd>
+          <dt>Dataset</dt>
+          <dd className="mono">
+            {data.config.dataset_id} {data.config.dataset_revision}
+          </dd>
+          <dt>Code revision</dt>
+          <dd className="mono">{data.config.code_revision}</dd>
+          <dt>Created</dt>
+          <dd className="mono">{data.created_at}</dd>
+          <dt>Started</dt>
+          <dd className="mono">{data.started_at ?? "—"}</dd>
+          <dt>Finished</dt>
+          <dd className="mono">{data.finished_at ?? "—"}</dd>
+        </dl>
+      </section>
+
       <section className={styles.section} aria-label="Metrics">
         <h2>Metrics</h2>
         {metrics.isPending ? (

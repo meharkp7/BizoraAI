@@ -50,6 +50,28 @@ export const useTheme = create<ThemeState>()((set) => ({
   },
 }));
 
+export type IndexTab = "graph" | "library";
+
+interface LibrarySelection {
+  /** Component id open in the library detail view. */
+  selectedComponentId: string | null;
+  /** Left-panel tab: the graph index or the component library. */
+  indexTab: IndexTab;
+  selectComponent: (componentId: string | null) => void;
+  setIndexTab: (tab: IndexTab) => void;
+  /** Open one library entry, switching to the library tab. */
+  openComponent: (componentId: string) => void;
+}
+
+export const useLibrarySelection = create<LibrarySelection>()((set) => ({
+  selectedComponentId: null,
+  indexTab: "graph",
+  selectComponent: (componentId) => set({ selectedComponentId: componentId }),
+  setIndexTab: (tab) => set({ indexTab: tab }),
+  openComponent: (componentId) =>
+    set({ selectedComponentId: componentId, indexTab: "library" }),
+}));
+
 /** Sync the initial theme to the document on startup. */
 export function initTheme(): Theme {
   const theme = initialTheme();

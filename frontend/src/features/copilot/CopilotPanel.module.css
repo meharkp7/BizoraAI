@@ -1,0 +1,145 @@
+.panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  display: grid;
+  gap: var(--space-2);
+}
+
+.panel h2 {
+  margin: 0;
+}
+
+.context {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-ink-faint);
+}
+
+.turns {
+  display: grid;
+  gap: var(--space-3);
+  max-height: 28rem;
+  overflow-y: auto;
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-ink-faint);
+}
+
+.turn {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.user {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 650;
+}
+
+.reply {
+  margin: 0;
+  font-size: 0.875rem;
+  white-space: pre-wrap;
+}
+
+.error {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-danger);
+}
+
+.card {
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: var(--space-1);
+}
+
+.cardTitle {
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.cardBody {
+  margin: 0;
+  font-size: 0.8125rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.cardLinks {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.cardLinks button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--color-accent-strong);
+  font-size: 0.8125rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.proposalActions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.proposalActions button {
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-accent-strong);
+  color: var(--color-accent-ink);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-weight: 650;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.proposalActions button.secondary {
+  background: none;
+  color: var(--color-ink-soft);
+  border-color: var(--color-line-strong);
+}
+
+.dismissed {
+  margin: var(--space-1) 0 0;
+  font-size: 0.75rem;
+  color: var(--color-ink-faint);
+}
+
+.form {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.form input {
+  flex: 1;
+  padding: var(--space-2);
+  font-size: 0.875rem;
+  background: var(--color-surface-raised);
+  color: var(--color-ink);
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+}
+
+.form button {
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-accent-strong);
+  color: var(--color-accent-ink);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-weight: 650;
+  cursor: pointer;
+}

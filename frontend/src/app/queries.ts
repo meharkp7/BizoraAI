@@ -173,6 +173,106 @@ export function useRunComparison(baselineRunId: string, variantRunId: string, en
   });
 }
 
+export const componentKeys = {
+  list: (filters?: {
+    q?: string;
+    domain?: string;
+    category?: string;
+    generic?: boolean;
+  }) => ["components", filters ?? {}] as const,
+  detail: (componentId: string) => ["components", componentId] as const,
+  preflight: (
+    projectId: string,
+    graphId: string,
+    version: number,
+    nodeId: string,
+    componentId: string,
+    config: Record<string, unknown>,
+  ) =>
+    [
+      "graph",
+      projectId,
+      graphId,
+      "revisions",
+      version,
+      "nodes",
+      nodeId,
+      "preflight",
+      componentId,
+      config,
+    ] as const,
+};
+
+export function useComponentSearch(filters?: {
+  q?: string;
+  domain?: string;
+  category?: string;
+  generic?: boolean;
+}) {
+  return useQuery({
+    queryKey: componentKeys.list(filters),
+    queryFn: () => api.listComponents(filters),
+  });
+}
+
+export function useComponentDetail(componentId: string | null) {
+  return useQuery({
+    queryKey: componentKeys.detail(componentId ?? ""),
+    queryFn: () => api.getComponent(componentId ?? ""),
+    enabled: componentId !== null,
+  });
+}
+
+export function usePreflight(
+  projectId: string,
+  graphId: string,
+  version: number,
+  nodeId: string | null,
+  componentId: string | null,
+  config: Record<string, unknown>,
+) {
+  return useQuery({
+    queryKey: componentKeys.preflight(
+      projectId,
+      graphId,
+      version,
+      nodeId ?? "",
+      componentId ?? "",
+      config,
+    ),
+    queryFn: () =>
+      api.preflightReplacement(
+        projectId,
+        graphId,
+        version,
+        nodeId ?? "",
+        componentId ?? "",
+        config,
+      ),
+    enabled: nodeId !== null && componentId !== null,
+    retry: false,
+  });
+}
+
+export function useCopilot(projectId: string, graphId: string, version: number) {
+  return useMutation({
+    mutationFn: ({
+      message,
+      selectedNodeId,
+    }: {
+      message: string;
+      selectedNodeId: string | null;
+    }) => api.askCopilot(projectId, graphId, version, message, selectedNodeId),
+  });
+}
+
+export function useAdapters() {
+  return useQuery({
+    queryKey: ["experiments", "adapters"] as const,
+    queryFn: () => api.listAdapters(),
+  });
+}
+
 export const paperKeys = {
   tables: (projectId: string, graphId: string) =>
     ["graph", projectId, graphId, "tables"] as const,

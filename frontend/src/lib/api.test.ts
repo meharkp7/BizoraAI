@@ -82,4 +82,39 @@ describe("api client", () => {
     expect(saved.updated_by).toBe("test-user");
     expect(saved.positions).toHaveLength(1);
   });
+
+  it("searches the component library", async () => {
+    const entries = await api.listComponents({ q: "2N3904" });
+    expect(entries[0]?.component_id).toBe("npn-2n3904");
+  });
+
+  it("loads one component entry", async () => {
+    const detail = await api.getComponent("npn-2n3904");
+    expect(detail.part_number).toBe("2N3904");
+    expect(detail.pinout).toHaveLength(3);
+  });
+
+  it("requests a replacement preflight", async () => {
+    const preflight = await api.preflightReplacement(
+      "project-1",
+      "graph-1",
+      2,
+      "encoder",
+      "npn-2n3904",
+      {},
+    );
+    expect(preflight.compatible).toBe(true);
+    expect(preflight.preserved_edge_ids).toEqual(["e1"]);
+  });
+
+  it("asks the copilot", async () => {
+    const response = await api.askCopilot("project-1", "graph-1", 2, "find transistor", "encoder");
+    expect(response.cards).toHaveLength(1);
+    expect(response.proposal).toBeNull();
+  });
+
+  it("lists execution adapters", async () => {
+    const adapters = await api.listAdapters();
+    expect(adapters[0]?.adapter_id).toBe("bizora.deterministic-test");
+  });
 });
