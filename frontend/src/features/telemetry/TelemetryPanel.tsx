@@ -21,10 +21,9 @@ function formatValue(value: number, unit: string | null): string {
  * tail, and pack signals. Every live element is tagged Measured;
  * placeholders shown before data arrives are tagged Illustrative.
  *
- * WIRING NOTE (owner follow-up): render this panel beside RunPanel in
- * the workspace/runs views; it only needs the finished or active run
- * id. `eventSourceFactory` is a test seam and defaults to the native
- * EventSource.
+ * Rendered for active runs on the run-detail page and for the
+ * finished run inside RunPanel. `eventSourceFactory` is a test seam
+ * and defaults to the native EventSource.
  */
 export function TelemetryPanel({
   runId,

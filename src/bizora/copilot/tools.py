@@ -18,6 +18,7 @@ from typing import Any
 from bizora.contracts.components import CopilotProposal
 from bizora.contracts.graph import MethodologyGraph
 from bizora.contracts.run import ExperimentRun, MetricRecord
+from bizora.copilot.pack_tools import execute_pack_tool
 from bizora.core.component_catalog import get_component, search_components
 from bizora.core.component_service import (
     build_replacement_node,
@@ -25,6 +26,7 @@ from bizora.core.component_service import (
 )
 from bizora.core.diff_service import RevisionDiffService
 from bizora.core.errors import BizoraError
+from bizora.packs.base import DomainPack
 from bizora.providers.copilot import CopilotToolSpec
 
 
@@ -39,6 +41,7 @@ class CopilotContext:
     get_run: Callable[[str], ExperimentRun | None] | None = None
     list_metrics: Callable[[str], list[MetricRecord]] | None = None
     write_log: list[str] = field(default_factory=list)
+    pack: DomainPack | None = None
 
     def revisions(self, version: int) -> MethodologyGraph | None:
         """Load one revision, defaulting to the current graph."""
@@ -452,9 +455,13 @@ TOOL_SPECS: tuple[CopilotToolSpec, ...] = (
 def execute_tool(context: CopilotContext, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     """Execute one tool call against the context (read-only)."""
     handler = TOOL_HANDLERS.get(name)
-    if handler is None:
-        return {"error": f"Unknown tool {name!r}."}
-    try:
-        return handler(context, arguments)
-    except BizoraError as exc:
-        return {"error": str(exc)}
+    if handler is not None:
+        try:
+            return handler(context, arguments)
+        except BizoraError as exc:
+            return {"error": str(exc)}
+    if context.pack is not None:
+        packed = execute_pack_tool(context.pack, context, name, arguments)
+        if packed is not None:
+            return packed
+    return {"error": f"Unknown tool {name!r}."}

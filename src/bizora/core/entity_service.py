@@ -20,7 +20,7 @@ from bizora.core.entity_registry import (
     resolve_generic,
     resolve_node,
 )
-from bizora.packs import DomainPack, ProfiledPack, default_registry
+from bizora.packs import DomainPack, ProceduralMeshPack, ProfiledPack, default_registry
 
 
 def profile_for_domain(pack_id: str) -> DomainProfile | None:
@@ -85,6 +85,9 @@ def resolve_graph(graph: MethodologyGraph) -> GraphEntities:
 
 _PART_KEYS = ("part", "part_number", "model")
 _PACKAGE_KEYS = ("package", "footprint")
+# Structural compiler binding a pack may claim (the deep-learning pack
+# reads "layer" to resolve compiler-bound nodes with opaque labels).
+_LAYER_KEYS = ("layer",)
 
 
 def _config_text(config: dict[str, object], keys: tuple[str, ...]) -> str | None:
@@ -124,6 +127,8 @@ def render_specs_for_graph(graph: MethodologyGraph) -> tuple[NodeRenderSpec, ...
     Part identity flows node config -> part ladder -> catalog package ->
     generated mesh, so a replaced node renders the package of its actual
     part. Registry hits with model URIs ride along as measured visuals.
+    Packs with config-driven geometry get the last word through the
+    procedural-mesh hook when the package path yields nothing.
     """
     pack = pack_for_graph(graph)
     if pack is None:
@@ -135,11 +140,13 @@ def render_specs_for_graph(graph: MethodologyGraph) -> tuple[NodeRenderSpec, ...
     for node in graph.nodes:
         config = node.config if isinstance(node.config, dict) else {}
         raw_text = f"{node.label} {node.description or ''}".strip() or node.label
+        bound_layer = _config_text(config, _LAYER_KEYS)
         resolution = pack.resolve_part(
             PartRef(
                 raw_text=raw_text,
                 part_number=_config_text(config, _PART_KEYS),
                 package=_config_text(config, _PACKAGE_KEYS),
+                parameters={"layer": bound_layer} if bound_layer is not None else {},
             )
         )
         if resolution.level is ResolutionLevel.UNRESOLVED:
@@ -151,6 +158,10 @@ def render_specs_for_graph(graph: MethodologyGraph) -> tuple[NodeRenderSpec, ...
             if entry is not None:
                 package = _entry_package(entry)
         mesh = _procedural_mesh(package)
+        if mesh is None and isinstance(pack, ProceduralMeshPack):
+            procedural = pack.procedural_spec(config, resolution)
+            if procedural is not None:
+                mesh = build_mesh(procedural)
         if not render.asset_uri and mesh is None:
             continue
         specs.append(

@@ -10,6 +10,7 @@ explicitly approve; it never writes anything itself.
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from typing import Any
 
 from bizora.contracts.components import (
@@ -28,7 +29,7 @@ from bizora.core.component_catalog import (
     search_components,
 )
 from bizora.core.component_service import build_replacement_node, preflight_replacement
-from bizora.core.entity_service import resolve_graph
+from bizora.core.entity_service import pack_for_graph, resolve_graph
 from bizora.core.errors import BizoraError
 from bizora.providers.copilot import CopilotProvider
 
@@ -489,6 +490,8 @@ async def answer_copilot_async(
     active_context = (
         context if context is not None else build_default_context(graph, selected_node_id)
     )
+    if active_context.pack is None:
+        active_context = replace(active_context, pack=pack_for_graph(active_context.graph))
     try:
         return await answer_with_llm(message, active_context, provider, report=report)
     except Exception:

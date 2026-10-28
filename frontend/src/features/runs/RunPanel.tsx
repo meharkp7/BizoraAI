@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { Link } from "react-router";
 import { useAdapters, useCreateRun, useExecuteRun } from "../../app/queries.ts";
 import type { ExperimentConfig, MethodologyGraph } from "../../lib/types.ts";
+import { TelemetryPanel } from "../telemetry/TelemetryPanel.tsx";
 import styles from "./RunPanel.module.css";
 
 const DEFAULT_ADAPTER_ID = "bizora.deterministic-test";
@@ -16,9 +17,11 @@ function suggestRunId(experimentId: string, version: number): string {
 export function RunPanel({
   projectId,
   graph,
+  eventSourceFactory,
 }: {
   projectId: string;
   graph: MethodologyGraph;
+  eventSourceFactory?: (url: string) => EventSource;
 }) {
   const [experimentId, setExperimentId] = useState(`exp-${graph.graph_id}-v${graph.version}`);
   const [seed, setSeed] = useState("42");
@@ -149,6 +152,9 @@ export function RunPanel({
             {finishedRunId}
           </Link>
         </p>
+      ) : null}
+      {finishedRunId ? (
+        <TelemetryPanel runId={finishedRunId} eventSourceFactory={eventSourceFactory} />
       ) : null}
     </section>
   );

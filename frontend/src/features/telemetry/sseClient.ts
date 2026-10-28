@@ -53,6 +53,7 @@ export function isTerminalState(state: string): boolean {
 export interface TelemetryStreamHandlers {
   onEvent(event: TelemetryEvent): void;
   onError?(cause: unknown): void;
+  onOpenError?(cause: unknown): void;
 }
 
 export interface TelemetryStreamOptions {
@@ -71,7 +72,13 @@ export function openTelemetryStream(
 ): () => void {
   const url = telemetryStreamUrl(runId, options.fromSeq ?? 0);
   const factory = options.eventSourceFactory ?? ((target: string) => new EventSource(target));
-  const source = factory(url);
+  let source: EventSource;
+  try {
+    source = factory(url);
+  } catch (cause) {
+    handlers.onOpenError?.(cause);
+    return () => {};
+  }
   const onMessage = (message: MessageEvent): void => {
     const event = parseTelemetryEvent(String(message.data));
     if (event !== null) handlers.onEvent(event);

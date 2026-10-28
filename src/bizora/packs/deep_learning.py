@@ -23,12 +23,14 @@ from __future__ import annotations
 
 import ast
 import keyword
+import math
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import ValidationError
 
+from bizora.contracts.assets import ProceduralKind, ProceduralSpec
 from bizora.contracts.graph import (
     GraphEdge,
     GraphNode,
@@ -45,11 +47,13 @@ from bizora.contracts.packs import (
     PartRef,
     PartResolution,
     RenderSpec,
+    ResolutionConfidence,
+    ResolutionLevel,
     SimulationPreview,
     SimulationPreviewSection,
 )
 from bizora.contracts.patches import GraphPatch, PatchOperation
-from bizora.core.entity_registry import EntityTypeDef, InterfaceDef
+from bizora.core.entity_registry import EntityTypeDef, InterfaceDef, tokenize
 from bizora.packs.lexical import LexicalPack, data_iface, tensor_iface
 
 if TYPE_CHECKING:
@@ -1949,6 +1953,106 @@ def preflight_patch(
 
 
 # ---------------------------------------------------------------------------
+# Layer resolution and tensor-shape geometry for the 3D explorer.
+# ---------------------------------------------------------------------------
+
+#: Namespace pinning layer resolutions apart from catalog asset keys.
+_LAYER_ASSET_PREFIX = "layer:"
+
+#: Slab footprint when the config states no usable dims (millimetres).
+_DEFAULT_SLAB_MM = 10.0
+
+#: Fixed slab thickness; per-layer dims drive width and height only.
+_SLAB_THICKNESS_MM = 8.0
+
+
+def _match_layer_id(raw_text: str) -> str | None:
+    """Return the first layer kind named by the text, if any.
+
+    Matches need a whole layer-id token ("mlp-block") or a whole
+    display phrase ("MLP block"), so "Attention block" resolves while
+    partial words never match. Single common words can still match
+    ("attention" in "pay attention"), which is why layer resolutions
+    stay at MATCHED confidence (representative, not exact).
+    """
+    tokens = set(tokenize(raw_text))
+    lowered = raw_text.lower()
+    for spec in LAYER_SPECS:
+        if spec.layer_id in tokens or spec.display.lower() in lowered:
+            return spec.layer_id
+    return None
+
+
+def _layer_of(resolution: PartResolution) -> str | None:
+    """Return the layer id behind a layer resolution, or None."""
+    key = resolution.asset_key
+    if (
+        resolution.level is not ResolutionLevel.CATEGORY
+        or key is None
+        or not key.startswith(_LAYER_ASSET_PREFIX)
+    ):
+        return None
+    layer_id = key[len(_LAYER_ASSET_PREFIX):]
+    return layer_id if layer_id in LAYER_INDEX else None
+
+
+def _dim_mm(value: object) -> float | None:
+    """Scale one positive config int to millimetres, or None when unusable.
+
+    Log scaling keeps a 768-wide embedding visibly larger than a
+    12-head attention block without letting vocab sizes explode the
+    scene; bools and non-ints fall back to the default slab.
+    """
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        return None
+    return min(60.0, max(2.0, 2.0 + 6.0 * math.log10(1.0 + value)))
+
+
+def _layer_box_dims(layer_id: str, config: Mapping[str, Any]) -> tuple[float, float]:
+    """Return (width, height) for one layer from its declared dim params.
+
+    Width follows the output dim, height the input dim; layers without
+    declared dims fall back to required int params in spec order (ranks
+    and other small-range params excluded), then to the default slab.
+    """
+    spec = LAYER_INDEX[layer_id]
+    width_keys = [
+        key
+        for key in (spec.out_dim_param, spec.channels_out_param, spec.append_dim_param)
+        if key is not None
+    ]
+    height_keys = [
+        key for key in (spec.in_dim_param, spec.channels_in_param) if key is not None
+    ]
+    fallback = [
+        param.name
+        for param in spec.params
+        if param.kind == "int"
+        and param.required
+        and (param.maximum is None or param.maximum > 16)
+    ]
+    width: float | None = None
+    width_key: str | None = None
+    for key in [*width_keys, *fallback]:
+        sized = _dim_mm(config.get(key))
+        if sized is not None:
+            width, width_key = sized, key
+            break
+    height: float | None = None
+    for key in [*height_keys, *fallback]:
+        if key == width_key:
+            continue
+        sized = _dim_mm(config.get(key))
+        if sized is not None:
+            height = sized
+            break
+    return (
+        width if width is not None else _DEFAULT_SLAB_MM,
+        height if height is not None else _DEFAULT_SLAB_MM,
+    )
+
+
+# ---------------------------------------------------------------------------
 # The pack: lexical routing plus shape preflight and compilation.
 # ---------------------------------------------------------------------------
 
@@ -1956,9 +2060,11 @@ def preflight_patch(
 class DeepLearningPack:
     """Phase-6 ML/DL pack behind the DomainPack/ProfiledPack protocols.
 
-    Detection, resolution, and rendering delegate to the generic lexical
-    harness over unchanged v1 data; preflight adds tensor-shape verdicts,
-    and :meth:`compile` exposes the template-only PyTorch compiler.
+    Detection delegates to the generic lexical harness over unchanged
+    v1 data; resolution and rendering match the layer vocabulary first
+    (compiler bindings, then label mentions) and fall back to the
+    harness; preflight adds tensor-shape verdicts, and :meth:`compile`
+    exposes the template-only PyTorch compiler.
     """
 
     def __init__(self) -> None:
@@ -2022,12 +2128,52 @@ class DeepLearningPack:
         return self._lexical.detect(tags)
 
     def resolve_part(self, ref: PartRef) -> PartResolution:
-        """Resolve one part mention down the exact/family/category ladder."""
+        """Resolve compiler-bound or named layers, else the lexical ladder."""
+        bound = ref.parameters.get("layer", "").strip()
+        if bound and bound in LAYER_INDEX:
+            return PartResolution(
+                level=ResolutionLevel.CATEGORY,
+                confidence=ResolutionConfidence.MATCHED,
+                pack_id=PACK_ID,
+                kind_id=bound,
+                asset_key=f"{_LAYER_ASSET_PREFIX}{bound}",
+                reason=f"Node binds compiler layer '{bound}'.",
+            )
+        matched = _match_layer_id(ref.raw_text)
+        if matched is not None:
+            display = LAYER_INDEX[matched].display
+            return PartResolution(
+                level=ResolutionLevel.CATEGORY,
+                confidence=ResolutionConfidence.MATCHED,
+                pack_id=PACK_ID,
+                kind_id=matched,
+                asset_key=f"{_LAYER_ASSET_PREFIX}{matched}",
+                reason=f"Label mentions {display}; treat as representative, not exact.",
+            )
         return self._lexical.resolve_part(ref)
 
     def render_spec(self, resolution: PartResolution) -> RenderSpec:
-        """Return the 3D render spec for one resolved part."""
+        """Label layer resolutions with the layer display name."""
+        layer_id = _layer_of(resolution)
+        if layer_id is not None:
+            return RenderSpec(label=LAYER_INDEX[layer_id].display, illustrative=True)
         return self._lexical.render_spec(resolution)
+
+    def procedural_spec(
+        self, node_config: Mapping[str, Any], resolution: PartResolution
+    ) -> ProceduralSpec | None:
+        """Return the tensor-shape slab for one layer, or None otherwise."""
+        layer_id = _layer_of(resolution)
+        if layer_id is None:
+            return None
+        width_mm, height_mm = _layer_box_dims(layer_id, node_config)
+        return ProceduralSpec(
+            kind=ProceduralKind.BOX,
+            body_length_mm=width_mm,
+            body_width_mm=_SLAB_THICKNESS_MM,
+            body_height_mm=height_mm,
+            pin_count=0,
+        )
 
     def check_patch(
         self,

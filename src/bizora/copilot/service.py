@@ -29,6 +29,7 @@ from bizora.copilot.citations import (
     RunCitation,
     validate_citations,
 )
+from bizora.copilot.pack_tools import pack_tool_specs
 from bizora.copilot.prompts import FINAL_ANSWER_INSTRUCTION, SYSTEM_PROMPT
 from bizora.copilot.tools import TOOL_SPECS, CopilotContext, execute_tool
 from bizora.providers.copilot import (
@@ -222,6 +223,8 @@ async def answer_with_llm(
     ]
     tool_results: list[dict[str, Any]] = []
     specs = list(TOOL_SPECS)
+    if context.pack is not None:
+        specs.extend(pack_tool_specs(context.pack))
 
     for _ in range(max_rounds):
         turn: CopilotAssistantTurn = await provider.chat(history, specs)

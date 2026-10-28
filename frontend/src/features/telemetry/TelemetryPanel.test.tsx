@@ -95,4 +95,18 @@ describe("TelemetryPanel", () => {
     expect(screen.getAllByText("Measured").length).toBeGreaterThan(0);
     expect(screen.queryByText("Waiting for live telemetry…")).not.toBeInTheDocument();
   });
+
+  it("reports honestly when the stream cannot open", async () => {
+    render(
+      <TelemetryPanel
+        runId="run-1"
+        eventSourceFactory={() => {
+          throw new Error("EventSource is not defined");
+        }}
+      />,
+    );
+    expect(
+      await screen.findByText("Live telemetry is unavailable in this browser."),
+    ).toBeInTheDocument();
+  });
 });

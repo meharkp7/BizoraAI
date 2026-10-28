@@ -12,9 +12,10 @@ import styles from "./MeasuredVsReportedTable.module.css";
  * Assumed-comparable, because treating them as directly comparable
  * assumes matching datasets and conditions the UI cannot verify.
  *
- * WIRING NOTE (owner follow-up): render this inside ComparePage next
- * to the existing measured comparison once reported-number fetching
- * is wired; it only needs the RunComparison plus reported entries.
+ * Rendered inside ComparePage next to the measured comparison.
+ * Reported entries are still empty: no backend endpoint derives
+ * paper-reported metrics from extracted tables yet, so the column
+ * honestly reports that nothing is linked until fetching lands.
  */
 export function MeasuredVsReportedTable({
   comparison,

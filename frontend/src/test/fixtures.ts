@@ -185,6 +185,7 @@ function runFixture(runId: string, state: ExperimentRun["state"]): ExperimentRun
 
 export const succeededRun = runFixture("run-ok", "succeeded");
 export const failedRun = runFixture("run-bad", "failed");
+export const pendingRun = runFixture("run-pending", "pending");
 
 export const metricsFixture: MetricRecord[] = [
   {

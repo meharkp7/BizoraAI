@@ -11,6 +11,7 @@ from bizora.copilot.citations import (
     collect_observed_grounding,
     validate_citations,
 )
+from bizora.copilot.pack_tools import execute_pack_tool, pack_tool_specs
 from bizora.copilot.prompts import FINAL_ANSWER_INSTRUCTION, SYSTEM_PROMPT
 from bizora.copilot.service import (
     CopilotRunReport,
@@ -43,4 +44,6 @@ __all__ = [
     "TOOL_SPECS",
     "CopilotContext",
     "execute_tool",
+    "execute_pack_tool",
+    "pack_tool_specs",
 ]

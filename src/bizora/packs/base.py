@@ -7,9 +7,10 @@ preflight rules, and copilot tools. Routing picks the best pack or
 returns None so the caller can fall back to explore-only mode.
 """
 
-from collections.abc import Iterable
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from collections.abc import Iterable, Mapping
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
+from bizora.contracts.assets import ProceduralSpec
 from bizora.contracts.graph import MethodologyGraph
 from bizora.contracts.packs import (
     CopilotToolSpec,
@@ -99,6 +100,24 @@ class ProfiledPack(Protocol):
     @property
     def catalog_entries(self) -> "tuple[ComponentDetail, ...]":
         """Return the validated catalog entries this pack contributes."""
+        ...
+
+
+@runtime_checkable
+class ProceduralMeshPack(Protocol):
+    """A pack that derives fallback geometry from node config.
+
+    The core calls this only after the asset-registry and package
+    paths yield nothing, so packs without config-driven geometry
+    simply stay out. Returned specs must be honest parameters for
+    the shared mesh builder (real dimensions where the config
+    states them, documented defaults otherwise), never decoration.
+    """
+
+    def procedural_spec(
+        self, node_config: Mapping[str, Any], resolution: PartResolution
+    ) -> ProceduralSpec | None:
+        """Return generated-geometry params, or None when this node has none."""
         ...
 
 

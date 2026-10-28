@@ -99,6 +99,64 @@ def test_footprint_shorthand_maps_to_passive_row() -> None:
     assert specs[0].mesh.spec.body_length_mm == 1.6
 
 
+def make_ml_graph(nodes: tuple[GraphNode, ...]) -> MethodologyGraph:
+    return make_graph("Pretrain a token model with backprop", nodes)
+
+
+def test_ml_layer_renders_tensor_shape_slab() -> None:
+    graph = make_ml_graph(
+        (make_node("attn", "Attention block", layer="attention", embed_dim=768, num_heads=12),),
+    )
+
+    specs = render_specs_for_graph(graph)
+
+    assert len(specs) == 1
+    assert specs[0].node_id == "attn"
+    assert specs[0].label == "Attention"
+    assert specs[0].illustrative is True
+    assert specs[0].mesh is not None
+    assert specs[0].mesh.spec.kind.value == "box"
+    assert specs[0].mesh.spec.body_length_mm > specs[0].mesh.spec.body_height_mm
+
+
+def test_ml_layer_binding_resolves_opaque_labels() -> None:
+    graph = make_ml_graph(
+        (
+            make_node(
+                "block-3",
+                "block-3",
+                layer="linear",
+                in_features=128,
+                out_features=512,
+            ),
+        ),
+    )
+
+    specs = render_specs_for_graph(graph)
+
+    assert len(specs) == 1
+    assert specs[0].label == "Linear"
+    assert specs[0].mesh is not None
+    assert specs[0].mesh.spec.body_length_mm > specs[0].mesh.spec.body_height_mm
+
+
+def test_ml_text_match_resolves_labeled_layers() -> None:
+    graph = make_ml_graph((make_node("lin", "Linear projection"),))
+
+    specs = render_specs_for_graph(graph)
+
+    assert len(specs) == 1
+    assert specs[0].label == "Linear"
+    assert specs[0].mesh is not None
+    assert specs[0].mesh.spec.kind.value == "box"
+
+
+def test_ml_unmatched_nodes_are_skipped() -> None:
+    graph = make_ml_graph((make_node("mystery", "Xyzzq flurblewidget device"),))
+
+    assert render_specs_for_graph(graph) == ()
+
+
 def test_unresolved_nodes_are_skipped() -> None:
     graph = make_graph(
         "Resistor divider circuit with voltage readout",

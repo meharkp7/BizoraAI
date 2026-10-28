@@ -16,6 +16,7 @@ import {
   notFound,
   paperExtractionFixture,
   parsedPaperFixture,
+  pendingRun,
   preflightFixture,
   renderSpecsFixture,
   simulationPreviewFixture,
@@ -90,6 +91,7 @@ export const handlers = [
   http.get("/api/v1/experiments/runs/:runId", ({ params }) => {
     if (params["runId"] === "run-ok") return HttpResponse.json(succeededRun);
     if (params["runId"] === "run-bad") return HttpResponse.json(failedRun);
+    if (params["runId"] === "run-pending") return HttpResponse.json(pendingRun);
     return notFound("RESOURCE_NOT_FOUND", "Experiment run not found.");
   }),
 

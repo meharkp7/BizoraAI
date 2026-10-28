@@ -8,7 +8,7 @@ from bizora.packs import (
     quantization,
     signal_processing,
 )
-from bizora.packs.base import DomainPack, PackRegistry, ProfiledPack
+from bizora.packs.base import DomainPack, PackRegistry, ProceduralMeshPack, ProfiledPack
 from bizora.packs.lexical import LexicalPack
 
 
@@ -33,6 +33,7 @@ __all__ = [
     "DomainPack",
     "LexicalPack",
     "PackRegistry",
+    "ProceduralMeshPack",
     "ProfiledPack",
     "default_registry",
 ]

@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { useRunComparison } from "../../app/queries.ts";
 import type { ComparisonVerdict } from "../../lib/types.ts";
 import { EmptyState, ErrorState, LoadingState } from "../../components/states.tsx";
+import { MeasuredVsReportedTable } from "./MeasuredVsReportedTable.tsx";
 import styles from "./ComparePage.module.css";
 
 function VerdictBadge({ verdict }: { verdict: ComparisonVerdict }) {
@@ -151,6 +152,8 @@ export function ComparePage() {
           ) : (
             <p className={styles.hint}>No shared measured metrics to report.</p>
           )}
+
+          <MeasuredVsReportedTable comparison={comparison.data} reported={[]} />
 
           {comparison.data.skipped_metrics.length > 0 ? (
             <>

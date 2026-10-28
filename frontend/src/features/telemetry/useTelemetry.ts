@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { RunState } from "../../lib/types.ts";
 import { isTerminalState, openTelemetryStream } from "./sseClient.ts";
+import type { TelemetryStreamHandlers } from "./sseClient.ts";
 import type {
   PackSignalSample,
   TelemetryLogRecord,
@@ -85,64 +86,65 @@ export function useTelemetryStream(
       close?.();
     };
 
-    close = openTelemetryStream(
-      runId,
-      {
-        onEvent: (event) => {
-          if (finished) return;
-          setSnapshot((current) => {
-            const next: TelemetrySnapshot = {
-              ...current,
-              status: current.status === "idle" ? "streaming" : current.status,
-              eventCount: current.eventCount + 1,
-              latestSeq: event.seq,
-            };
-            if (event.step !== null) {
-              next.steps = [...current.steps, event.step].slice(-historyCap);
-            }
-            if (event.metric !== null) {
-              const sample = event.metric;
-              next.latestMetrics = { ...current.latestMetrics, [sample.name]: sample };
-              next.metricHistory = {
-                ...current.metricHistory,
-                [sample.name]: [...(current.metricHistory[sample.name] ?? []), sample.value].slice(
-                  -historyCap,
-                ),
-              };
-            }
-            if (event.log !== null) {
-              next.logs = [...current.logs, event.log].slice(-logCap);
-            }
-            if (event.pack_signal !== null) {
-              next.packSignals = [...current.packSignals, event.pack_signal].slice(-historyCap);
-            }
-            if (event.state !== null) {
-              next.runState = event.state.state;
-              if (isTerminalState(event.state.state)) {
-                next.status = "closed";
-              }
-            }
-            return next;
-          });
-          if (
-            event.state !== null &&
-            isTerminalState(event.state.state) &&
-            !finished
-          ) {
-            finish("closed");
-          }
-        },
-        onError: () => {
-          if (finished) return;
-          setSnapshot((current) => ({
+    const handlers: TelemetryStreamHandlers = {
+      onEvent: (event) => {
+        if (finished) return;
+        setSnapshot((current) => {
+          const next: TelemetrySnapshot = {
             ...current,
-            error: "The telemetry stream disconnected.",
-          }));
-          finish("error");
-        },
+            status: current.status === "idle" ? "streaming" : current.status,
+            eventCount: current.eventCount + 1,
+            latestSeq: event.seq,
+          };
+          if (event.step !== null) {
+            next.steps = [...current.steps, event.step].slice(-historyCap);
+          }
+          if (event.metric !== null) {
+            const sample = event.metric;
+            next.latestMetrics = { ...current.latestMetrics, [sample.name]: sample };
+            next.metricHistory = {
+              ...current.metricHistory,
+              [sample.name]: [...(current.metricHistory[sample.name] ?? []), sample.value].slice(
+                -historyCap,
+              ),
+            };
+          }
+          if (event.log !== null) {
+            next.logs = [...current.logs, event.log].slice(-logCap);
+          }
+          if (event.pack_signal !== null) {
+            next.packSignals = [...current.packSignals, event.pack_signal].slice(-historyCap);
+          }
+          if (event.state !== null) {
+            next.runState = event.state.state;
+            if (isTerminalState(event.state.state)) {
+              next.status = "closed";
+            }
+          }
+          return next;
+        });
+        if (event.state !== null && isTerminalState(event.state.state) && !finished) {
+          finish("closed");
+        }
       },
-      { fromSeq, eventSourceFactory },
-    );
+      onError: () => {
+        if (finished) return;
+        setSnapshot((current) => ({
+          ...current,
+          error: "The telemetry stream disconnected.",
+        }));
+        finish("error");
+      },
+      onOpenError: () => {
+        if (finished) return;
+        setSnapshot((current) => ({
+          ...current,
+          error: "Live telemetry is unavailable in this browser.",
+        }));
+        finish("error");
+      },
+    };
+    close = openTelemetryStream(runId, handlers, { fromSeq, eventSourceFactory });
     return () => {
       finished = true;
       close?.();

@@ -3,6 +3,7 @@ import { useExecuteRun, useRun, useRunArtifacts, useRunMetrics, useRuns } from "
 import { BizoraApiError } from "../../lib/api.ts";
 import type { RunState } from "../../lib/types.ts";
 import { EmptyState, ErrorState, LoadingState } from "../../components/states.tsx";
+import { TelemetryPanel } from "../telemetry/TelemetryPanel.tsx";
 import styles from "./RunsPage.module.css";
 
 function StateBadge({ state }: { state: RunState }) {
@@ -84,7 +85,13 @@ export function RunsPage({ projectId, graphId }: { projectId: string; graphId: s
   );
 }
 
-export function RunDetailPage({ runId }: { runId: string }) {
+export function RunDetailPage({
+  runId,
+  eventSourceFactory,
+}: {
+  runId: string;
+  eventSourceFactory?: (url: string) => EventSource;
+}) {
   const run = useRun(runId);
   const metrics = useRunMetrics(runId, run.data?.state === "succeeded");
   const artifacts = useRunArtifacts(runId, run.data?.state === "succeeded");
@@ -153,6 +160,10 @@ export function RunDetailPage({ runId }: { runId: string }) {
           <dd className="mono">{data.finished_at ?? "—"}</dd>
         </dl>
       </section>
+
+      {data.state === "pending" || data.state === "running" ? (
+        <TelemetryPanel runId={data.run_id} eventSourceFactory={eventSourceFactory} />
+      ) : null}
 
       <section className={styles.section} aria-label="Metrics">
         <h2>Metrics</h2>
