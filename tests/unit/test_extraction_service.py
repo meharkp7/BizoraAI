@@ -5,6 +5,11 @@ import asyncio
 
 import pytest
 
+from bizora.contracts.assumptions import (
+    DEFAULT_ASSUMPTION_REASON,
+    annotate_graph,
+    node_is_assumed,
+)
 from bizora.contracts.graph import (
     GraphEdge,
     GraphNode,
@@ -89,10 +94,15 @@ def test_extract_draft_returns_valid_graph() -> None:
             request,
         )
 
-        assert result == graph
+        assert result == annotate_graph(graph)
         assert result.project_id == request.project_id
         assert result.graph_id == request.graph_id
         assert result.version == 1
+        assert all(node_is_assumed(node) for node in result.nodes)
+        assert all(
+            node.config.get("assumption_reason") == DEFAULT_ASSUMPTION_REASON
+            for node in result.nodes
+        )
 
     asyncio.run(run_test())
 
