@@ -1,0 +1,146 @@
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  display: grid;
+  gap: var(--space-3);
+}
+
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.title {
+  margin: 0;
+}
+
+.meta {
+  margin: var(--space-1) 0 0;
+  font-size: 0.8125rem;
+  color: var(--color-ink-faint);
+}
+
+.badge {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-line);
+}
+
+.assumed {
+  color: var(--color-warn-strong);
+  border-color: var(--color-warn-strong);
+}
+
+.grounded {
+  color: var(--color-olive);
+}
+
+.ungrounded {
+  color: var(--color-ink-faint);
+}
+
+.reason {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-warn-strong);
+}
+
+.description {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--color-ink-soft);
+}
+
+.hint {
+  margin: 0;
+  color: var(--color-ink-faint);
+  font-size: 0.875rem;
+}
+
+.evidenceList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.evidenceItem {
+  border-top: 1px solid var(--color-line);
+  padding-top: var(--space-2);
+}
+
+.evidenceHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.evidenceStatus {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-olive);
+}
+
+.locator {
+  font-size: 0.8125rem;
+  color: var(--color-ink-faint);
+}
+
+.quote {
+  margin: var(--space-2) 0 0;
+  padding-top: var(--space-2);
+  border-top: 2px solid var(--color-accent-strong);
+  font-family: var(--font-display);
+  font-style: italic;
+  color: var(--color-ink-soft);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.decisionRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.decision {
+  font-weight: 700;
+  font-size: 0.875rem;
+}
+
+.form {
+  display: grid;
+  gap: var(--space-2);
+  border-top: 1px solid var(--color-line);
+  padding-top: var(--space-3);
+}
+
+.field {
+  display: grid;
+  gap: var(--space-1);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.error {
+  margin: 0;
+  color: var(--color-error);
+  font-size: 0.875rem;
+}

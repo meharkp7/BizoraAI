@@ -1,0 +1,32 @@
+.review {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  font-size: 0.875rem;
+  color: var(--color-ink-soft);
+}
+
+.saved {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-olive);
+  font-weight: 700;
+}
+
+.failed {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-error);
+}
+
+.cards {
+  display: grid;
+  gap: var(--space-4);
+}
