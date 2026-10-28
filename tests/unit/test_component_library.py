@@ -14,19 +14,27 @@ from bizora.core.component_catalog import (
 )
 from bizora.core.component_service import build_replacement_node, preflight_replacement
 from bizora.core.copilot_service import answer_copilot
-from bizora.core.entity_registry import PROFILES
+from bizora.core.entity_registry import DomainProfile
 from bizora.core.errors import BizoraError
+from bizora.packs import ProfiledPack, default_registry
 
 
 def load_graph(name: str) -> MethodologyGraph:
     return MethodologyGraph.model_validate(load_fixture_payload(name))
 
 
+def pack_profile(pack_id: str) -> DomainProfile:
+    """Return the detection profile for one built-in pack."""
+    pack = default_registry().get(pack_id)
+    assert isinstance(pack, ProfiledPack)
+    return pack.profile
+
+
 def test_catalog_entries_link_to_registry_types() -> None:
     """Every entry names a real domain and entity type; exact parts have numbers."""
     assert len(CATALOG) >= 50
     for detail in CATALOG.values():
-        profile = PROFILES[detail.domain]
+        profile = pack_profile(detail.domain)
         assert detail.entity_type in {entity.type_id for entity in profile.entity_types}
         if not detail.generic:
             assert detail.part_number

@@ -8,7 +8,7 @@ returns None so the caller can fall back to explore-only mode.
 """
 
 from collections.abc import Iterable
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from bizora.contracts.graph import MethodologyGraph
 from bizora.contracts.packs import (
@@ -21,6 +21,10 @@ from bizora.contracts.packs import (
     RenderSpec,
 )
 from bizora.contracts.patches import GraphPatch
+
+if TYPE_CHECKING:
+    from bizora.contracts.components import ComponentDetail
+    from bizora.core.entity_registry import DomainProfile
 
 
 @runtime_checkable
@@ -71,6 +75,28 @@ class DomainPack(Protocol):
         ...
 
 
+@runtime_checkable
+class ProfiledPack(Protocol):
+    """A pack that also exposes lexical detection data and catalog entries.
+
+    The core routing engine consumes this structurally: detection signals
+    and entity types drive classification and resolution, catalog entries
+    feed the component library. All of it is pack-owned data; the core
+    only matches and routes. Packs without a profile (like the toy pack)
+    still route, but resolve to generic placeholders.
+    """
+
+    @property
+    def profile(self) -> "DomainProfile":
+        """Return the detection signals and entity types this pack handles."""
+        ...
+
+    @property
+    def catalog_entries(self) -> "tuple[ComponentDetail, ...]":
+        """Return the validated catalog entries this pack contributes."""
+        ...
+
+
 class PackRegistry:
     """Register packs and route open-vocabulary domain tags to the best one."""
 
@@ -92,6 +118,11 @@ class PackRegistry:
     def available(self) -> tuple[tuple[str, str], ...]:
         """Return the registered (pack_id, pack_version) pairs."""
         return tuple(sorted((pack.pack_id, pack.pack_version) for pack in self._packs.values()))
+
+    @property
+    def packs(self) -> tuple[DomainPack, ...]:
+        """Return the registered packs in registration order."""
+        return tuple(self._packs.values())
 
     def route(self, tags: tuple[DomainTag, ...]) -> DomainPack | None:
         """Return the highest-affinity pack, or None for explore-only mode.

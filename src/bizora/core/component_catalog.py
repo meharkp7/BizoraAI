@@ -1,34 +1,29 @@
 """Component catalog: validated in-memory registry with search.
 
-Seed entries live in per-domain data modules as plain dicts and are
-validated into ComponentDetail contracts at import, so a malformed entry
-fails fast instead of shipping a broken library card.
+Entries live as data in the domain packs and are validated into
+ComponentDetail contracts at pack construction, so a malformed entry
+fails fast instead of shipping a broken library card. This module only
+concatenates pack entries in registry order and checks that each one
+links to a real pack vocabulary.
 """
 
 from __future__ import annotations
 
-from typing import Any
-
 from bizora.contracts.components import ComponentDetail, ComponentSummary
 from bizora.contracts.graph import NodeKind
-from bizora.core.component_data_electronics import COMPONENTS as ELECTRONICS
-from bizora.core.component_data_iot import COMPONENTS as IOT
-from bizora.core.component_data_quant import COMPONENTS as QUANT
-from bizora.core.component_data_signal import COMPONENTS as SIGNAL
-from bizora.core.component_data_software import COMPONENTS as SOFTWARE
-from bizora.core.entity_registry import PROFILES
+from bizora.packs import ProfiledPack, default_registry
 
 
-def _load(entries: list[dict[str, Any]]) -> dict[str, ComponentDetail]:
+def _load(
+    details: tuple[ComponentDetail, ...], known: dict[str, frozenset[str]]
+) -> dict[str, ComponentDetail]:
     catalog: dict[str, ComponentDetail] = {}
-    for entry in entries:
-        detail = ComponentDetail.model_validate(entry)
+    for detail in details:
         if detail.component_id in catalog:
             raise ValueError(f"Duplicate component id {detail.component_id!r}.")
-        profile = PROFILES.get(detail.domain)
-        if profile is None:
+        known_types = known.get(detail.domain)
+        if known_types is None:
             raise ValueError(f"Component {detail.component_id!r} names unknown domain.")
-        known_types = {entity.type_id for entity in profile.entity_types}
         if detail.entity_type not in known_types:
             raise ValueError(
                 f"Component {detail.component_id!r} names unknown entity type "
@@ -42,7 +37,21 @@ def _load(entries: list[dict[str, Any]]) -> dict[str, ComponentDetail]:
     return catalog
 
 
-CATALOG: dict[str, ComponentDetail] = _load(ELECTRONICS + IOT + QUANT + SIGNAL + SOFTWARE)
+def _collect() -> tuple[tuple[ComponentDetail, ...], dict[str, frozenset[str]]]:
+    """Gather pack entries and vocabularies in registry order."""
+    details: list[ComponentDetail] = []
+    known: dict[str, frozenset[str]] = {}
+    for pack in default_registry().packs:
+        if not isinstance(pack, ProfiledPack):
+            continue
+        known[pack.pack_id] = frozenset(
+            entity.type_id for entity in pack.profile.entity_types
+        )
+        details.extend(pack.catalog_entries)
+    return tuple(details), known
+
+
+CATALOG: dict[str, ComponentDetail] = _load(*_collect())
 
 
 def get_component(component_id: str) -> ComponentDetail | None:

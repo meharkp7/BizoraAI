@@ -1,6 +1,13 @@
-"""Quantization catalog entries: weight formats, engines, evaluators."""
+"""Model quantization pack: weight formats, engines, evaluators.
+
+Catalog entries and detection profile moved verbatim from the former
+core registry into pack data, wired to the generic pack harness.
+"""
 
 from typing import Any
+
+from bizora.core.entity_registry import EntityTypeDef, InterfaceDef
+from bizora.packs.lexical import LexicalPack, data_iface, tensor_iface
 
 TENSOR = {"name": "tensor", "kind": "tensor", "params": {}}
 DATA = {"name": "data", "kind": "data", "params": {}}
@@ -406,3 +413,71 @@ COMPONENTS: list[dict[str, Any]] = [
         "evidence": [],
     },
 ]
+
+
+PACK_ID = "quantization"
+PACK_VERSION = "1.0.0"
+DISPLAY = "Model quantization"
+THRESHOLD = 2
+
+SIGNALS: tuple[str, ...] = (
+    "quantization",
+    "quantize",
+    "quantized",
+    "nf4",
+    "fp16",
+    "fp32",
+    "int8",
+    "int4",
+    "bitsandbytes",
+    "gguf",
+    "awq",
+    "gptq",
+    "dequant",
+    "precision",
+    "bit-width",
+    "bitwidth",
+)
+
+ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
+    EntityTypeDef(
+        "weight-tensor",
+        "Weight tensor",
+        "format",
+        ("weight", "weights", "parameter", "tensor", "checkpoint"),
+        (tensor_iface(),),
+    ),
+    EntityTypeDef(
+        "quant-format",
+        "Quantization format",
+        "format",
+        ("nf4", "fp16", "fp32", "int8", "int4", "format", "dtype", "quant"),
+        (tensor_iface(), InterfaceDef("config", "config")),
+        identity_keys=("format", "dtype", "bits"),
+    ),
+    EntityTypeDef(
+        "inference-engine",
+        "Inference engine",
+        "compute",
+        ("inference", "inference engine", "runtime", "server", "vllm", "llama.cpp"),
+        (tensor_iface(), InterfaceDef("api", "protocol")),
+    ),
+    EntityTypeDef(
+        "quant-evaluator",
+        "Quantization evaluator",
+        "compute",
+        ("evaluat", "perplexity", "benchmark", "accuracy", "error metric"),
+        (data_iface(),),
+    ),
+)
+
+pack = LexicalPack(
+    pack_id=PACK_ID,
+    pack_version=PACK_VERSION,
+    display=DISPLAY,
+    signals=SIGNALS,
+    threshold=THRESHOLD,
+    entity_types=ENTITY_TYPES,
+    catalog=COMPONENTS,
+    simulator_adapter_ids=(),
+)

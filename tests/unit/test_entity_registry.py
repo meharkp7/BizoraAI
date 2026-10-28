@@ -1,12 +1,22 @@
 """Unit tests for the paper-agnostic entity registry."""
 
 from bizora.core.entity_registry import (
-    PROFILES,
+    DomainProfile,
     check_compatible,
     detect_domain,
     resolve_generic,
     resolve_node,
 )
+from bizora.packs import ProfiledPack, default_registry
+
+REGISTRY = default_registry()
+
+
+def profile(pack_id: str) -> DomainProfile:
+    """Return the detection profile for one built-in pack."""
+    pack = REGISTRY.get(pack_id)
+    assert isinstance(pack, ProfiledPack)
+    return pack.profile
 
 
 def test_detect_domain_matches_keyword_signals() -> None:
@@ -15,6 +25,7 @@ def test_detect_domain_matches_keyword_signals() -> None:
         "NBTI aging in 6T SRAM",
         "Body-bias compensation reduces leakage.",
         (("6T SRAM cell", None, "component", {}),),
+        REGISTRY,
     )
 
     assert classification.domain == "electronics"
@@ -28,6 +39,7 @@ def test_detect_domain_returns_generic_without_signals() -> None:
         "A generic widget study",
         "Widgets are processed generically.",
         (("Widget", None, "operation", {}),),
+        REGISTRY,
     )
 
     assert classification.domain == "generic"
@@ -41,6 +53,7 @@ def test_detect_domain_needs_two_distinct_signals() -> None:
         "A study of something",
         "",
         (("Sensor", None, "component", {}),),
+        REGISTRY,
     )
 
     assert classification.domain == "generic"
@@ -48,7 +61,9 @@ def test_detect_domain_needs_two_distinct_signals() -> None:
 
 def test_resolve_node_matches_entity_type_and_records_terms() -> None:
     """A temperature sensor resolves to the sensor-module entity type."""
-    resolution = resolve_node(PROFILES["iot"], "temp", "Temperature sensor", None, "component", {})
+    resolution = resolve_node(
+        profile("iot"), "temp", "Temperature sensor", None, "component", {}
+    )
 
     assert resolution.entity_type == "sensor-module"
     assert resolution.domain == "iot"
@@ -60,7 +75,7 @@ def test_resolve_node_matches_entity_type_and_records_terms() -> None:
 def test_resolve_node_exact_identity_from_config() -> None:
     """A config model key pins the exact identity into the display label."""
     resolution = resolve_node(
-        PROFILES["iot"],
+        profile("iot"),
         "mcu",
         "Microcontroller",
         None,
@@ -75,7 +90,7 @@ def test_resolve_node_exact_identity_from_config() -> None:
 def test_resolve_node_prefers_label_over_description_words() -> None:
     """A coordinator serving clients resolves as a coordinator, not a client."""
     resolution = resolve_node(
-        PROFILES["distributed-systems"],
+        profile("distributed-systems"),
         "coord",
         "Coordinator",
         "Coordinator that routes client requests to workers.",
@@ -89,7 +104,9 @@ def test_resolve_node_prefers_label_over_description_words() -> None:
 
 def test_resolve_node_dedups_overlapping_terms() -> None:
     """The stem cli inside client counts once, not twice."""
-    resolution = resolve_node(PROFILES["distributed-systems"], "cli", "Client", None, "input", {})
+    resolution = resolve_node(
+        profile("distributed-systems"), "cli", "Client", None, "input", {}
+    )
 
     assert resolution.entity_type == "client"
     assert resolution.matched_terms == ("client",)
@@ -98,7 +115,7 @@ def test_resolve_node_dedups_overlapping_terms() -> None:
 def test_resolve_node_prefers_longer_term_on_label_tie() -> None:
     """Demodulator beats modulator: the longer term is more specific."""
     resolution = resolve_node(
-        PROFILES["signal-processing"],
+        profile("signal-processing"),
         "demod",
         "Demodulator",
         None,
@@ -111,7 +128,9 @@ def test_resolve_node_prefers_longer_term_on_label_tie() -> None:
 
 def test_resolve_node_falls_back_to_generic_component() -> None:
     """An unmatched node resolves to an explicit generic fallback."""
-    resolution = resolve_node(PROFILES["iot"], "odd", "Whirligig widget", None, "component", {})
+    resolution = resolve_node(
+        profile("iot"), "odd", "Whirligig widget", None, "component", {}
+    )
 
     assert resolution.entity_type == "generic-component"
     assert resolution.generic is True
@@ -130,8 +149,12 @@ def test_resolve_generic_is_honest_unknown() -> None:
 
 def test_check_compatible_accepts_matching_format_swap() -> None:
     """NF4 and FP16 share the quantization-format interfaces, so they swap."""
-    old = resolve_node(PROFILES["quantization"], "nf4", "NF4 quantization", None, "operation", {})
-    new = resolve_node(PROFILES["quantization"], "nf4", "FP16 conversion", None, "operation", {})
+    old = resolve_node(
+        profile("quantization"), "nf4", "NF4 quantization", None, "operation", {}
+    )
+    new = resolve_node(
+        profile("quantization"), "nf4", "FP16 conversion", None, "operation", {}
+    )
 
     assert old.entity_type == "quant-format" == new.entity_type
     compatibility = check_compatible(old, new, ("e1",))
@@ -143,8 +166,12 @@ def test_check_compatible_accepts_matching_format_swap() -> None:
 
 def test_check_compatible_blocks_dropped_known_interface() -> None:
     """Swapping a microcontroller for a sensor drops gpio and is rejected."""
-    old = resolve_node(PROFILES["iot"], "mcu", "ESP32 microcontroller", None, "component", {})
-    new = resolve_node(PROFILES["iot"], "mcu", "Temperature sensor", None, "component", {})
+    old = resolve_node(
+        profile("iot"), "mcu", "ESP32 microcontroller", None, "component", {}
+    )
+    new = resolve_node(
+        profile("iot"), "mcu", "Temperature sensor", None, "component", {}
+    )
 
     assert old.entity_type == "microcontroller"
     assert new.entity_type == "sensor-module"
@@ -158,7 +185,9 @@ def test_check_compatible_blocks_dropped_known_interface() -> None:
 def test_check_compatible_never_blocks_generic() -> None:
     """Unknown interfaces never block a replacement."""
     old = resolve_generic("n1", "Mystery node")
-    new = resolve_node(PROFILES["iot"], "n1", "ESP32 microcontroller", None, "component", {})
+    new = resolve_node(
+        profile("iot"), "n1", "ESP32 microcontroller", None, "component", {}
+    )
 
     assert check_compatible(old, new, ()).compatible is True
     assert check_compatible(new, old, ()).compatible is True

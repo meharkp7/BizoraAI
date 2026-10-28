@@ -1,6 +1,13 @@
-"""Signal-processing catalog entries: generic pipeline stages with schemas."""
+"""Signal processing pack: generic pipeline stages with schemas.
+
+Catalog entries and detection profile moved verbatim from the former
+core registry into pack data, wired to the generic pack harness.
+"""
 
 from typing import Any
+
+from bizora.core.entity_registry import EntityTypeDef, InterfaceDef
+from bizora.packs.lexical import LexicalPack
 
 ANALOG = {"name": "analog", "kind": "analog", "params": {}}
 SIG = {"name": "signal", "kind": "signal", "params": {}}
@@ -306,3 +313,98 @@ COMPONENTS: list[dict[str, Any]] = [
         "evidence": [],
     },
 ]
+
+
+PACK_ID = "signal-processing"
+PACK_VERSION = "1.0.0"
+DISPLAY = "Signal processing"
+THRESHOLD = 2
+
+SIGNALS: tuple[str, ...] = (
+    "modulation",
+    "demodulation",
+    "modulator",
+    "demodulator",
+    "sampling",
+    "carrier",
+    "bandwidth",
+    "spectrum",
+    "fft",
+    "filter",
+    "channel",
+    "awgn",
+    "symbol",
+    "waveform",
+    "codec",
+    "encode",
+    "decode",
+    "qam",
+    "psk",
+    "fsk",
+    "ofdm",
+    "speech",
+    "audio",
+)
+
+ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
+    EntityTypeDef(
+        "sampler",
+        "Sampler",
+        "signal",
+        ("sampl", "adc", "digitiz", "microphone"),
+        (InterfaceDef("analog-in", "analog"), InterfaceDef("samples", "signal")),
+    ),
+    EntityTypeDef(
+        "source-encoder",
+        "Source encoder",
+        "signal",
+        ("encod", "codec", "compress"),
+        (InterfaceDef("bits", "data"),),
+    ),
+    EntityTypeDef(
+        "modulator",
+        "Modulator",
+        "signal",
+        ("modulat", "qam", "psk", "fsk", "ofdm", "mapper"),
+        (InterfaceDef("symbols", "signal"), InterfaceDef("carrier", "analog")),
+    ),
+    EntityTypeDef(
+        "channel-model",
+        "Channel",
+        "network",
+        ("channel", "awgn", "fading", "transmission", "medium"),
+        (InterfaceDef("in", "signal"), InterfaceDef("out", "signal")),
+    ),
+    EntityTypeDef(
+        "demodulator",
+        "Demodulator",
+        "signal",
+        ("demodulat", "demapper", "detector", "equaliz"),
+        (InterfaceDef("symbols", "signal"), InterfaceDef("bits", "data")),
+    ),
+    EntityTypeDef(
+        "source-decoder",
+        "Source decoder",
+        "signal",
+        ("decod", "reconstruct", "synthes", "playback", "speaker"),
+        (InterfaceDef("samples", "signal"),),
+    ),
+    EntityTypeDef(
+        "filter",
+        "Filter",
+        "signal",
+        ("filter", "equalizer", "mixer", "amplifier"),
+        (InterfaceDef("in", "signal"), InterfaceDef("out", "signal")),
+    ),
+)
+
+pack = LexicalPack(
+    pack_id=PACK_ID,
+    pack_version=PACK_VERSION,
+    display=DISPLAY,
+    signals=SIGNALS,
+    threshold=THRESHOLD,
+    entity_types=ENTITY_TYPES,
+    catalog=COMPONENTS,
+    simulator_adapter_ids=(),
+)

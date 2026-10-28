@@ -1,6 +1,13 @@
-"""IoT catalog entries: controllers, sensors, radios, actuators, power, cloud."""
+"""IoT systems pack: controllers, sensors, radios, actuators, power, cloud.
+
+Catalog entries and detection profile moved verbatim from the former
+core registry into pack data, wired to the generic pack harness.
+"""
 
 from typing import Any
+
+from bizora.core.entity_registry import EntityTypeDef, InterfaceDef
+from bizora.packs.lexical import LexicalPack, data_iface, power_iface
 
 POWER = {"name": "power", "kind": "power", "params": {}}
 DATA = {"name": "data", "kind": "data", "params": {}}
@@ -651,3 +658,98 @@ COMPONENTS: list[dict[str, Any]] = [
         "evidence": [],
     },
 ]
+
+
+PACK_ID = "iot"
+PACK_VERSION = "1.0.0"
+DISPLAY = "IoT systems"
+THRESHOLD = 2
+
+SIGNALS: tuple[str, ...] = (
+    "sensor",
+    "microcontroller",
+    "esp32",
+    "arduino",
+    "actuator",
+    "wireless",
+    "bluetooth",
+    "wifi",
+    "lora",
+    "zigbee",
+    "mqtt",
+    "gpio",
+    "i2c",
+    "spi",
+    "uart",
+    "embedded",
+    "firmware",
+    "gateway",
+    "dashboard",
+)
+
+ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
+    EntityTypeDef(
+        "microcontroller",
+        "Microcontroller",
+        "compute",
+        ("microcontroller", "mcu", "esp32", "arduino", "raspberry", "stm32"),
+        (power_iface(), InterfaceDef("gpio", "gpio"), data_iface()),
+        identity_keys=("model", "part"),
+    ),
+    EntityTypeDef(
+        "sensor-module",
+        "Sensor module",
+        "sensor",
+        ("sensor", "temperature", "humidity", "pressure", "accelerometer", "dht", "bme"),
+        (power_iface(), data_iface()),
+        identity_keys=("model", "part"),
+    ),
+    EntityTypeDef(
+        "actuator",
+        "Actuator",
+        "compute",
+        ("actuator", "relay", "motor", "servo", "valve"),
+        (power_iface(), InterfaceDef("control", "signal")),
+    ),
+    EntityTypeDef(
+        "radio",
+        "Radio / comms",
+        "network",
+        (
+            "radio",
+            "wireless",
+            "wifi",
+            "bluetooth",
+            "lora",
+            "zigbee",
+            "transceiver",
+            "antenna",
+        ),
+        (power_iface(), InterfaceDef("air", "rf"), data_iface()),
+    ),
+    EntityTypeDef(
+        "cloud-service",
+        "Cloud service",
+        "network",
+        ("cloud", "dashboard", "server", "mqtt broker", "backend", "api"),
+        (InterfaceDef("api", "protocol"),),
+    ),
+    EntityTypeDef(
+        "power-supply",
+        "Power supply",
+        "power",
+        ("battery", "power supply", "solar", "charger", "regulator"),
+        (power_iface(),),
+    ),
+)
+
+pack = LexicalPack(
+    pack_id=PACK_ID,
+    pack_version=PACK_VERSION,
+    display=DISPLAY,
+    signals=SIGNALS,
+    threshold=THRESHOLD,
+    entity_types=ENTITY_TYPES,
+    catalog=COMPONENTS,
+    simulator_adapter_ids=(),
+)
