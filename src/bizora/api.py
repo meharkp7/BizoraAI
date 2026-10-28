@@ -101,6 +101,7 @@ from bizora.providers.copilot import CopilotProvider
 from bizora.providers.fireworks import FireworksMethodologyProvider
 from bizora.providers.muse_copilot import MuseCopilotProvider
 from bizora.providers.tables import TableExtractionRequest
+from bizora.streaming.bus import get_shared_bus
 
 logger = logging.getLogger(__name__)
 
@@ -999,6 +1000,7 @@ def get_execution_service() -> ExecutionService:
     return ExecutionService(
         get_session_factory(),
         WorkerConfig(worker_id="api-executor", max_runtime_seconds=600),
+        telemetry_bus=get_shared_bus(),
     )
 
 

@@ -200,3 +200,22 @@ class TelemetryBus:
             return False
         state: RunState = event.state.state
         return state in TERMINAL_STATES
+
+
+_SHARED_BUS: TelemetryBus | None = None
+_SHARED_BUS_LOCK = threading.Lock()
+
+
+def get_shared_bus() -> TelemetryBus:
+    """Return the process-wide bus shared by the worker and the router.
+
+    ``bizora.api`` injects this into the execution worker and
+    ``bizora.main`` injects it into the streaming router so live SSE
+    subscribers observe the same events the worker publishes. Tests
+    that need isolation construct their own :class:`TelemetryBus`.
+    """
+    global _SHARED_BUS
+    with _SHARED_BUS_LOCK:
+        if _SHARED_BUS is None:
+            _SHARED_BUS = TelemetryBus()
+        return _SHARED_BUS

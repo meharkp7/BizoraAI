@@ -58,6 +58,8 @@ from bizora.db.repository import (
     save_artifact_record,
     save_metric_record,
 )
+from bizora.streaming.bus import TelemetryBus
+from bizora.streaming.events import make_metric_event, make_state_event
 
 _resource: ModuleType | None
 try:
@@ -162,6 +164,7 @@ class ExecutionService:
         argv_factory: Callable[[str, str], list[str]] | None = None,
         rss_reader: Callable[[int], int | None] | None = None,
         isolation_provider: IsolationProvider | None = None,
+        telemetry_bus: TelemetryBus | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._config = config
@@ -171,6 +174,14 @@ class ExecutionService:
         self._isolation = (
             isolation_provider if isolation_provider is not None else LocalIsolationProvider()
         )
+        self._telemetry_bus = telemetry_bus
+
+    def _publish_state(self, run_id: str, state: RunState, error: str | None = None) -> None:
+        """Publish one lifecycle event when telemetry is wired."""
+        if self._telemetry_bus is None:
+            return
+        bus = self._telemetry_bus
+        bus.publish(make_state_event(run_id, bus.next_seq(run_id), state, error=error))
 
     @contextmanager
     def _session(self) -> Iterator[Session]:
@@ -293,6 +304,7 @@ class ExecutionService:
                         details={"run_id": run_id},
                     )
                 session.commit()
+                self._publish_state(run_id, RunState.RUNNING)
                 return config
             if (
                 record.state == RunState.RUNNING.value
@@ -350,6 +362,8 @@ class ExecutionService:
             if record is None:
                 return self._resolve_finalize_race(session, run_id)
             session.commit()
+            # The terminal state event ends the run's stream on the bus.
+            self._publish_state(run_id, to_state, error)
             return experiment_run_from_record(record)
 
     def _succeed_with_results(
@@ -386,7 +400,26 @@ class ExecutionService:
                     ),
                 )
             session.commit()
+            self._publish_metrics(run_id, result)
+            # The terminal state event ends the run's stream on the bus.
+            self._publish_state(run_id, RunState.SUCCEEDED)
             return experiment_run_from_record(record)
+
+    def _publish_metrics(self, run_id: str, result: ExecutionResult) -> None:
+        """Stream one live event per adapter-reported metric."""
+        if self._telemetry_bus is None:
+            return
+        bus = self._telemetry_bus
+        for metric in result.metrics:
+            bus.publish(
+                make_metric_event(
+                    run_id,
+                    bus.next_seq(run_id),
+                    metric.metric_id,
+                    metric.name,
+                    metric.value,
+                )
+            )
 
     def _fail(
         self,

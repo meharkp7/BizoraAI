@@ -1,21 +1,11 @@
 """FastAPI router for live telemetry over SSE (Phase 7, R8).
 
-WIRING NOTE (owner follow-up): this module only *builds* the router; it
-is intentionally not imported by ``bizora.api`` or ``bizora.main``. To
-serve the stream, the owner adds, in the application assembly:
-
-.. code-block:: python
-
-    from bizora.streaming.bus import TelemetryBus
-    from bizora.streaming.router import create_streaming_router
-
-    telemetry_bus = TelemetryBus()
-    app.include_router(create_streaming_router(telemetry_bus, get_run=...))
-
-and publishes events from the execution service (``next_seq`` + the
-:mod:`bizora.streaming.events` builders + ``publish``), publishing a
-terminal state event or calling ``close_run`` when a run finishes or is
-stopped so the stream ends.
+This module only *builds* the router; ``bizora.main`` mounts it over
+the shared bus (``bizora.streaming.bus.get_shared_bus``), which
+``bizora.api`` also injects into the execution worker. The worker
+publishes a RUNNING state event on claim, one metric event per
+adapter-reported metric, and a terminal state event on finalize, which
+ends the stream.
 
 Endpoints:
 
