@@ -406,6 +406,7 @@
         },
         {
           "aliases": [
+            "contrastive loss",
             "contrastive pretraining"
           ],
           "evidence": [
@@ -418,6 +419,7 @@
         },
         {
           "aliases": [
+            "product quantization",
             "quantized representations"
           ],
           "evidence": [
@@ -430,6 +432,7 @@
         },
         {
           "aliases": [
+            "fine-tuning",
             "supervised fine-tuning"
           ],
           "evidence": [
@@ -1100,7 +1103,9 @@
         },
         {
           "aliases": [
-            "manufacturer ID"
+            "manufacturer ID",
+            "manufacturer classification",
+            "manufacturer identity"
           ],
           "evidence": [
             {

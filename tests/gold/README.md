@@ -56,7 +56,9 @@ matches when a gold name/alias equals a predicted label after
 normalization, or one side's tokens contain the other's (so terse gold
 names match descriptive predicted labels). Single generic tokens can
 over-match; every provider faces the same scorer, so comparisons stay
-fair.
+fair. Known limitation: no stemming or synonym handling, so
+"aging classification" will not match "aged chip classification" —
+use aliases for genuine paper-term variants.
 
 Draft graphs cache by provider and PDF hash under `tests/gold/.cache/`
 (git-ignored); re-runs are free unless `--refresh` is passed. Metered
