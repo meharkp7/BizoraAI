@@ -1,0 +1,25 @@
+.badge {
+  display: inline-block;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.5;
+  border: 1px solid var(--color-line-strong);
+}
+
+.measured {
+  background: var(--color-success-subtle, #e6f4ea);
+  color: var(--color-success-ink, #1b5e20);
+}
+
+.assumed {
+  background: var(--color-warning-subtle, #fef7e0);
+  color: var(--color-warning-ink, #7a4c00);
+}
+
+.illustrative {
+  background: var(--color-surface-raised);
+  color: var(--color-ink-muted);
+  border-style: dashed;
+}
