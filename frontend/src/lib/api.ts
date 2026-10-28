@@ -18,6 +18,7 @@ import type {
   GraphRevisionDiff,
   MethodologyGraph,
   MetricRecord,
+  NodeRenderSpec,
   PaperExtractionResponse,
   PaperUpload,
   ParsedPaper,
@@ -177,6 +178,16 @@ export const api = {
   ): Promise<SimulationPreview> {
     return request(
       `/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/revisions/${version}/simulation-preview`,
+    );
+  },
+
+  getRenderSpecs(
+    projectId: string,
+    graphId: string,
+    version: number,
+  ): Promise<NodeRenderSpec[]> {
+    return request(
+      `/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/revisions/${version}/render-specs`,
     );
   },
 

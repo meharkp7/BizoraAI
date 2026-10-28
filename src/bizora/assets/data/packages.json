@@ -1,5 +1,6 @@
 {
-  "comment": "Generic package outline dimensions (mm) for procedural fallbacks. Industry-standard outlines, not parts: no manufacturer, no part number, no paper. Dimensions are nominal JEDEC-style values used only to size illustrative stand-ins.",
+  "comment": "Generic package outline dimensions (mm) for procedural fallbacks. Industry-standard outlines, not parts: no manufacturer, no part number, no paper. Dimensions are nominal JEDEC-style values used only to size illustrative stand-ins. DO-35 body per Vishay DO-204AH data (3.5 long x 1.5 dia) via mbedded.ninja. Aliases map footprint shorthands (0603) to rows without guessing.",
+
   "packages": [
     {
       "package": "sot-23",
@@ -47,6 +48,7 @@
     },
     {
       "package": "passive-0603",
+      "aliases": ["0603"],
       "kind": "box",
       "body_length_mm": 1.6,
       "body_width_mm": 0.8,
@@ -58,6 +60,7 @@
     },
     {
       "package": "passive-0805",
+      "aliases": ["0805"],
       "kind": "box",
       "body_length_mm": 2.0,
       "body_width_mm": 1.25,
@@ -66,6 +69,17 @@
       "pin_pitch_mm": 2.0,
       "pin_rows": 1,
       "pin_length_mm": 0.5
+    },
+    {
+      "package": "do-35",
+      "kind": "cylinder",
+      "body_length_mm": 1.5,
+      "body_width_mm": 1.5,
+      "body_height_mm": 3.5,
+      "pin_count": 2,
+      "pin_pitch_mm": 1.5,
+      "pin_rows": 1,
+      "pin_length_mm": 3.0
     },
     {
       "package": "module-pin-field",

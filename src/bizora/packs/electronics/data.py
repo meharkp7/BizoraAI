@@ -715,6 +715,7 @@ COMPONENTS: list[dict[str, Any]] = [
             {"name": "Interface", "value": "I2C", "typical": False},
             {"name": "Current resolution", "value": "0.8", "unit": "mA", "typical": True},
             {"name": "Supply", "value": "3-5.5", "unit": "V", "typical": False},
+            {"name": "Package", "value": "SOIC-8", "typical": False},
         ],
         "pinout": [
             {"designator": "A0", "name": "A0", "function": "I2C address bit 0"},

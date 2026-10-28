@@ -216,3 +216,26 @@ class ResolvedAsset(BaseModel):
         elif self.asset is None:
             raise ValueError("Resolved outcomes carry exactly one asset record.")
         return self
+
+
+class NodeRenderSpec(BaseModel):
+    """One node's 3D visual: measured model URI and/or generated mesh.
+
+    Nodes without either stay out of the endpoint payload so the canvas
+    keeps its archetype placeholder honestly instead of a fake spec.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    node_id: str = Field(min_length=1, max_length=128)
+    label: str = Field(min_length=1, max_length=300)
+    asset_uri: str | None = Field(default=None, max_length=1000)
+    fallback_package: str | None = Field(default=None, max_length=256)
+    illustrative: bool = True
+    mesh: ProceduralMesh | None = None
+
+    @model_validator(mode="after")
+    def _check_carries_a_visual(self) -> "NodeRenderSpec":
+        if not self.asset_uri and self.mesh is None:
+            raise ValueError("A render spec needs a model URI or a mesh.")
+        return self

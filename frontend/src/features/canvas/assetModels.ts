@@ -6,29 +6,18 @@
 
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import type {
+  NodeRenderSpec,
+  ProceduralMeshData,
+  ProceduralPartData,
+} from "../../lib/types.ts";
 
 export type AssetProvenance = "measured" | "illustrative";
 
-/** One node's render spec, mirroring backend RenderSpec JSON. */
-export interface NodeAssetSpec {
-  nodeId: string;
-  label: string;
-  assetUri: string | null;
-  fallbackPackage: string | null;
-  illustrative: boolean;
-}
+/** One node's render spec; the canvas consumes backend NodeRenderSpec rows. */
+export type NodeAssetSpec = NodeRenderSpec;
 
-/** One generated solid, mirroring backend MeshPart JSON. */
-export interface ProceduralPartData {
-  name: string;
-  vertices: [number, number, number][];
-  faces: [number, number, number][];
-}
-
-/** Generated fallback mesh, mirroring backend ProceduralMesh JSON. */
-export interface ProceduralMeshData {
-  parts: ProceduralPartData[];
-}
+export type { ProceduralMeshData, ProceduralPartData };
 
 export interface AssetSummary {
   measured: number;
@@ -66,9 +55,9 @@ export function loadRequests(specs: readonly NodeAssetSpec[] | null | undefined)
   const seen = new Set<string>();
   const requests: GlbLoadRequest[] = [];
   for (const spec of specs ?? []) {
-    if (spec.assetUri === null || spec.assetUri === "" || seen.has(spec.nodeId)) continue;
-    seen.add(spec.nodeId);
-    requests.push({ nodeId: spec.nodeId, url: spec.assetUri });
+    if (spec.asset_uri === null || spec.asset_uri === "" || seen.has(spec.node_id)) continue;
+    seen.add(spec.node_id);
+    requests.push({ nodeId: spec.node_id, url: spec.asset_uri });
   }
   return requests;
 }
@@ -78,9 +67,23 @@ export function specsByNodeId(
 ): Map<string, NodeAssetSpec> {
   const index = new Map<string, NodeAssetSpec>();
   for (const spec of specs ?? []) {
-    if (!index.has(spec.nodeId)) index.set(spec.nodeId, spec);
+    if (!index.has(spec.node_id)) index.set(spec.node_id, spec);
   }
   return index;
+}
+
+/** Specs carrying generated fallback geometry, deduplicated by node. */
+export function meshSpecs(
+  specs: readonly NodeAssetSpec[] | null | undefined,
+): NodeAssetSpec[] {
+  const seen = new Set<string>();
+  const meshes: NodeAssetSpec[] = [];
+  for (const spec of specs ?? []) {
+    if (spec.mesh === null || seen.has(spec.node_id)) continue;
+    seen.add(spec.node_id);
+    meshes.push(spec);
+  }
+  return meshes;
 }
 
 /** Minimal loader surface so tests can stub GLB fetching. */
@@ -113,4 +116,26 @@ export function buildProceduralGeometries(mesh: ProceduralMeshData): THREE.Buffe
     geometry.computeVertexNormals();
     return geometry;
   });
+}
+
+export type ProceduralPartRole = "body" | "lead";
+
+/** Material role from the backend part name: the body vs pin leads. */
+export function partRole(partName: string): ProceduralPartRole {
+  return partName === "body" ? "body" : "lead";
+}
+
+/** Assemble one pickable group per mesh: named meshes under one parent. */
+export function buildProceduralGroup(
+  mesh: ProceduralMeshData,
+  materialFor: (role: ProceduralPartRole) => THREE.Material,
+): THREE.Group {
+  const group = new THREE.Group();
+  const geometries = buildProceduralGeometries(mesh);
+  mesh.parts.forEach((part, index) => {
+    const child = new THREE.Mesh(geometries[index], materialFor(partRole(part.name)));
+    child.name = part.name;
+    group.add(child);
+  });
+  return group;
 }

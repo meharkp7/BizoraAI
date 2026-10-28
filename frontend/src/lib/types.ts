@@ -472,3 +472,25 @@ export interface SimulationPreview {
   sections: SimulationPreviewSection[];
   warnings: string[];
 }
+
+/** One generated solid, mirroring backend MeshPart JSON. */
+export interface ProceduralPartData {
+  name: string;
+  vertices: [number, number, number][];
+  faces: [number, number, number][];
+}
+
+/** Generated fallback mesh; mirrors the parts of backend ProceduralMesh JSON. */
+export interface ProceduralMeshData {
+  parts: ProceduralPartData[];
+}
+
+/** One node's 3D visual, mirroring backend NodeRenderSpec JSON. */
+export interface NodeRenderSpec {
+  node_id: string;
+  label: string;
+  asset_uri: string | null;
+  fallback_package: string | null;
+  illustrative: boolean;
+  mesh: ProceduralMeshData | null;
+}

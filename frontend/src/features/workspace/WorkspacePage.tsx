@@ -5,6 +5,7 @@ import {
   useGraphEntities,
   useGraphLayout,
   useGraphRevision,
+  useRenderSpecs,
   useSaveLayout,
 } from "../../app/queries.ts";
 import { BizoraApiError } from "../../lib/api.ts";
@@ -18,6 +19,7 @@ import type {
   GraphPatch,
   GraphRevisionDiff,
   MethodologyGraph,
+  NodeRenderSpec,
   ResearchBrief,
   ViewportState,
 } from "../../lib/types.ts";
@@ -251,6 +253,7 @@ export function WorkspacePage({
   const revision = useGraphRevision(projectId, graphId, version);
   const savedLayout = useGraphLayout(projectId, graphId, version);
   const entities = useGraphEntities(projectId, graphId, version);
+  const renderSpecs = useRenderSpecs(projectId, graphId, version, view === "3d");
   const patch = useApplyPatch(projectId, graphId);
   const batch = useApplyPatchBatch(projectId, graphId);
   const history = useRevisionHistory(version, onVersionChange);
@@ -328,6 +331,7 @@ export function WorkspacePage({
       entities={entities.data ?? null}
       entitiesPending={entities.isPending}
       entitiesError={entities.error instanceof Error ? entities.error.message : null}
+      assetSpecs={renderSpecs.data ?? null}
       selectedNodeIds={selectedNodeIds}
       selectedEdgeIds={selectedEdgeIds}
       mutating={mutating}
@@ -380,6 +384,7 @@ function WorkspaceLoaded({
   entities,
   entitiesPending,
   entitiesError,
+  assetSpecs,
   selectedNodeIds,
   selectedEdgeIds,
   mutating,
@@ -406,6 +411,7 @@ function WorkspaceLoaded({
   entities: GraphEntities | null;
   entitiesPending: boolean;
   entitiesError: string | null;
+  assetSpecs: NodeRenderSpec[] | null;
   selectedNodeIds: string[];
   selectedEdgeIds: string[];
   mutating: boolean;
@@ -610,6 +616,7 @@ function WorkspaceLoaded({
               entities={entities}
               entitiesPending={entitiesPending}
               entitiesError={entitiesError}
+              assetSpecs={assetSpecs}
             />
           ) : (
             <GraphCanvas

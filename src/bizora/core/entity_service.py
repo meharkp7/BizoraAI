@@ -1,5 +1,9 @@
 """Domain detection and entity resolution over methodology graphs."""
 
+from bizora.assets.procedural import build_mesh
+from bizora.assets.resolver import package_spec
+from bizora.contracts.assets import NodeRenderSpec, ProceduralMesh
+from bizora.contracts.components import ComponentDetail
 from bizora.contracts.domain import (
     GENERIC_DOMAIN,
     DomainClassification,
@@ -8,7 +12,7 @@ from bizora.contracts.domain import (
     ReplacementCompatibility,
 )
 from bizora.contracts.graph import GraphNode, MethodologyGraph
-from bizora.contracts.packs import SimulationPreview
+from bizora.contracts.packs import PartRef, ResolutionLevel, SimulationPreview
 from bizora.core.entity_registry import (
     DomainProfile,
     check_compatible,
@@ -77,6 +81,89 @@ def resolve_graph(graph: MethodologyGraph) -> GraphEntities:
         classification=classification,
         entities=tuple(entities),
     )
+
+
+_PART_KEYS = ("part", "part_number", "model")
+_PACKAGE_KEYS = ("package", "footprint")
+
+
+def _config_text(config: dict[str, object], keys: tuple[str, ...]) -> str | None:
+    """Return the first non-blank string value for the given config keys."""
+    for key in keys:
+        value = config.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _entry_package(entry: ComponentDetail) -> str | None:
+    """Return the catalog entry's package id, if it states one."""
+    for key in _PACKAGE_KEYS:
+        configured = entry.default_config.get(key)
+        if isinstance(configured, str) and configured.strip():
+            return configured.strip()
+    for spec in entry.specs:
+        if spec.name.strip().lower() == "package" and spec.value.strip():
+            return spec.value.strip()
+    return None
+
+
+def _procedural_mesh(package: str | None) -> ProceduralMesh | None:
+    """Return generated geometry for one package id, or None if unknown."""
+    if not package:
+        return None
+    spec = package_spec(package)
+    if spec is None:
+        return None
+    return build_mesh(spec)
+
+
+def render_specs_for_graph(graph: MethodologyGraph) -> tuple[NodeRenderSpec, ...]:
+    """Resolve every node to a 3D visual; nodes without one are skipped.
+
+    Part identity flows node config -> part ladder -> catalog package ->
+    generated mesh, so a replaced node renders the package of its actual
+    part. Registry hits with model URIs ride along as measured visuals.
+    """
+    pack = pack_for_graph(graph)
+    if pack is None:
+        return ()
+    catalog: dict[str, ComponentDetail] = {}
+    if isinstance(pack, ProfiledPack):
+        catalog = {entry.component_id: entry for entry in pack.catalog_entries}
+    specs: list[NodeRenderSpec] = []
+    for node in graph.nodes:
+        config = node.config if isinstance(node.config, dict) else {}
+        raw_text = f"{node.label} {node.description or ''}".strip() or node.label
+        resolution = pack.resolve_part(
+            PartRef(
+                raw_text=raw_text,
+                part_number=_config_text(config, _PART_KEYS),
+                package=_config_text(config, _PACKAGE_KEYS),
+            )
+        )
+        if resolution.level is ResolutionLevel.UNRESOLVED:
+            continue
+        render = pack.render_spec(resolution)
+        package = _config_text(config, _PACKAGE_KEYS)
+        if package is None and resolution.asset_key is not None:
+            entry = catalog.get(resolution.asset_key)
+            if entry is not None:
+                package = _entry_package(entry)
+        mesh = _procedural_mesh(package)
+        if not render.asset_uri and mesh is None:
+            continue
+        specs.append(
+            NodeRenderSpec(
+                node_id=node.id,
+                label=render.label,
+                asset_uri=render.asset_uri,
+                fallback_package=render.fallback_package,
+                illustrative=render.illustrative,
+                mesh=mesh,
+            )
+        )
+    return tuple(specs)
 
 
 def check_replacement(

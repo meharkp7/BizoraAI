@@ -34,12 +34,33 @@ def _package_table() -> dict[str, dict[str, Any]]:
         package = entry.get("package")
         if isinstance(package, str) and package.strip():
             table[normalize_asset_token(package)] = entry
+        aliases = entry.get("aliases", [])
+        if isinstance(aliases, list):
+            for alias in aliases:
+                if isinstance(alias, str) and alias.strip():
+                    table.setdefault(normalize_asset_token(alias), entry)
     return table
 
 
+def _lookup_variant(token: str) -> dict[str, Any] | None:
+    """Return the table entry for one normalized variant token, if any."""
+    return _package_table().get(token)
+
+
 def package_spec(package: str) -> ProceduralSpec | None:
-    """Return the procedural spec for one package id, or None if unknown."""
-    entry = _package_table().get(normalize_asset_token(package))
+    """Return the procedural spec for one package id, or None if unknown.
+
+    Multi-variant values ("PDIP-8 / SOIC-8") try each alternative in
+    order and use the first covered variant; aliases ("0603") map to
+    their rows. Anything else stays unknown instead of a guess.
+    """
+    token = normalize_asset_token(package)
+    entry = _lookup_variant(token)
+    if entry is None:
+        for variant in token.split("/"):
+            entry = _lookup_variant(normalize_asset_token(variant))
+            if entry is not None:
+                break
     if entry is None:
         return None
     return ProceduralSpec.model_validate(

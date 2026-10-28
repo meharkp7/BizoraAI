@@ -98,6 +98,24 @@ def test_package_table_covers_expected_generic_outlines() -> None:
     assert tuple(sorted(known_packages())) == known_packages()
 
 
+def test_package_spec_matches_aliases_and_first_covered_variant() -> None:
+    """Footprint shorthands map via aliases; multi-variant picks covered."""
+    assert package_spec("0603") is not None
+    assert package_spec("0805") is not None
+    assert package_spec("PDIP-8 / SOIC-8") is not None
+    assert package_spec("SOIC-14 / TSSOP-14") is None
+    assert package_spec("0402") is None
+
+
+def test_do35_row_uses_verified_body_dimensions() -> None:
+    """DO-35 body is 3.5 long x 1.5 dia per Vishay DO-204AH data."""
+    spec = package_spec("do-35")
+
+    assert spec is not None
+    assert spec.body_height_mm == 3.5
+    assert spec.pin_count == 2
+
+
 def test_pack_render_spec_serves_registry_hits_and_misses() -> None:
     """render_spec serves registry URIs with provenance; misses stay illustrative."""
     from bizora.contracts.packs import PartResolution, ResolutionConfidence, ResolutionLevel

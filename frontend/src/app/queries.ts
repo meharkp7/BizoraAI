@@ -21,6 +21,8 @@ export const graphKeys = {
     ["graph", projectId, graphId, "revisions", version, "entities"] as const,
   preview: (projectId: string, graphId: string, version: number) =>
     ["graph", projectId, graphId, "revisions", version, "simulation-preview"] as const,
+  renderSpecs: (projectId: string, graphId: string, version: number) =>
+    ["graph", projectId, graphId, "revisions", version, "render-specs"] as const,
 };
 
 export const runKeys = {
@@ -281,6 +283,22 @@ export function useCopilot(projectId: string, graphId: string, version: number) 
       message: string;
       selectedNodeId: string | null;
     }) => api.askCopilot(projectId, graphId, version, message, selectedNodeId),
+  });
+}
+
+export function useRenderSpecs(
+  projectId: string,
+  graphId: string,
+  version: number,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: graphKeys.renderSpecs(projectId, graphId, version),
+    queryFn: () => api.getRenderSpecs(projectId, graphId, version),
+    enabled,
+    // A failed specs fetch must never break the explorer: the canvas
+    // keeps its archetype placeholders when data is missing.
+    retry: false,
   });
 }
 

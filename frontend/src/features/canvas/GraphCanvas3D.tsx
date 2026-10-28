@@ -6,14 +6,16 @@ import { ErrorState } from "../../components/states.tsx";
 import { useTheme, useWorkspaceSelection } from "../../lib/store.ts";
 import type { GraphEntities, GraphLayout, MethodologyGraph } from "../../lib/types.ts";
 import {
+  buildProceduralGroup,
   loadGlbModel,
   loadRequests,
+  meshSpecs,
   provenanceLabel,
   provenanceOf,
   specsByNodeId,
   summarizeProvenance,
 } from "./assetModels.ts";
-import type { NodeAssetSpec } from "./assetModels.ts";
+import type { NodeAssetSpec, ProceduralPartRole } from "./assetModels.ts";
 import { EntityLegend } from "./EntityLegend.tsx";
 import {
   EDGE_COLOR,
@@ -236,6 +238,63 @@ export function GraphCanvas3D({
         nodeTags.set(node.id, { element: tag, marker });
       }
 
+      // Generated package solids swap in synchronously over the archetype
+      // placeholders, normalized to the node size. Specs with a model URI
+      // skip this path: the GLB loader below owns them instead.
+      const bodyMaterial = new THREE.MeshStandardMaterial({
+        color: "#4a4a55",
+        roughness: 0.42,
+        metalness: 0.3,
+      });
+      const leadMaterial = new THREE.MeshStandardMaterial({
+        color: "#c9ced6",
+        roughness: 0.3,
+        metalness: 0.9,
+      });
+      disposables.push(bodyMaterial, leadMaterial);
+      const proceduralMaterial = (role: ProceduralPartRole): THREE.Material =>
+        role === "body" ? bodyMaterial : leadMaterial;
+      for (const spec of meshSpecs(assetSpecs)) {
+        if (spec.asset_uri || spec.mesh === null) continue;
+        const mesh = nodeMeshes.get(spec.node_id);
+        const point = positions.get(spec.node_id);
+        if (!mesh || !point) continue;
+        const group = buildProceduralGroup(spec.mesh, proceduralMaterial);
+        const box = new THREE.Box3().setFromObject(group);
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z) || 1;
+        const scale = (NODE_RADIUS * 2) / maxDim;
+        group.scale.setScalar(scale);
+        const center = box.getCenter(new THREE.Vector3());
+        group.position.set(
+          point.x - center.x * scale,
+          point.y - center.y * scale,
+          point.z - center.z * scale,
+        );
+        group.userData.nodeId = spec.node_id;
+        group.userData.baseScale = scale;
+        mesh.visible = false;
+        const swappedTag = nodeTags.get(spec.node_id);
+        if (swappedTag) {
+          // The placeholder hides, so the label marker must move to the
+          // group or selection/hover tags never enter the DOM.
+          group.add(swappedTag.marker);
+          swappedTag.marker.position.set(center.x * scale, center.y * scale, center.z * scale);
+        }
+        scene.add(group);
+        modelGroups.set(spec.node_id, group);
+        pickRoots.push(group);
+        disposables.push({
+          dispose: () => {
+            scene.remove(group);
+            group.traverse((child) => {
+              const childMesh = child as THREE.Mesh;
+              if (childMesh.geometry) childMesh.geometry.dispose();
+            });
+          },
+        });
+      }
+
       // GLB models load asynchronously over the archetype placeholders:
       // a resolved model swaps in normalized to the node size, while a
       // missing or failing URL keeps the placeholder honestly in place.
@@ -269,6 +328,15 @@ export function GraphCanvas3D({
             group.userData.nodeId = request.nodeId;
             group.userData.baseScale = scale;
             mesh.visible = false;
+            const swappedTag = nodeTags.get(request.nodeId);
+            if (swappedTag) {
+              group.add(swappedTag.marker);
+              swappedTag.marker.position.set(
+                center.x * scale,
+                center.y * scale,
+                center.z * scale,
+              );
+            }
             scene.add(group);
             modelGroups.set(request.nodeId, group);
             pickRoots.push(group);

@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from bizora.adapters.registry import create_default_registry
+from bizora.contracts.assets import NodeRenderSpec
 from bizora.contracts.comparison import RunComparison
 from bizora.contracts.components import (
     CompatibilityPreflight,
@@ -53,7 +54,7 @@ from bizora.core.component_service import preflight_replacement
 from bizora.core.config import get_settings
 from bizora.core.copilot_service import answer_copilot
 from bizora.core.diff_service import RevisionDiffService
-from bizora.core.entity_service import preview_graph, resolve_graph
+from bizora.core.entity_service import preview_graph, render_specs_for_graph, resolve_graph
 from bizora.core.errors import BizoraError, ErrorCode
 from bizora.core.execution_service import ExecutionService, WorkerConfig
 from bizora.core.extraction_persistence_service import (
@@ -651,6 +652,41 @@ def get_simulation_preview(
             detail="No simulation preview for this revision.",
         )
     return preview
+
+
+@router.get(
+    "/api/v1/graphs/{project_id}/{graph_id}/revisions/{version}/render-specs",
+    response_model=list[NodeRenderSpec],
+    tags=["graphs"],
+)
+def get_render_specs(
+    project_id: str,
+    graph_id: str,
+    version: int,
+    session: Session = DB_SESSION_DEPENDENCY,
+) -> tuple[NodeRenderSpec, ...]:
+    """Return per-node 3D visuals; nodes without one are omitted."""
+    if version < 1:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Version must be a positive integer.",
+        )
+
+    record = get_graph_revision(
+        session,
+        project_id=project_id,
+        graph_id=graph_id,
+        version=version,
+    )
+
+    if record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Graph revision not found.",
+        )
+
+    graph = MethodologyGraph.model_validate(record.graph_payload)
+    return render_specs_for_graph(graph)
 
 
 @router.get(

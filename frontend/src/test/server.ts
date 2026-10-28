@@ -17,6 +17,7 @@ import {
   paperExtractionFixture,
   parsedPaperFixture,
   preflightFixture,
+  renderSpecsFixture,
   simulationPreviewFixture,
   succeededRun,
   tableFixture,
@@ -145,6 +146,11 @@ export const handlers = [
   http.get(
     "/api/v1/graphs/:projectId/:graphId/revisions/:version/simulation-preview",
     () => HttpResponse.json(simulationPreviewFixture),
+  ),
+
+  http.get(
+    "/api/v1/graphs/:projectId/:graphId/revisions/:version/render-specs",
+    () => HttpResponse.json(renderSpecsFixture),
   ),
 ];
 

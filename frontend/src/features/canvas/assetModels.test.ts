@@ -2,8 +2,11 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import {
   buildProceduralGeometries,
+  buildProceduralGroup,
   loadGlbModel,
   loadRequests,
+  meshSpecs,
+  partRole,
   provenanceLabel,
   provenanceOf,
   specsByNodeId,
@@ -11,29 +14,30 @@ import {
 } from "./assetModels.ts";
 import type { NodeAssetSpec } from "./assetModels.ts";
 
-function spec(overrides: Partial<NodeAssetSpec> & { nodeId: string }): NodeAssetSpec {
+function spec(overrides: Partial<NodeAssetSpec> & { node_id: string }): NodeAssetSpec {
   return {
-    label: overrides.nodeId,
-    assetUri: null,
-    fallbackPackage: null,
+    label: overrides.node_id,
+    asset_uri: null,
+    fallback_package: null,
     illustrative: true,
+    mesh: null,
     ...overrides,
   };
 }
 
 describe("asset provenance", () => {
   it("reads measured vs illustrative straight from the spec flag", () => {
-    expect(provenanceOf(spec({ nodeId: "a", illustrative: false }))).toBe("measured");
-    expect(provenanceOf(spec({ nodeId: "b", illustrative: true }))).toBe("illustrative");
+    expect(provenanceOf(spec({ node_id: "a", illustrative: false }))).toBe("measured");
+    expect(provenanceOf(spec({ node_id: "b", illustrative: true }))).toBe("illustrative");
     expect(provenanceLabel("measured")).toBe("Measured model");
     expect(provenanceLabel("illustrative")).toBe("Illustrative stand-in");
   });
 
   it("summarizes mixed specs for the explorer indicator", () => {
     const summary = summarizeProvenance([
-      spec({ nodeId: "a", illustrative: false }),
-      spec({ nodeId: "b", illustrative: false }),
-      spec({ nodeId: "c", illustrative: true }),
+      spec({ node_id: "a", illustrative: false }),
+      spec({ node_id: "b", illustrative: false }),
+      spec({ node_id: "c", illustrative: true }),
     ]);
     expect(summary).toEqual({ measured: 2, illustrative: 1, total: 3 });
     expect(summarizeProvenance(null)).toEqual({ measured: 0, illustrative: 0, total: 0 });
@@ -42,8 +46,8 @@ describe("asset provenance", () => {
 
   it("indexes specs by node, first entry winning duplicates", () => {
     const index = specsByNodeId([
-      spec({ nodeId: "a", label: "First" }),
-      spec({ nodeId: "a", label: "Second" }),
+      spec({ node_id: "a", label: "First" }),
+      spec({ node_id: "a", label: "Second" }),
     ]);
     expect(index.get("a")?.label).toBe("First");
     expect(specsByNodeId(null).size).toBe(0);
@@ -53,10 +57,10 @@ describe("asset provenance", () => {
 describe("GLB load requests", () => {
   it("lists one fetch per node with a URI, skipping placeholders", () => {
     const requests = loadRequests([
-      spec({ nodeId: "a", assetUri: "https://cdn.test/a.glb", illustrative: false }),
-      spec({ nodeId: "b", assetUri: null }),
-      spec({ nodeId: "c", assetUri: "" }),
-      spec({ nodeId: "a", assetUri: "https://cdn.test/a-second.glb" }),
+      spec({ node_id: "a", asset_uri: "https://cdn.test/a.glb", illustrative: false }),
+      spec({ node_id: "b", asset_uri: null }),
+      spec({ node_id: "c", asset_uri: "" }),
+      spec({ node_id: "a", asset_uri: "https://cdn.test/a-second.glb" }),
     ]);
     expect(requests).toEqual([{ nodeId: "a", url: "https://cdn.test/a.glb" }]);
     expect(loadRequests(null)).toEqual([]);
@@ -130,5 +134,38 @@ describe("procedural fallback geometry", () => {
     const geometries = buildProceduralGeometries({ parts: [boxPart, pin] });
     expect(geometries).toHaveLength(2);
     for (const geometry of geometries) geometry.dispose();
+  });
+
+  it("lists only specs carrying generated meshes, deduplicated by node", () => {
+    const mesh = { parts: [boxPart] };
+    const listed = meshSpecs([
+      spec({ node_id: "a", mesh }),
+      spec({ node_id: "b" }),
+      spec({ node_id: "a", mesh }),
+    ]);
+    expect(listed.map((entry) => entry.node_id)).toEqual(["a"]);
+    expect(meshSpecs(null)).toEqual([]);
+  });
+
+  it("routes body vs leads to material roles by part name", () => {
+    expect(partRole("body")).toBe("body");
+    expect(partRole("pin-1")).toBe("lead");
+    expect(partRole("pin-32")).toBe("lead");
+  });
+
+  it("assembles named child meshes under one group", () => {
+    const pin = { ...boxPart, name: "pin-1" };
+    const seen: string[] = [];
+    const group = buildProceduralGroup({ parts: [boxPart, pin] }, (role) => {
+      seen.push(role);
+      return new THREE.MeshBasicMaterial();
+    });
+    expect(group.children.map((child) => child.name)).toEqual(["body", "pin-1"]);
+    expect(seen).toEqual(["body", "lead"]);
+    for (const child of group.children) {
+      const mesh = child as THREE.Mesh;
+      mesh.geometry.dispose();
+      (mesh.material as THREE.Material).dispose();
+    }
   });
 });
