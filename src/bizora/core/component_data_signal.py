@@ -1,0 +1,308 @@
+"""Signal-processing catalog entries: generic pipeline stages with schemas."""
+
+from typing import Any
+
+ANALOG = {"name": "analog", "kind": "analog", "params": {}}
+SIG = {"name": "signal", "kind": "signal", "params": {}}
+DATA = {"name": "data", "kind": "data", "params": {}}
+SYMBOLS = {"name": "symbols", "kind": "signal", "params": {}}
+BITS = {"name": "bits", "kind": "data", "params": {}}
+
+COMPONENTS: list[dict[str, Any]] = [
+    {
+        "component_id": "sig-sampler-generic",
+        "domain": "signal-processing",
+        "entity_type": "sampler",
+        "category": "signal",
+        "kind": "preprocessing",
+        "label": "Speech sampler (generic)",
+        "generic": True,
+        "manufacturer": None,
+        "part_number": None,
+        "headline": "Generic analog-to-sample conversion stage",
+        "description": (
+            "Generic speech sampling stage producing discrete-time samples from an "
+            "analog input. Set the sampling rate and resolution."
+        ),
+        "datasheet_url": None,
+        "reference_url": None,
+        "specs": [{"name": "Identity", "value": "generic", "typical": False}],
+        "pinout": [],
+        "interfaces": [
+            {"name": "analog-in", "kind": "analog", "params": {}},
+            {"name": "samples", "kind": "signal", "params": {}},
+        ],
+        "constraints": {},
+        "config_schema": [
+            {
+                "key": "sampling_rate_hz",
+                "label": "Sampling rate",
+                "type": "number",
+                "default": 8000,
+                "unit": "Hz",
+                "required": True,
+                "description": "Samples per second produced by this stage.",
+            },
+            {
+                "key": "bits",
+                "label": "Resolution",
+                "type": "number",
+                "default": 16,
+                "unit": "bit",
+                "required": False,
+                "description": "Bits per sample.",
+            },
+        ],
+        "default_config": {"sampling_rate_hz": 8000, "bits": 16},
+        "evidence": [],
+    },
+    {
+        "component_id": "sig-encoder-generic",
+        "domain": "signal-processing",
+        "entity_type": "source-encoder",
+        "category": "signal",
+        "kind": "operation",
+        "label": "Source encoder (generic)",
+        "generic": True,
+        "manufacturer": None,
+        "part_number": None,
+        "headline": "Generic speech compression encoder",
+        "description": (
+            "Generic source encoder compressing samples into a bitstream. "
+            "No exact codec is implied."
+        ),
+        "datasheet_url": None,
+        "reference_url": None,
+        "specs": [{"name": "Identity", "value": "generic", "typical": False}],
+        "pinout": [],
+        "interfaces": [BITS],
+        "constraints": {},
+        "config_schema": [
+            {
+                "key": "bitrate_bps",
+                "label": "Bitrate",
+                "type": "number",
+                "default": 13000,
+                "unit": "bps",
+                "required": False,
+                "description": "Target encoded bitrate.",
+            },
+        ],
+        "default_config": {},
+        "evidence": [],
+    },
+    {
+        "component_id": "sig-modulator-qam",
+        "domain": "signal-processing",
+        "entity_type": "modulator",
+        "category": "signal",
+        "kind": "operation",
+        "label": "QAM modulator (generic)",
+        "generic": True,
+        "manufacturer": None,
+        "part_number": None,
+        "headline": "Generic quadrature amplitude modulator with settable order",
+        "description": (
+            "Generic QAM modulator mapping bits to constellation symbols. "
+            "Set the modulation order for the link budget under study."
+        ),
+        "datasheet_url": None,
+        "reference_url": None,
+        "specs": [{"name": "Family", "value": "QAM", "typical": False}],
+        "pinout": [],
+        "interfaces": [SYMBOLS, {"name": "carrier", "kind": "analog", "params": {}}],
+        "constraints": {},
+        "config_schema": [
+            {
+                "key": "modulation_order",
+                "label": "Modulation order",
+                "type": "enum",
+                "default": "16",
+                "options": ["4", "16", "64", "256"],
+                "required": True,
+                "description": "QAM constellation size.",
+            },
+        ],
+        "default_config": {"modulation_order": "16"},
+        "evidence": [],
+    },
+    {
+        "component_id": "sig-modulator-psk",
+        "domain": "signal-processing",
+        "entity_type": "modulator",
+        "category": "signal",
+        "kind": "operation",
+        "label": "PSK modulator (generic)",
+        "generic": True,
+        "manufacturer": None,
+        "part_number": None,
+        "headline": "Generic phase-shift-keying modulator with settable order",
+        "description": (
+            "Generic PSK modulator mapping bits to phase symbols. Alternative to "
+            "QAM where constant-envelope transmission matters."
+        ),
+        "datasheet_url": None,
+        "reference_url": None,
+        "specs": [{"name": "Family", "value": "PSK", "typical": False}],
+        "pinout": [],
+        "interfaces": [SYMBOLS, {"name": "carrier", "kind": "analog", "params": {}}],
+        "constraints": {},
+        "config_schema": [
+            {
+                "key": "modulation_order",
+                "label": "Modulation order",
+                "type": "enum",
+                "default": "8",
+                "options": ["2", "4", "8"],
+                "required": True,
+                "description": "PSK constellation size.",
+            },
+        ],
+        "default_config": {"modulation_order": "8"},
+        "evidence": [],
+    },
+    {
+        "component_id": "sig-channel-awgn",
+        "domain": "signal-processing",
+        "entity_type": "channel-model",
+        "category": "network",
+        "kind": "component",
+        "label": "AWGN channel (generic)",
+        "generic": True,
+        "manufacturer": None,
+        "part_number": None,
+        "headline": "Generic additive white Gaussian noise channel",
+        "description": (
+            "Generic AWGN channel model adding Gaussian noise at the configured "
+            "signal-to-noise ratio."
+        ),
+        "datasheet_url": None,
+        "reference_url": None,
+        "specs": [{"name": "Model", "value": "AWGN", "typical": False}],
+        "pinout": [],
+        "interfaces": [
+            {"name": "in", "kind": "signal", "params": {}},
+            {"name": "out", "kind": "signal", "params": {}},
+        ],
+        "constraints": {},
+        "config_schema": [
+            {
+                "key": "snr_db",
+                "label": "SNR",
+                "type": "number",
+                "default": 10,
+                "unit": "dB",
+                "required": True,
+                "description": "Signal-to-noise ratio of the channel.",
+            },
+        ],
+        "default_config": {"snr_db": 10},
+        "evidence": [],
+    },
+    {
+        "component_id": "sig-demodulator-generic",
+        "domain": "signal-processing",
+        "entity_type": "demodulator",
+        "category": "signal",
+        "kind": "operation",
+        "label": "Demodulator (generic)",
+        "generic": True,
+        "manufacturer": None,
+        "part_number": None,
+        "headline": "Generic symbol-to-bit demodulator",
+        "description": (
+            "Generic demodulator recovering bits from received symbols. Pair with "
+            "the matching modulator order."
+        ),
+        "datasheet_url": None,
+        "reference_url": None,
+        "specs": [{"name": "Identity", "value": "generic", "typical": False}],
+        "pinout": [],
+        "interfaces": [SYMBOLS, BITS],
+        "constraints": {},
+        "config_schema": [
+            {
+                "key": "modulation_order",
+                "label": "Modulation order",
+                "type": "enum",
+                "default": "16",
+                "options": ["2", "4", "8", "16", "64", "256"],
+                "required": True,
+                "description": "Constellation size expected from the modulator.",
+            },
+        ],
+        "default_config": {"modulation_order": "16"},
+        "evidence": [],
+    },
+    {
+        "component_id": "sig-decoder-generic",
+        "domain": "signal-processing",
+        "entity_type": "source-decoder",
+        "category": "signal",
+        "kind": "operation",
+        "label": "Source decoder (generic)",
+        "generic": True,
+        "manufacturer": None,
+        "part_number": None,
+        "headline": "Generic bitstream-to-speech decoder",
+        "description": (
+            "Generic source decoder reconstructing speech samples from the received "
+            "bitstream. No exact codec is implied."
+        ),
+        "datasheet_url": None,
+        "reference_url": None,
+        "specs": [{"name": "Identity", "value": "generic", "typical": False}],
+        "pinout": [],
+        "interfaces": [{"name": "samples", "kind": "signal", "params": {}}],
+        "constraints": {},
+        "config_schema": [],
+        "default_config": {},
+        "evidence": [],
+    },
+    {
+        "component_id": "sig-filter-fir",
+        "domain": "signal-processing",
+        "entity_type": "filter",
+        "category": "signal",
+        "kind": "operation",
+        "label": "FIR filter (generic)",
+        "generic": True,
+        "manufacturer": None,
+        "part_number": None,
+        "headline": "Generic finite-impulse-response filter stage",
+        "description": (
+            "Generic FIR filter for shaping or equalizing the signal path. "
+            "Set the tap count and cutoff."
+        ),
+        "datasheet_url": None,
+        "reference_url": None,
+        "specs": [{"name": "Structure", "value": "FIR", "typical": False}],
+        "pinout": [],
+        "interfaces": [
+            {"name": "in", "kind": "signal", "params": {}},
+            {"name": "out", "kind": "signal", "params": {}},
+        ],
+        "constraints": {},
+        "config_schema": [
+            {
+                "key": "taps",
+                "label": "Tap count",
+                "type": "number",
+                "default": 32,
+                "required": True,
+                "description": "Number of filter taps.",
+            },
+            {
+                "key": "cutoff_hz",
+                "label": "Cutoff",
+                "type": "number",
+                "default": 3400,
+                "unit": "Hz",
+                "required": False,
+                "description": "Low-pass cutoff frequency.",
+            },
+        ],
+        "default_config": {"taps": 32},
+        "evidence": [],
+    },
+]

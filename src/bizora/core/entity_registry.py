@@ -160,6 +160,30 @@ PROFILES: dict[str, DomainProfile] = {
                 ("resistor", "capacitor", "inductor", "resistance", "capacitance"),
                 (_power(),),
             ),
+            EntityTypeDef(
+                "diode",
+                "Diode",
+                "discrete",
+                ("diode", "rectifier", "schottky", "zener", "1n4148"),
+                (
+                    InterfaceDef("anode", "signal"),
+                    InterfaceDef("cathode", "signal"),
+                ),
+            ),
+            EntityTypeDef(
+                "analog-ic",
+                "Analog IC",
+                "package",
+                ("op-amp", "opamp", "operational amplifier", "timer", "ne555", "lm358"),
+                (_power(), InterfaceDef("in", "analog"), InterfaceDef("out", "analog")),
+            ),
+            EntityTypeDef(
+                "data-converter",
+                "Data converter",
+                "package",
+                ("adc", "dac", "data converter", "analog-to-digital", "digital-to-analog"),
+                (_power(), InterfaceDef("analog", "analog"), _data()),
+            ),
         ),
     ),
     "iot": DomainProfile(

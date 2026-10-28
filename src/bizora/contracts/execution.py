@@ -28,6 +28,16 @@ class ExecutionStatus(StrEnum):
     FAILED = "failed"
 
 
+class AdapterSummary(BaseModel):
+    """One registered execution adapter the UI may offer for runs."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    adapter_id: str = Field(min_length=1, max_length=128)
+    adapter_version: str = Field(min_length=1, max_length=32)
+    description: str = Field(min_length=1, max_length=500)
+
+
 class StructuredError(BaseModel):
     """Machine-readable failure detail recorded for a run."""
 
@@ -80,9 +90,7 @@ class AdapterExecutionRequest(BaseModel):
             or config.graph_id != graph.graph_id
             or config.graph_version != graph.version
         ):
-            raise ValueError(
-                "Request config must reference the exact supplied graph revision."
-            )
+            raise ValueError("Request config must reference the exact supplied graph revision.")
         return self
 
 

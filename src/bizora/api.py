@@ -17,9 +17,19 @@ from fastapi import (
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
+from bizora.adapters.registry import create_default_registry
 from bizora.contracts.comparison import RunComparison
+from bizora.contracts.components import (
+    CompatibilityPreflight,
+    ComponentDetail,
+    ComponentSummary,
+    CopilotRequest,
+    CopilotResponse,
+    PreflightRequest,
+)
 from bizora.contracts.diff import GraphRevisionDiff
 from bizora.contracts.domain import GraphEntities
+from bizora.contracts.execution import AdapterSummary
 from bizora.contracts.graph import MethodologyGraph
 from bizora.contracts.layout import GraphLayout
 from bizora.contracts.patches import GraphPatch, GraphPatchBatch
@@ -37,7 +47,10 @@ from bizora.contracts.table import (
     SuggestedIds,
 )
 from bizora.core.comparison_service import ComparisonService
+from bizora.core.component_catalog import get_component, search_components
+from bizora.core.component_service import preflight_replacement
 from bizora.core.config import get_settings
+from bizora.core.copilot_service import answer_copilot
 from bizora.core.diff_service import RevisionDiffService
 from bizora.core.entity_service import resolve_graph
 from bizora.core.errors import BizoraError, ErrorCode
@@ -84,6 +97,7 @@ from bizora.providers.tables import TableExtractionRequest
 logger = logging.getLogger(__name__)
 
 DB_SESSION_DEPENDENCY = Depends(get_db_session)
+
 
 def get_fireworks_provider() -> FireworksMethodologyProvider:
     """Create the configured Fireworks provider or fail clearly."""
@@ -151,6 +165,7 @@ def get_baseten_provider() -> BasetenMethodologyProvider:
 BASETEN_PROVIDER_DEPENDENCY = Depends(get_baseten_provider)
 
 router = APIRouter()
+
 
 @router.post(
     "/api/v1/graphs/extract",
@@ -266,10 +281,14 @@ async def extract_paper(
     filename = file.filename or "paper.pdf"
     suggested = _suggest_ids(filename, pdf)
 
-    resolved_project = project_id.strip() if project_id and project_id.strip() else suggested.project_id
+    resolved_project = (
+        project_id.strip() if project_id and project_id.strip() else suggested.project_id
+    )
     resolved_graph = graph_id.strip() if graph_id and graph_id.strip() else suggested.graph_id
     resolved_source = source_id.strip() if source_id and source_id.strip() else suggested.source_id
-    resolved_author = created_by.strip() if created_by and created_by.strip() else DEFAULT_CREATED_BY
+    resolved_author = (
+        created_by.strip() if created_by and created_by.strip() else DEFAULT_CREATED_BY
+    )
 
     if not is_valid_source_id(resolved_source):
         raise BizoraError(
@@ -300,9 +319,7 @@ async def extract_paper(
 
     warnings: list[str] = []
     if pdf.truncated:
-        warnings.append(
-            f"Paper text was truncated to {PAPER_TEXT_LIMIT} characters."
-        )
+        warnings.append(f"Paper text was truncated to {PAPER_TEXT_LIMIT} characters.")
 
     tables: list[ExtractedTable] = []
     try:
@@ -320,9 +337,7 @@ async def extract_paper(
         )
         warnings.extend(table_warnings)
     except MethodologyProviderError:
-        warnings.append(
-            "Results tables could not be extracted: the provider request failed."
-        )
+        warnings.append("Results tables could not be extracted: the provider request failed.")
 
     return PaperExtractionResponse(
         graph=graph,
@@ -398,6 +413,7 @@ def create_graph(
     GraphPersistenceService.create_initial_revision(session, graph)
     return graph
 
+
 @router.post(
     "/api/v1/graphs/{project_id}/{graph_id}/revisions",
     response_model=MethodologyGraph,
@@ -457,9 +473,7 @@ def apply_graph_patch(
             detail="Base graph revision not found.",
         )
 
-    base_graph = MethodologyGraph.model_validate(
-        base_record.graph_payload
-    )
+    base_graph = MethodologyGraph.model_validate(base_record.graph_payload)
 
     patched_graph = GraphPatchService.apply_patch(base_graph, patch)
 
@@ -475,6 +489,7 @@ def apply_graph_patch(
     )
 
     return MethodologyGraph.model_validate(record.graph_payload)
+
 
 @router.post(
     "/api/v1/graphs/{project_id}/{graph_id}/patch-batches",
@@ -509,13 +524,9 @@ def apply_graph_patch_batch(
             detail="Base graph revision not found.",
         )
 
-    base_graph = MethodologyGraph.model_validate(
-        base_record.graph_payload
-    )
+    base_graph = MethodologyGraph.model_validate(base_record.graph_payload)
 
-    patched_graph = GraphPatchService.apply_patches(
-        base_graph, batch.patches
-    )
+    patched_graph = GraphPatchService.apply_patches(base_graph, batch.patches)
 
     # Re-check the latest persisted snapshot transactionally before saving.
     record = GraphPersistenceService.create_revision(
@@ -529,6 +540,7 @@ def apply_graph_patch_batch(
     )
 
     return MethodologyGraph.model_validate(record.graph_payload)
+
 
 @router.get(
     "/api/v1/graphs/{project_id}/{graph_id}/revisions/{version}",
@@ -599,6 +611,117 @@ def get_graph_entities(
     return resolve_graph(graph)
 
 
+@router.get(
+    "/api/v1/components",
+    response_model=list[ComponentSummary],
+    tags=["components"],
+)
+def list_components(
+    q: str = Query(default=""),
+    domain: str | None = Query(default=None),
+    category: str | None = Query(default=None),
+    generic: bool | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+) -> tuple[ComponentSummary, ...]:
+    """Search the component library with optional filters."""
+    return search_components(q, domain=domain, category=category, generic=generic, limit=limit)
+
+
+@router.get(
+    "/api/v1/components/{component_id}",
+    response_model=ComponentDetail,
+    tags=["components"],
+)
+def get_component_detail(component_id: str) -> ComponentDetail:
+    """Return one component library entry with specs and configuration."""
+    detail = get_component(component_id)
+    if detail is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Component not found.",
+        )
+    return detail
+
+
+def _revision_or_404(
+    session: Session, project_id: str, graph_id: str, version: int
+) -> MethodologyGraph:
+    """Load one persisted revision or raise the standard HTTP errors."""
+    if version < 1:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Version must be a positive integer.",
+        )
+    record = get_graph_revision(
+        session,
+        project_id=project_id,
+        graph_id=graph_id,
+        version=version,
+    )
+    if record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Graph revision not found.",
+        )
+    return MethodologyGraph.model_validate(record.graph_payload)
+
+
+@router.post(
+    "/api/v1/graphs/{project_id}/{graph_id}/revisions/{version}/nodes/{node_id}/preflight",
+    response_model=CompatibilityPreflight,
+    tags=["graphs"],
+)
+def preflight_node_replacement(
+    project_id: str,
+    graph_id: str,
+    version: int,
+    node_id: str,
+    request: PreflightRequest,
+    session: Session = DB_SESSION_DEPENDENCY,
+) -> CompatibilityPreflight:
+    """Validate a catalog replacement against one node without writing."""
+    graph = _revision_or_404(session, project_id, graph_id, version)
+    return preflight_replacement(graph, node_id, request.component_id, request.config)
+
+
+@router.post(
+    "/api/v1/graphs/{project_id}/{graph_id}/revisions/{version}/copilot",
+    response_model=CopilotResponse,
+    tags=["graphs"],
+)
+def ask_copilot(
+    project_id: str,
+    graph_id: str,
+    version: int,
+    request: CopilotRequest,
+    session: Session = DB_SESSION_DEPENDENCY,
+) -> CopilotResponse:
+    """Answer one copilot message against the catalog and graph state."""
+    graph = _revision_or_404(session, project_id, graph_id, version)
+    return answer_copilot(graph, request.message, request.selected_node_id)
+
+
+@router.get(
+    "/api/v1/experiments/adapters",
+    response_model=list[AdapterSummary],
+    tags=["experiments"],
+)
+def list_adapters() -> list[AdapterSummary]:
+    """Return the registered execution adapters the UI may offer."""
+    registry = create_default_registry()
+    summaries = []
+    for adapter_id, adapter_version in registry.available():
+        adapter = registry.resolve(adapter_id, adapter_version)
+        summaries.append(
+            AdapterSummary(
+                adapter_id=adapter_id,
+                adapter_version=adapter_version,
+                description=type(adapter).__doc__ or "Registered execution adapter.",
+            )
+        )
+    return summaries
+
+
 @router.put(
     "/api/v1/graphs/{project_id}/{graph_id}/revisions/{version}/layout",
     response_model=GraphLayout,
@@ -612,11 +735,7 @@ def save_graph_layout(
     session: Session = DB_SESSION_DEPENDENCY,
 ) -> GraphLayout:
     """Save a visual-only layout without altering the graph revision."""
-    if (
-        layout.project_id != project_id
-        or layout.graph_id != graph_id
-        or layout.version != version
-    ):
+    if layout.project_id != project_id or layout.graph_id != graph_id or layout.version != version:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Path identifiers must match the layout payload.",
@@ -770,10 +889,7 @@ def list_run_metrics(
 ) -> list[MetricRecord]:
     """List one run's persisted metric records."""
     ExperimentRunService.get_run(session, run_id)
-    return [
-        metric_record_from_row(row)
-        for row in list_metrics_for_run(session, run_id)
-    ]
+    return [metric_record_from_row(row) for row in list_metrics_for_run(session, run_id)]
 
 
 @router.get(
@@ -787,10 +903,7 @@ def list_run_artifacts(
 ) -> list[ArtifactRecord]:
     """List one run's persisted artifact records."""
     ExperimentRunService.get_run(session, run_id)
-    return [
-        artifact_record_from_row(row)
-        for row in list_artifacts_for_run(session, run_id)
-    ]
+    return [artifact_record_from_row(row) for row in list_artifacts_for_run(session, run_id)]
 
 
 @router.post(
