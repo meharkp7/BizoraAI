@@ -1,10 +1,19 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { CSS2DObject, CSS2DRenderer } from "three/addons/renderers/CSS2DRenderer.js";
 import { ErrorState } from "../../components/states.tsx";
 import { useTheme, useWorkspaceSelection } from "../../lib/store.ts";
 import type { GraphEntities, GraphLayout, MethodologyGraph } from "../../lib/types.ts";
+import {
+  loadGlbModel,
+  loadRequests,
+  provenanceLabel,
+  provenanceOf,
+  specsByNodeId,
+  summarizeProvenance,
+} from "./assetModels.ts";
+import type { NodeAssetSpec } from "./assetModels.ts";
 import { EntityLegend } from "./EntityLegend.tsx";
 import {
   EDGE_COLOR,
@@ -47,15 +56,18 @@ export function GraphCanvas3D({
   entities,
   entitiesPending = false,
   entitiesError = null,
+  assetSpecs = null,
 }: {
   graph: MethodologyGraph;
   layout: GraphLayout | null;
   entities: GraphEntities | null;
   entitiesPending?: boolean;
   entitiesError?: string | null;
+  assetSpecs?: NodeAssetSpec[] | null;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [failed, setFailed] = useState(false);
+  const assetSummary = useMemo(() => summarizeProvenance(assetSpecs), [assetSpecs]);
   const [coarsePointer] = useState(
     () =>
       typeof window !== "undefined" &&
@@ -182,7 +194,10 @@ export function GraphCanvas3D({
       };
 
       const nodeMeshes = new Map<string, THREE.Mesh>();
+      const modelGroups = new Map<string, THREE.Group>();
+      const pickRoots: THREE.Object3D[] = [];
       const nodeTags = new Map<string, { element: HTMLDivElement; marker: CSS2DObject }>();
+      const specs = specsByNodeId(assetSpecs);
       for (const node of graph.nodes) {
         const point = positions.get(node.id) ?? { x: 0, y: 0, z: 0 };
         const resolution = resolutions.get(node.id);
@@ -199,13 +214,88 @@ export function GraphCanvas3D({
         inner.className = styles.tagInner;
         inner.textContent = node.label;
         tag.appendChild(inner);
+        const spec = specs.get(node.id);
+        if (spec) {
+          // Per-node measured-vs-illustrative marker, inline-styled so no
+          // stylesheet change is needed for the indicator.
+          const badge = document.createElement("span");
+          const provenance = provenanceOf(spec);
+          badge.textContent = provenanceLabel(provenance);
+          badge.dataset.provenance = provenance;
+          badge.style.display = "block";
+          badge.style.fontSize = "11px";
+          badge.style.opacity = "0.8";
+          tag.appendChild(badge);
+        }
         const marker = new CSS2DObject(tag);
         marker.visible = false;
         mesh.add(marker);
         scene.add(mesh);
         nodeMeshes.set(node.id, mesh);
+        pickRoots.push(mesh);
         nodeTags.set(node.id, { element: tag, marker });
       }
+
+      // GLB models load asynchronously over the archetype placeholders:
+      // a resolved model swaps in normalized to the node size, while a
+      // missing or failing URL keeps the placeholder honestly in place.
+      let cancelled = false;
+      const pendingLoads = new Map<string, Promise<THREE.Group>>();
+      const loadCached = (url: string): Promise<THREE.Group> => {
+        const pending = pendingLoads.get(url);
+        if (pending) return pending;
+        const started = loadGlbModel(url);
+        pendingLoads.set(url, started);
+        return started;
+      };
+      for (const request of loadRequests(assetSpecs)) {
+        const mesh = nodeMeshes.get(request.nodeId);
+        const point = positions.get(request.nodeId);
+        if (!mesh || !point) continue;
+        void loadCached(request.url).then(
+          (group) => {
+            if (cancelled) return;
+            const box = new THREE.Box3().setFromObject(group);
+            const size = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z) || 1;
+            const scale = (NODE_RADIUS * 2) / maxDim;
+            group.scale.setScalar(scale);
+            const center = box.getCenter(new THREE.Vector3());
+            group.position.set(
+              point.x - center.x * scale,
+              point.y - center.y * scale,
+              point.z - center.z * scale,
+            );
+            group.userData.nodeId = request.nodeId;
+            group.userData.baseScale = scale;
+            mesh.visible = false;
+            scene.add(group);
+            modelGroups.set(request.nodeId, group);
+            pickRoots.push(group);
+            disposables.push({
+              dispose: () => {
+                scene.remove(group);
+                group.traverse((child) => {
+                  const childMesh = child as THREE.Mesh;
+                  if (childMesh.geometry) childMesh.geometry.dispose();
+                  const material = childMesh.material as
+                    | THREE.Material
+                    | THREE.Material[]
+                    | undefined;
+                  if (Array.isArray(material)) material.forEach((entry) => entry.dispose());
+                  else if (material) material.dispose();
+                });
+              },
+            });
+          },
+          () => {
+            // Keep the archetype placeholder: no model, no silent swap.
+          },
+        );
+      }
+      onDispose.push(() => {
+        cancelled = true;
+      });
 
       const edgeLines = new Map<string, THREE.Line>();
       const edgeTags = new Map<string, { element: HTMLDivElement; marker: CSS2DObject }>();
@@ -255,6 +345,15 @@ export function GraphCanvas3D({
       };
       const showNodeTag = (id: string, show: boolean): void => showTag(nodeTags, id, show);
       const showEdgeTag = (id: string, show: boolean): void => showTag(edgeTags, id, show);
+      const resolveNodeId = (target: THREE.Object3D): string | null => {
+        let current: THREE.Object3D | null = target;
+        while (current) {
+          const id = current.userData.nodeId;
+          if (typeof id === "string") return id;
+          current = current.parent;
+        }
+        return null;
+      };
       const applySelection = (nodeIds: readonly string[], edgeIds: readonly string[]): void => {
         const nodes = new Set(nodeIds);
         const edges = new Set(edgeIds);
@@ -264,6 +363,11 @@ export function GraphCanvas3D({
             ? selectedMaterial
             : materialFor(mesh.userData.kind as string);
           mesh.scale.setScalar(selected ? SELECT_SCALE : 1);
+          const group = modelGroups.get(id);
+          if (group) {
+            const base = group.userData.baseScale as number;
+            group.scale.setScalar(base * (selected ? SELECT_SCALE : 1));
+          }
           if (id !== hoveredId) showNodeTag(id, selected);
         }
         for (const [id, line] of edgeLines) {
@@ -316,9 +420,10 @@ export function GraphCanvas3D({
         );
         raycaster.setFromCamera(pointer, camera);
         const live = useWorkspaceSelection.getState();
-        const nodeHit = raycaster.intersectObjects([...nodeMeshes.values()], false)[0];
-        if (nodeHit) {
-          live.selectNodes([nodeHit.object.userData.nodeId as string]);
+        const nodeHit = raycaster.intersectObjects(pickRoots, true)[0];
+        const nodeId = nodeHit ? resolveNodeId(nodeHit.object) : null;
+        if (nodeHit && nodeId) {
+          live.selectNodes([nodeId]);
           return;
         }
         const edgeHit = raycaster.intersectObjects([...edgeLines.values()], false)[0];
@@ -351,8 +456,8 @@ export function GraphCanvas3D({
           -((event.clientY - rect.top) / rect.height) * 2 + 1,
         );
         raycaster.setFromCamera(pointer, camera);
-        const hit = raycaster.intersectObjects([...nodeMeshes.values()], false)[0];
-        const id = hit ? (hit.object.userData.nodeId as string) : null;
+        const hit = raycaster.intersectObjects(pickRoots, true)[0];
+        const id = hit ? resolveNodeId(hit.object) : null;
         if (id === hoveredId) return;
         const store = useWorkspaceSelection.getState();
         if (hoveredId !== null && !store.selectedNodeIds.includes(hoveredId)) {
@@ -410,7 +515,7 @@ export function GraphCanvas3D({
       labelRenderer?.domElement.remove();
     };
     // Scene lifetime: rebuild per graph object; selection syncs via the store.
-  }, [graph, layout, entities, failed]);
+  }, [graph, layout, entities, assetSpecs, failed]);
 
   if (failed) {
     return (
@@ -441,7 +546,7 @@ export function GraphCanvas3D({
           Resolving component identities…
         </p>
       ) : null}
-      <EntityLegend entities={entities} />
+      <EntityLegend entities={entities} assetSummary={assetSummary} />
     </div>
   );
 }

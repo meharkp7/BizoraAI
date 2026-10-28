@@ -13,6 +13,8 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from bizora.assets.registry import AssetRegistry
+from bizora.contracts.assets import AssetProvenance
 from bizora.contracts.components import ComponentDetail
 from bizora.contracts.graph import GraphNode, MethodologyGraph
 from bizora.contracts.packs import (
@@ -74,6 +76,7 @@ class LexicalPack:
         entity_types: tuple[EntityTypeDef, ...],
         catalog: Sequence[dict[str, Any]],
         simulator_adapter_ids: tuple[str, ...] = (),
+        assets: AssetRegistry | None = None,
     ) -> None:
         self._pack_id = pack_id
         self._pack_version = pack_version
@@ -89,6 +92,7 @@ class LexicalPack:
         )
         self._catalog = tuple(ComponentDetail.model_validate(entry) for entry in catalog)
         self._simulators = simulator_adapter_ids
+        self._assets = assets
         self._vocabulary = PackVocabulary(
             kinds=tuple(
                 PackComponentKind(kind_id=item.type_id, display_label=item.display)
@@ -211,19 +215,36 @@ class LexicalPack:
             reason=f"No {self._display} catalog entry matches {ref.raw_text!r}.",
         )
 
+    @property
+    def asset_registry_version(self) -> str | None:
+        """Return the wired asset-registry version, or None when unwired."""
+        return self._assets.version if self._assets is not None else None
+
     def render_spec(self, resolution: PartResolution) -> RenderSpec:
         """Return the 3D render spec for one resolved part.
 
-        No asset registry exists yet (Phase 4), so every visual stays
-        illustrative; the asset key pins which entry it represents.
+        The resolution asset key looks up the wired asset registry: a
+        measured record yields its model URI as a measured visual, any
+        other match stays illustrative, and a miss keeps the previous
+        illustrative fallback pinned to the same key.
         """
         if resolution.level is ResolutionLevel.UNRESOLVED or resolution.kind_id is None:
             return RenderSpec(label="Unresolved part", illustrative=True)
         label = self._kind_labels.get(resolution.kind_id, resolution.kind_id)
+        fallback = resolution.asset_key or resolution.kind_id
+        if self._assets is not None and resolution.asset_key:
+            record = self._assets.get(resolution.asset_key)
+            if record is not None:
+                return RenderSpec(
+                    label=label,
+                    asset_uri=record.uri,
+                    fallback_package=fallback,
+                    illustrative=record.provenance is not AssetProvenance.MEASURED,
+                )
         return RenderSpec(
             label=label,
             asset_uri=None,
-            fallback_package=resolution.asset_key or resolution.kind_id,
+            fallback_package=fallback,
             illustrative=True,
         )
 
