@@ -1,0 +1,1822 @@
+{
+  "version": 1,
+  "papers": [
+    {
+      "components": [
+        {
+          "aliases": [
+            "U-net"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Fig. 1. U-net architecture"
+            }
+          ],
+          "name": "U-Net"
+        },
+        {
+          "aliases": [
+            "contracting network"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "contracting path"
+        },
+        {
+          "aliases": [
+            "expansive path"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "expanding path"
+        },
+        {
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "data augmentation"
+        },
+        {
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Fig. 2. Overlap-tile strategy"
+            }
+          ],
+          "name": "overlap-tile strategy"
+        },
+        {
+          "aliases": [
+            "ISBI cell tracking challenge"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Fig. 4. Result on the ISBI cell tracking challenge"
+            }
+          ],
+          "name": "ISBI segmentation benchmark"
+        },
+        {
+          "aliases": [
+            "sliding window CNN"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "sliding-window convolutional network"
+        }
+      ],
+      "domain_tags": [
+        "biomedical image segmentation",
+        "deep-learning"
+      ],
+      "evidence": [
+        {
+          "kind": "page",
+          "locator": "p.1"
+        }
+      ],
+      "paper_id": "unet-1505",
+      "pdf_path": "research_papers/1505.04597v1.pdf"
+    },
+    {
+      "components": [
+        {
+          "aliases": [
+            "attention model"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 1: The Transformer - model architecture"
+            }
+          ],
+          "name": "Transformer"
+        },
+        {
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "encoder"
+        },
+        {
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "decoder"
+        },
+        {
+          "aliases": [
+            "dot-product attention"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 2: Scaled Dot-Product Attention"
+            }
+          ],
+          "name": "scaled dot-product attention"
+        },
+        {
+          "aliases": [
+            "multihead attention"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 2: Multi-Head Attention"
+            }
+          ],
+          "name": "multi-head attention"
+        },
+        {
+          "aliases": [
+            "WMT14 en-de"
+          ],
+          "evidence": [
+            {
+              "kind": "table",
+              "locator": "Table 2: BLEU scores"
+            }
+          ],
+          "name": "WMT English-to-German translation"
+        },
+        {
+          "aliases": [
+            "WMT14 en-fr"
+          ],
+          "evidence": [
+            {
+              "kind": "table",
+              "locator": "Table 2: BLEU scores"
+            }
+          ],
+          "name": "WMT English-to-French translation"
+        }
+      ],
+      "domain_tags": [
+        "machine translation",
+        "deep-learning"
+      ],
+      "evidence": [
+        {
+          "kind": "page",
+          "locator": "p.1"
+        }
+      ],
+      "paper_id": "transformer-1706",
+      "pdf_path": "research_papers/1706.03762v7.pdf"
+    },
+    {
+      "components": [
+        {
+          "aliases": [
+            "MobileNet v2"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "MobileNetV2"
+        },
+        {
+          "aliases": [
+            "inverted residuals"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "inverted residual block"
+        },
+        {
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "linear bottleneck"
+        },
+        {
+          "aliases": [
+            "depthwise separable convolution"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 2: separable convolution blocks"
+            }
+          ],
+          "name": "depthwise convolution"
+        },
+        {
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "SSDLite"
+        },
+        {
+          "aliases": [
+            "Mobile DeepLab v3"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "Mobile DeepLabv3"
+        },
+        {
+          "aliases": [
+            "ImageNet"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "ImageNet classification"
+        },
+        {
+          "aliases": [
+            "COCO detection"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "COCO object detection"
+        }
+      ],
+      "domain_tags": [
+        "mobile computer vision",
+        "deep-learning"
+      ],
+      "evidence": [
+        {
+          "kind": "page",
+          "locator": "p.1"
+        }
+      ],
+      "paper_id": "mobilenetv2-1801",
+      "pdf_path": "research_papers/1801.04381v4.pdf"
+    },
+    {
+      "components": [
+        {
+          "aliases": [
+            "DDPM",
+            "diffusion model"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "diffusion probabilistic model"
+        },
+        {
+          "aliases": [
+            "variational bound"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "weighted variational bound"
+        },
+        {
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "denoising score matching"
+        },
+        {
+          "aliases": [
+            "Langevin sampling"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "Langevin dynamics"
+        },
+        {
+          "aliases": [
+            "CIFAR-10"
+          ],
+          "evidence": [
+            {
+              "kind": "table",
+              "locator": "Table 1: CIFAR10 results"
+            }
+          ],
+          "name": "CIFAR10 benchmark"
+        },
+        {
+          "aliases": [
+            "Frechet Inception Distance"
+          ],
+          "evidence": [
+            {
+              "kind": "table",
+              "locator": "Table 1: FID scores"
+            }
+          ],
+          "name": "FID score"
+        }
+      ],
+      "domain_tags": [
+        "generative image modeling",
+        "deep-learning"
+      ],
+      "evidence": [
+        {
+          "kind": "page",
+          "locator": "p.1"
+        }
+      ],
+      "paper_id": "ddpm-2006",
+      "pdf_path": "research_papers/2006.11239v2.pdf"
+    },
+    {
+      "components": [
+        {
+          "aliases": [
+            "wav2vec2"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 1: framework illustration"
+            }
+          ],
+          "name": "wav2vec 2.0"
+        },
+        {
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "latent speech representations"
+        },
+        {
+          "aliases": [
+            "contrastive pretraining"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "contrastive task"
+        },
+        {
+          "aliases": [
+            "quantized representations"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "representation quantization"
+        },
+        {
+          "aliases": [
+            "supervised fine-tuning"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "fine-tuning on transcribed speech"
+        },
+        {
+          "aliases": [
+            "Librispeech ASR"
+          ],
+          "evidence": [
+            {
+              "kind": "table",
+              "locator": "Table 1: WER on Librispeech"
+            }
+          ],
+          "name": "Librispeech benchmark"
+        }
+      ],
+      "domain_tags": [
+        "self-supervised speech representations",
+        "deep-learning"
+      ],
+      "evidence": [
+        {
+          "kind": "page",
+          "locator": "p.1"
+        }
+      ],
+      "paper_id": "wav2vec2-2006",
+      "pdf_path": "research_papers/2006.11477v3.pdf"
+    },
+    {
+      "components": [
+        {
+          "aliases": [
+            "ViT"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 1: Model overview"
+            }
+          ],
+          "name": "Vision Transformer"
+        },
+        {
+          "aliases": [
+            "patch embeddings"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 1: image patches"
+            }
+          ],
+          "name": "image patch embedding"
+        },
+        {
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "pure transformer encoder"
+        },
+        {
+          "aliases": [
+            "JFT"
+          ],
+          "evidence": [
+            {
+              "kind": "table",
+              "locator": "Table 2: state-of-the-art comparison"
+            }
+          ],
+          "name": "JFT-300M pretraining"
+        },
+        {
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 2: VTAB performance"
+            }
+          ],
+          "name": "VTAB benchmark"
+        },
+        {
+          "aliases": [
+            "ImageNet"
+          ],
+          "evidence": [
+            {
+              "kind": "table",
+              "locator": "Table 2: image classification benchmarks"
+            }
+          ],
+          "name": "image classification"
+        }
+      ],
+      "domain_tags": [
+        "image recognition",
+        "deep-learning"
+      ],
+      "evidence": [
+        {
+          "kind": "page",
+          "locator": "p.1"
+        }
+      ],
+      "held_out": true,
+      "paper_id": "vit-2010",
+      "pdf_path": "research_papers/2010.11929v2.pdf"
+    },
+    {
+      "components": [
+        {
+          "aliases": [
+            "low-rank adaptation"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "LoRA"
+        },
+        {
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "frozen pretrained model weights"
+        },
+        {
+          "aliases": [
+            "rank decomposition"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 1: reparameterization"
+            }
+          ],
+          "name": "trainable rank decomposition matrices"
+        },
+        {
+          "aliases": [
+            "GPT3"
+          ],
+          "evidence": [
+            {
+              "kind": "table",
+              "locator": "Table 4: GPT-3 175B"
+            }
+          ],
+          "name": "GPT-3 175B"
+        },
+        {
+          "aliases": [
+            "GPT2"
+          ],
+          "evidence": [
+            {
+              "kind": "table",
+              "locator": "Table 3: GPT-2 E2E NLG"
+            }
+          ],
+          "name": "GPT-2 adaptation"
+        },
+        {
+          "aliases": [
+            "E2E benchmark"
+          ],
+          "evidence": [
+            {
+              "kind": "table",
+              "locator": "Table 3: E2E NLG challenge"
+            }
+          ],
+          "name": "E2E NLG benchmark"
+        }
+      ],
+      "domain_tags": [
+        "parameter-efficient fine-tuning",
+        "deep-learning"
+      ],
+      "evidence": [
+        {
+          "kind": "page",
+          "locator": "p.1"
+        }
+      ],
+      "paper_id": "lora-2106",
+      "pdf_path": "research_papers/2106.09685v2.pdf"
+    },
+    {
+      "components": [
+        {
+          "aliases": [
+            "diffusion policy"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 2. Diffusion Policy Overview"
+            }
+          ],
+          "name": "Diffusion Policy"
+        },
+        {
+          "aliases": [
+            "conditional diffusion"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "conditional denoising diffusion process"
+        },
+        {
+          "aliases": [
+            "robot policy"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 1. Policy Representations"
+            }
+          ],
+          "name": "visuomotor policy"
+        },
+        {
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "Langevin dynamics inference"
+        },
+        {
+          "aliases": [
+            "score function"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "action-distribution score function"
+        },
+        {
+          "aliases": [
+            "manipulation benchmarks"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "robot manipulation benchmarks"
+        }
+      ],
+      "domain_tags": [
+        "robot visuomotor control",
+        "deep-learning"
+      ],
+      "evidence": [
+        {
+          "kind": "page",
+          "locator": "p.1"
+        }
+      ],
+      "paper_id": "diffusion-policy-2303",
+      "pdf_path": "research_papers/2303.04137v5.pdf"
+    },
+    {
+      "components": [
+        {
+          "aliases": [
+            "residual network",
+            "ResNet"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 2. Residual learning building block"
+            }
+          ],
+          "name": "residual learning framework"
+        },
+        {
+          "aliases": [
+            "residual block"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 2. Residual learning"
+            }
+          ],
+          "name": "residual building block"
+        },
+        {
+          "aliases": [
+            "skip connections"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 3. shortcut connections"
+            }
+          ],
+          "name": "shortcut connections"
+        },
+        {
+          "aliases": [
+            "ResNet-152"
+          ],
+          "evidence": [
+            {
+              "kind": "table",
+              "locator": "Table 1. Architectures for ImageNet"
+            }
+          ],
+          "name": "152-layer network"
+        },
+        {
+          "aliases": [
+            "ILSVRC 2015"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "ImageNet classification"
+        },
+        {
+          "aliases": [
+            "CIFAR10"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 1. Training error on CIFAR-10"
+            }
+          ],
+          "name": "CIFAR-10 analysis"
+        }
+      ],
+      "domain_tags": [
+        "image recognition",
+        "deep-learning"
+      ],
+      "evidence": [
+        {
+          "kind": "page",
+          "locator": "p.1"
+        }
+      ],
+      "paper_id": "resnet-he",
+      "pdf_path": "research_papers/He_Deep_Residual_Learning_CVPR_2016_paper.pdf"
+    },
+    {
+      "components": [
+        {
+          "aliases": [
+            "comparator PUF"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Fig. 1. Architecture of the proposed PUF"
+            }
+          ],
+          "name": "cross-coupled comparator PUF"
+        },
+        {
+          "aliases": [
+            "positive feedback"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Fig. 4. Positive feedback mechanism"
+            }
+          ],
+          "name": "positive feedback response generation"
+        },
+        {
+          "aliases": [
+            "sense amp"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "sense amplifier"
+        },
+        {
+          "aliases": [
+            "CTAT and PTAT"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "temperature compensation"
+        },
+        {
+          "aliases": [
+            "65nm CMOS"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "65 nm CMOS fabrication"
+        },
+        {
+          "aliases": [
+            "PUF bitcell"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "bit cell"
+        }
+      ],
+      "domain_tags": [
+        "hardware security",
+        "electronics"
+      ],
+      "evidence": [
+        {
+          "kind": "page",
+          "locator": "p.1"
+        }
+      ],
+      "paper_id": "puf-comparator-a1036",
+      "pdf_path": "research_papers/A 1036 F2bit High Reliability Temperature.pdf"
+    },
+    {
+      "components": [
+        {
+          "aliases": [
+            "SRAM cell"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "FIGURE 1. SRAM-based PUF cell"
+            }
+          ],
+          "name": "SRAM-based PUF cell"
+        },
+        {
+          "aliases": [
+            "two bits per cell"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "2 bits per cell"
+        },
+        {
+          "aliases": [
+            "preselection test"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "tilting preselection test"
+        },
+        {
+          "aliases": [
+            "bit error rate"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "BER"
+        },
+        {
+          "aliases": [
+            "metastable cell"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "FIGURE 1. metastability PUF cell"
+            }
+          ],
+          "name": "metastability"
+        }
+      ],
+      "domain_tags": [
+        "hardware security",
+        "electronics"
+      ],
+      "evidence": [
+        {
+          "kind": "page",
+          "locator": "p.1"
+        }
+      ],
+      "paper_id": "sram-puf-tilting",
+      "pdf_path": "research_papers/A_2_Bit_Cell_Tilting_SRAM-Based_PUF_With_a_BER_of_3.1E-10_and_an_Energy_of_21_FJ_Bit_in_65nm.pdf"
+    },
+    {
+      "components": [
+        {
+          "aliases": [
+            "weak PUFs"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "weak physically unclonable function"
+        },
+        {
+          "aliases": [
+            "CMOS entropy"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "CMOS manufacturing entropy source"
+        },
+        {
+          "aliases": [
+            "mismatch PUF"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 2. mismatch-based PUF classes"
+            }
+          ],
+          "name": "mismatch-based PUF"
+        },
+        {
+          "aliases": [
+            "delay PUF"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 3. delay-based solutions"
+            }
+          ],
+          "name": "delay-based PUF"
+        },
+        {
+          "aliases": [
+            "SRAM PUF"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 4. SRAM-based solutions"
+            }
+          ],
+          "name": "SRAM-based PUF"
+        },
+        {
+          "aliases": [
+            "stability enhancement"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "post-silicon stability enhancement"
+        },
+        {
+          "aliases": [
+            "FOMs"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 1. Figures of Merit"
+            }
+          ],
+          "name": "figures of merit"
+        }
+      ],
+      "domain_tags": [
+        "hardware security",
+        "electronics"
+      ],
+      "evidence": [
+        {
+          "kind": "page",
+          "locator": "p.1"
+        }
+      ],
+      "paper_id": "puf-review-chips",
+      "pdf_path": "research_papers/chips-04-00003-v2.pdf"
+    },
+    {
+      "components": [
+        {
+          "aliases": [
+            "SRAM PUFs"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 1.1: SRAM circuit"
+            }
+          ],
+          "name": "SRAM PUF authentication"
+        },
+        {
+          "aliases": [
+            "aging effects"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 2.2: Aging processes in 6-transistor SRAM"
+            }
+          ],
+          "name": "aging classification"
+        },
+        {
+          "aliases": [
+            "manufacturer ID"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "manufacturer identification"
+        },
+        {
+          "aliases": [
+            "process variation"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 1.2: process variations"
+            }
+          ],
+          "name": "process variations"
+        },
+        {
+          "aliases": [
+            "counterfeit IC detection"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "counterfeit detection"
+        }
+      ],
+      "domain_tags": [
+        "hardware security",
+        "electronics"
+      ],
+      "evidence": [
+        {
+          "kind": "page",
+          "locator": "p.1"
+        }
+      ],
+      "paper_id": "ai-sram-puf-thesis",
+      "pdf_path": "research_papers/AI-Enabled Hardware Security Approach for Aging Classification an.pdf"
+    },
+    {
+      "components": [
+        {
+          "aliases": [
+            "nanosheet FET"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "FIGURE 1. Overview of the work"
+            }
+          ],
+          "name": "NSFET"
+        },
+        {
+          "aliases": [
+            "complementary FET"
+          ],
+          "evidence": [
+            {
+              "kind": "table",
+              "locator": "TABLE 1. CFET parameters"
+            }
+          ],
+          "name": "CFET"
+        },
+        {
+          "aliases": [
+            "self heating"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "FIGURE 1. Self-heating analysis"
+            }
+          ],
+          "name": "self-heating analysis"
+        },
+        {
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "aging effects"
+        },
+        {
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "parasitics effects"
+        },
+        {
+          "aliases": [
+            "IV characteristics"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "FIGURE 2. I-V characteristics"
+            }
+          ],
+          "name": "I-V characteristics"
+        }
+      ],
+      "domain_tags": [
+        "device reliability",
+        "electronics"
+      ],
+      "evidence": [
+        {
+          "kind": "page",
+          "locator": "p.1"
+        }
+      ],
+      "held_out": true,
+      "paper_id": "nsfet-aging",
+      "pdf_path": "research_papers/Impact_of_Aging_Self-Heating_and_Parasitics_Effects_on_NSFET_and_CFET.pdf"
+    },
+    {
+      "components": [
+        {
+          "aliases": [
+            "negative bias temperature instability"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "NBTI"
+        },
+        {
+          "aliases": [
+            "p-channel MOS"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "FIGURE 1. PMOS threshold voltage"
+            }
+          ],
+          "name": "PMOS transistor"
+        },
+        {
+          "aliases": [
+            "6T cell"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "FIGURE 2. Standard 6T SRAM cell"
+            }
+          ],
+          "name": "6T SRAM cell"
+        },
+        {
+          "aliases": [
+            "SNM"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "FIGURE 3. SNM variation"
+            }
+          ],
+          "name": "static noise margin"
+        },
+        {
+          "aliases": [
+            "standby leakage"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "FIGURE 1. standby leakage current"
+            }
+          ],
+          "name": "standby leakage current"
+        },
+        {
+          "aliases": [
+            "current mirror monitor"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "diode-connected current mirror monitor"
+        }
+      ],
+      "domain_tags": [
+        "device reliability",
+        "electronics"
+      ],
+      "evidence": [
+        {
+          "kind": "page",
+          "locator": "p.1"
+        }
+      ],
+      "held_out": true,
+      "paper_id": "nbti-monitor-bhootda",
+      "pdf_path": "research_papers/bhootda2021.pdf"
+    },
+    {
+      "components": [
+        {
+          "aliases": [
+            "leakage monitor"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "runtime leakage current monitoring"
+        },
+        {
+          "aliases": [
+            "body bias generator"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "body-bias-voltage-generator circuit"
+        },
+        {
+          "aliases": [
+            "6T cell"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 2. 6T SRAM cell"
+            }
+          ],
+          "name": "6T SRAM cell"
+        },
+        {
+          "aliases": [
+            "PV and BTI mitigation"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "variation compensation"
+        },
+        {
+          "aliases": [
+            "PMOS Vt shift"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 1. Threshold voltage variation of PMOS"
+            }
+          ],
+          "name": "threshold voltage variation"
+        }
+      ],
+      "domain_tags": [
+        "device reliability",
+        "electronics"
+      ],
+      "evidence": [
+        {
+          "kind": "page",
+          "locator": "p.1"
+        }
+      ],
+      "paper_id": "leakage-monitor-electronics09",
+      "pdf_path": "research_papers/electronics-09-00326-v3.pdf"
+    },
+    {
+      "components": [
+        {
+          "aliases": [
+            "AFE"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 1. Overall system diagram"
+            }
+          ],
+          "name": "analog front-end circuit"
+        },
+        {
+          "aliases": [
+            "baseline correction"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "rail-to-rail baseline compensation"
+        },
+        {
+          "aliases": [
+            "offset cancellation"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "offset elimination"
+        },
+        {
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "self-zeroing"
+        },
+        {
+          "aliases": [
+            "CDS"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "correlated double sampling"
+        },
+        {
+          "aliases": [
+            "sensor readout"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 3. Capacitive sensor acquisition"
+            }
+          ],
+          "name": "sensor acquisition circuit"
+        }
+      ],
+      "domain_tags": [
+        "sensor interface circuits",
+        "electronics"
+      ],
+      "evidence": [
+        {
+          "kind": "page",
+          "locator": "p.1"
+        }
+      ],
+      "paper_id": "analog-frontend-electronics12",
+      "pdf_path": "research_papers/electronics-12-02962.pdf"
+    },
+    {
+      "components": [
+        {
+          "aliases": [
+            "MO scheme",
+            "multiple observations"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 5. MO helper data scheme"
+            }
+          ],
+          "name": "multiple-observations helper data"
+        },
+        {
+          "aliases": [
+            "SRAM enrollment"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "SRAM-PUF enrollment observations"
+        },
+        {
+          "aliases": [
+            "key binding"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 1. Key binding scheme"
+            }
+          ],
+          "name": "secret-key binding"
+        },
+        {
+          "aliases": [
+            "secret key capacity"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 4. Secret-key capacity"
+            }
+          ],
+          "name": "secret-key capacity"
+        },
+        {
+          "aliases": [
+            "LDPC code"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "error-correcting code"
+        },
+        {
+          "aliases": [
+            "Monte Carlo evaluation"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "Monte Carlo simulations"
+        },
+        {
+          "aliases": [
+            "SD scheme"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "soft-decision helper data scheme"
+        }
+      ],
+      "domain_tags": [
+        "hardware security",
+        "electronics"
+      ],
+      "evidence": [
+        {
+          "kind": "page",
+          "locator": "p.1"
+        }
+      ],
+      "paper_id": "secret-key-entropy",
+      "pdf_path": "research_papers/entropy-23-00590-v2.pdf"
+    },
+    {
+      "components": [
+        {
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "ESP32"
+        },
+        {
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "Arduino"
+        },
+        {
+          "aliases": [
+            "TTGO T8"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 1. LilyGO TTGO T8 module"
+            }
+          ],
+          "name": "LilyGO TTGO T8"
+        },
+        {
+          "aliases": [
+            "Analog Discovery"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 2. Digilent Analog Discovery 2"
+            }
+          ],
+          "name": "Analog Discovery 2"
+        },
+        {
+          "aliases": [
+            "student IoT projects"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "IoT course projects"
+        }
+      ],
+      "domain_tags": [
+        "iot education",
+        "iot"
+      ],
+      "evidence": [
+        {
+          "kind": "page",
+          "locator": "p.1"
+        }
+      ],
+      "held_out": true,
+      "paper_id": "esp32-education-sensors",
+      "pdf_path": "research_papers/sensors-23-06739-v2.pdf"
+    },
+    {
+      "components": [
+        {
+          "aliases": [
+            "robot grippers"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "robotic arm grippers"
+        },
+        {
+          "aliases": [
+            "actuation"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "actuation mechanism"
+        },
+        {
+          "aliases": [
+            "grasping modes"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 2. gripping modes"
+            }
+          ],
+          "name": "gripping mode classification"
+        },
+        {
+          "aliases": [
+            "underconstrained mechanism"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 3. underconstrained mechanism"
+            }
+          ],
+          "name": "underactuated mechanism"
+        },
+        {
+          "aliases": [
+            "gripper comparison"
+          ],
+          "evidence": [
+            {
+              "kind": "table",
+              "locator": "Table 1. Categories of robotic grippers"
+            }
+          ],
+          "name": "design comparison"
+        }
+      ],
+      "domain_tags": [
+        "robotic grippers",
+        "generic"
+      ],
+      "evidence": [
+        {
+          "kind": "page",
+          "locator": "p.1"
+        }
+      ],
+      "held_out": true,
+      "paper_id": "gripper-review-robotics",
+      "pdf_path": "research_papers/robotics-12-00005-v2.pdf"
+    },
+    {
+      "components": [
+        {
+          "aliases": [
+            "Dobot arm"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "Dobot CR5"
+        },
+        {
+          "aliases": [
+            "dual-finger gripper"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 2. parallel dual-finger gripper"
+            }
+          ],
+          "name": "parallel dual-finger gripper"
+        },
+        {
+          "aliases": [
+            "linkage gripper"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 3. micro-servo linkage gripper"
+            }
+          ],
+          "name": "micro-servo linkage gripper"
+        },
+        {
+          "aliases": [
+            "three finger gripper"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 4. concentric three-finger gripper"
+            }
+          ],
+          "name": "concentric three-finger gripper"
+        },
+        {
+          "aliases": [
+            "ultrasonic sensor"
+          ],
+          "evidence": [
+            {
+              "kind": "figure",
+              "locator": "Figure 5. HC-SR04 proximity"
+            }
+          ],
+          "name": "HC-SR04 proximity sensing"
+        },
+        {
+          "aliases": [
+            "force feedback"
+          ],
+          "evidence": [
+            {
+              "kind": "page",
+              "locator": "p.1"
+            }
+          ],
+          "name": "FSR force feedback"
+        }
+      ],
+      "domain_tags": [
+        "robotic grippers",
+        "generic"
+      ],
+      "evidence": [
+        {
+          "kind": "page",
+          "locator": "p.1"
+        }
+      ],
+      "paper_id": "gripper-design-engproc",
+      "pdf_path": "research_papers/engproc-145-00022.pdf"
+    }
+  ]
+}

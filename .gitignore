@@ -69,3 +69,14 @@ node_modules/
 frontend/test-results/
 frontend/playwright-report/
 frontend/playwright/.auth/
+
+# Gold-set PDFs are local-only (licensed papers, never committed)
+tests/gold/papers/*
+!tests/gold/papers/.gitkeep
+
+# User-supplied paper corpus and eval draft cache (never committed)
+research_papers/
+tests/gold/.cache/
+
+# Parallel-phase git worktrees (scratch checkouts, never committed)
+.worktrees/
