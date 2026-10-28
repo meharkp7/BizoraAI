@@ -8,7 +8,7 @@ the pack data modules, never in this logic.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Any
 
 from pydantic import ValidationError
@@ -29,6 +29,7 @@ from bizora.contracts.packs import (
     RenderSpec,
     ResolutionConfidence,
     ResolutionLevel,
+    SimulationPreview,
 )
 from bizora.contracts.patches import GraphPatch, PatchOperation
 from bizora.core.entity_registry import (
@@ -77,6 +78,9 @@ class LexicalPack:
         catalog: Sequence[dict[str, Any]],
         simulator_adapter_ids: tuple[str, ...] = (),
         assets: AssetRegistry | None = None,
+        simulation_preview_builder: (
+            Callable[[MethodologyGraph], SimulationPreview | None] | None
+        ) = None,
     ) -> None:
         self._pack_id = pack_id
         self._pack_version = pack_version
@@ -93,6 +97,7 @@ class LexicalPack:
         self._catalog = tuple(ComponentDetail.model_validate(entry) for entry in catalog)
         self._simulators = simulator_adapter_ids
         self._assets = assets
+        self._preview_builder = simulation_preview_builder
         self._vocabulary = PackVocabulary(
             kinds=tuple(
                 PackComponentKind(kind_id=item.type_id, display_label=item.display)
@@ -288,6 +293,12 @@ class LexicalPack:
             )
             for missing in compatibility.missing_interfaces
         )
+
+    def simulation_preview(self, graph: MethodologyGraph) -> SimulationPreview | None:
+        """Return the wired builder's preview, or None when the pack offers none."""
+        if self._preview_builder is None:
+            return None
+        return self._preview_builder(graph)
 
     def _match_exact(self, part_number: str | None) -> ComponentDetail | None:
         if not part_number:

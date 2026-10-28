@@ -51,9 +51,9 @@ def test_routing_tie_order_is_preserved() -> None:
     assert isinstance(registry, PackRegistry)
 
 
-def test_pack_advertises_torch_adapter() -> None:
-    """The pack honestly reports the training adapter it can run."""
-    assert deep_learning.pack.simulator_adapter_ids == ("bizora.torch-train",)
+def test_pack_reports_no_runnable_adapter_yet() -> None:
+    """No runnable adapter until torch/Modal execution exists; flip with registry."""
+    assert deep_learning.pack.simulator_adapter_ids == ()
     assert deep_learning.TORCH_ADAPTER_ID == "bizora.torch-train"
 
 

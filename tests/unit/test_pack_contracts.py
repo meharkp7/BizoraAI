@@ -19,6 +19,7 @@ from bizora.contracts.packs import (
     RenderSpec,
     ResolutionConfidence,
     ResolutionLevel,
+    SimulationPreview,
     normalize_tag_label,
 )
 from bizora.contracts.patches import GraphPatch
@@ -77,6 +78,9 @@ class ToyPack:
         self, graph: MethodologyGraph, patch: GraphPatch
     ) -> tuple[PackPreflightFinding, ...]:
         return ()
+
+    def simulation_preview(self, graph: MethodologyGraph) -> SimulationPreview | None:
+        return None
 
 
 def test_domain_tags_accept_open_vocabulary() -> None:

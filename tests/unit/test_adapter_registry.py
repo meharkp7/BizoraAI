@@ -54,7 +54,10 @@ def test_default_registry_resolves_test_adapter() -> None:
     adapter = registry.resolve("bizora.deterministic-test", "0.1.0")
 
     assert isinstance(adapter, DeterministicTestAdapter)
-    assert registry.available() == (("bizora.deterministic-test", "0.1.0"),)
+    assert registry.available() == (
+        ("bizora.deterministic-test", "0.1.0"),
+        ("bizora.ngspice", "0.1.0"),
+    )
 
 
 def test_resolve_rejects_unknown_adapter_id() -> None:
@@ -66,7 +69,8 @@ def test_resolve_rejects_unknown_adapter_id() -> None:
     assert exc_info.value.code == ErrorCode.INVALID_REQUEST
     assert exc_info.value.details["adapter_id"] == "bizora.unknown"
     assert exc_info.value.details["available"] == [
-        {"adapter_id": "bizora.deterministic-test", "adapter_version": "0.1.0"}
+        {"adapter_id": "bizora.deterministic-test", "adapter_version": "0.1.0"},
+        {"adapter_id": "bizora.ngspice", "adapter_version": "0.1.0"},
     ]
 
 

@@ -8,6 +8,7 @@ from bizora.contracts.domain import (
     ReplacementCompatibility,
 )
 from bizora.contracts.graph import GraphNode, MethodologyGraph
+from bizora.contracts.packs import SimulationPreview
 from bizora.core.entity_registry import (
     DomainProfile,
     check_compatible,
@@ -15,7 +16,7 @@ from bizora.core.entity_registry import (
     resolve_generic,
     resolve_node,
 )
-from bizora.packs import ProfiledPack, default_registry
+from bizora.packs import DomainPack, ProfiledPack, default_registry
 
 
 def profile_for_domain(pack_id: str) -> DomainProfile | None:
@@ -35,6 +36,20 @@ def _brief_text(graph: MethodologyGraph) -> str:
     parts.extend(brief.findings)
     parts.extend(brief.limitations)
     return " ".join(parts)
+
+
+def pack_for_graph(graph: MethodologyGraph) -> DomainPack | None:
+    """Return the routed pack for one graph revision, or None when generic."""
+    classification = classify_graph(graph)
+    return default_registry().get(classification.domain)
+
+
+def preview_graph(graph: MethodologyGraph) -> SimulationPreview | None:
+    """Return the routed pack's simulation preview, or None when absent."""
+    pack = pack_for_graph(graph)
+    if pack is None:
+        return None
+    return pack.simulation_preview(graph)
 
 
 def classify_graph(graph: MethodologyGraph) -> DomainClassification:

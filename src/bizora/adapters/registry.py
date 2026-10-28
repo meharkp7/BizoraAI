@@ -48,7 +48,8 @@ class AdapterRegistry:
 
 
 def create_default_registry() -> AdapterRegistry:
-    """Return a registry with the built-in deterministic test adapter."""
+    """Return a registry with the built-in execution adapters."""
     from bizora.adapters.deterministic_test import DeterministicTestAdapter
+    from bizora.adapters.ngspice_adapter import NgspiceAdapter
 
-    return AdapterRegistry([DeterministicTestAdapter()])
+    return AdapterRegistry([DeterministicTestAdapter(), NgspiceAdapter()])

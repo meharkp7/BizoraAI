@@ -19,6 +19,7 @@ from bizora.contracts.packs import (
     PartRef,
     PartResolution,
     RenderSpec,
+    SimulationPreview,
 )
 from bizora.contracts.patches import GraphPatch
 
@@ -72,6 +73,10 @@ class DomainPack(Protocol):
         self, graph: MethodologyGraph, patch: GraphPatch
     ) -> tuple[PackPreflightFinding, ...]:
         """Return pack-rule findings for a proposed edit; empty means clear."""
+        ...
+
+    def simulation_preview(self, graph: MethodologyGraph) -> SimulationPreview | None:
+        """Return what this pack would simulate, or None when it offers none."""
         ...
 
 

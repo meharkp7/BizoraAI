@@ -63,10 +63,11 @@ flow drove the actual UI and persisted real revisions and runs.
 
 ## Unsupported (explicitly reported in the UI)
 
-- Domain simulators: SPICE-class circuit simulation,
-  hardware-in-the-loop, and LLM inference have no registered adapter.
-  The run panel and the copilot both say so; runs perform genuine
-  deterministic validation only.
+- Domain simulators: hardware-in-the-loop, ML training, and LLM
+  inference have no runnable adapter. The run panel and the copilot
+  both say so. SPICE-class simulation IS connected (bizora.ngspice,
+  Phase 5); torch training code exists but cannot execute anywhere
+  yet (no torch locally, no Modal credentials).
 - LLM-backed copilot: the copilot is a deterministic intent engine over
   the catalog and graph state. Free-form questions outside its intents
   fall back to library search or help text.
@@ -88,11 +89,10 @@ flow drove the actual UI and persisted real revisions and runs.
    blocks) once a demo graph needs them.
    Dependencies: none. Acceptance: catalog tests pass; entries appear
    in library search.
-4. Add a SPICE-class adapter (e.g. ngspice-backed) for electronics
-   graphs behind the adapter registry with isolation review.
-   Dependencies: adapter interface, sandboxing decision, docs/security
-   update. Acceptance: an SRAM revision runs end-to-end and reports
-   measured metrics with `measured` result kind. Demo: run detail page.
+4. DONE (Phase 5): ngspice adapter registered; divider-circuit edit
+   moves measured v(out) 2.5V->3.75V; run detail shows `measured`
+   metrics. Follow-up: KiCad export, Renode/QEMU evaluation, board
+   layout view (brief Phase 5 steps 2-3, 5).
 5. Validate UPDATE_NODE_CONFIG payloads against the component config
    schema when the node carries a catalog identity.
    Dependencies: node-to-component linkage on replacement. Acceptance:

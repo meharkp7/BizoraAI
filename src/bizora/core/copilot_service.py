@@ -231,12 +231,13 @@ def answer_copilot(
     if any(word in lowered for word in ("run", "execute", "simulate", "simulation")):
         return CopilotResponse(
             reply=(
-                "The only connected execution adapter is bizora.deterministic-test, "
+                "Two execution adapters are connected: bizora.deterministic-test, "
                 "which validates the revision and persists a real run record "
-                "(status, seed, graph version). Domain simulators (SPICE-class circuit "
-                "simulation, hardware-in-the-loop, LLM inference) are not connected, "
-                "so I cannot execute those here. Use Run revision for a genuine "
-                "validation run, and treat anything else as unsupported."
+                "(status, seed, graph version), and bizora.ngspice, which runs "
+                "real SPICE-class circuit simulations for graphs with simulatable "
+                "nodes. Hardware-in-the-loop, ML training, and LLM inference are "
+                "not connected, so I cannot execute those here. Use Run revision "
+                "for a genuine run, and treat anything else as unsupported."
             ),
             cards=(),
         )

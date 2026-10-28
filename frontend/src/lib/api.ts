@@ -22,6 +22,7 @@ import type {
   PaperUpload,
   ParsedPaper,
   RunComparison,
+  SimulationPreview,
 } from "./types.ts";
 
 export class BizoraApiError extends Error {
@@ -166,6 +167,16 @@ export const api = {
   ): Promise<GraphEntities> {
     return request(
       `/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/revisions/${version}/entities`,
+    );
+  },
+
+  getSimulationPreview(
+    projectId: string,
+    graphId: string,
+    version: number,
+  ): Promise<SimulationPreview> {
+    return request(
+      `/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/revisions/${version}/simulation-preview`,
     );
   },
 

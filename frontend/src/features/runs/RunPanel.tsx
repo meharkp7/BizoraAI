@@ -5,8 +5,8 @@ import { useAdapters, useCreateRun, useExecuteRun } from "../../app/queries.ts";
 import type { ExperimentConfig, MethodologyGraph } from "../../lib/types.ts";
 import styles from "./RunPanel.module.css";
 
-const ADAPTER_ID = "bizora.deterministic-test";
-const ADAPTER_VERSION = "0.1.0";
+const DEFAULT_ADAPTER_ID = "bizora.deterministic-test";
+const DEFAULT_ADAPTER_VERSION = "0.1.0";
 
 function suggestRunId(experimentId: string, version: number): string {
   const stamp = Date.now().toString(36);
@@ -22,12 +22,16 @@ export function RunPanel({
 }) {
   const [experimentId, setExperimentId] = useState(`exp-${graph.graph_id}-v${graph.version}`);
   const [seed, setSeed] = useState("42");
+  const [adapterId, setAdapterId] = useState(DEFAULT_ADAPTER_ID);
   const [failure, setFailure] = useState<string | null>(null);
   const [finishedRunId, setFinishedRunId] = useState<string | null>(null);
   const createRun = useCreateRun();
   const executeRun = useExecuteRun();
   const adapters = useAdapters();
   const busy = createRun.isPending || executeRun.isPending;
+  const options = adapters.data ?? [];
+  const selected = options.find((adapter) => adapter.adapter_id === adapterId) ?? null;
+  const adapterVersion = selected?.adapter_version ?? DEFAULT_ADAPTER_VERSION;
 
   function submit(event: FormEvent): void {
     event.preventDefault();
@@ -41,8 +45,8 @@ export function RunPanel({
       project_id: projectId,
       graph_id: graph.graph_id,
       graph_version: graph.version,
-      adapter_id: ADAPTER_ID,
-      adapter_version: ADAPTER_VERSION,
+      adapter_id: adapterId,
+      adapter_version: adapterVersion,
       dataset_id: graph.graph_id,
       dataset_revision: `v${graph.version}`,
       seed: seedValue,
@@ -76,8 +80,8 @@ export function RunPanel({
     <section className={styles.panel} aria-label="Run revision">
       <h2>Run revision</h2>
       <p className={styles.hint}>
-        Validate v{graph.version} with the deterministic adapter and inspect the
-        persisted run.
+        Run v{graph.version} with the selected adapter and inspect the persisted
+        run.
       </p>
       <p className={styles.hint}>
         Connected adapters:{" "}
@@ -85,12 +89,28 @@ export function RunPanel({
           ? adapters.data.map((adapter) => adapter.adapter_id).join(", ")
           : "loading…"}
       </p>
+      {selected ? <p className={styles.hint}>{selected.description}</p> : null}
       <p className={styles.hint}>
-        Domain simulators (SPICE-class circuit simulation, hardware-in-the-loop,
-        LLM inference) are not connected; this run performs genuine deterministic
-        validation only, never a simulated experiment.
+        Hardware-in-the-loop, ML training, and LLM inference are not connected.
       </p>
       <form className={styles.form} onSubmit={submit}>
+        <label>
+          Adapter
+          <select
+            value={adapterId}
+            onChange={(event) => setAdapterId(event.target.value)}
+            disabled={options.length === 0}
+          >
+            {options.map((adapter) => (
+              <option key={adapter.adapter_id} value={adapter.adapter_id}>
+                {adapter.adapter_id} ({adapter.adapter_version})
+              </option>
+            ))}
+            {options.length === 0 ? (
+              <option value={adapterId}>{adapterId}</option>
+            ) : null}
+          </select>
+        </label>
         <label>
           Experiment ID
           <input

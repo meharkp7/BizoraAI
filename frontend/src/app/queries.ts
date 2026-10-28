@@ -1,7 +1,7 @@
 /* TanStack Query hooks over the Bizora API. */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "../lib/api.ts";
+import { BizoraApiError, api } from "../lib/api.ts";
 import type {
   ExperimentConfig,
   GraphLayout,
@@ -19,6 +19,8 @@ export const graphKeys = {
     ["graph", projectId, graphId, "diff", baseVersion, targetVersion] as const,
   entities: (projectId: string, graphId: string, version: number) =>
     ["graph", projectId, graphId, "revisions", version, "entities"] as const,
+  preview: (projectId: string, graphId: string, version: number) =>
+    ["graph", projectId, graphId, "revisions", version, "simulation-preview"] as const,
 };
 
 export const runKeys = {
@@ -51,6 +53,22 @@ export function useGraphEntities(projectId: string, graphId: string, version: nu
   return useQuery({
     queryKey: graphKeys.entities(projectId, graphId, version),
     queryFn: () => api.getGraphEntities(projectId, graphId, version),
+  });
+}
+
+export function useSimulationPreview(projectId: string, graphId: string, version: number) {
+  return useQuery({
+    queryKey: graphKeys.preview(projectId, graphId, version),
+    queryFn: async () => {
+      try {
+        return await api.getSimulationPreview(projectId, graphId, version);
+      } catch (error) {
+        // No preview for this revision is normal: the panel stays hidden.
+        if (error instanceof BizoraApiError && error.isNotFound) return null;
+        throw error;
+      }
+    },
+    retry: false,
   });
 }
 

@@ -109,9 +109,9 @@ def test_adapter_identity_and_interface() -> None:
 
 
 def test_adapter_id_matches_pack_wiring() -> None:
-    """Pack and adapter agree on the adapter id (no import cycle)."""
+    """Adapter id constant matches; pack reports none until execution exists."""
     assert torch_adapter.ADAPTER_ID == deep_learning.TORCH_ADAPTER_ID
-    assert deep_learning.pack.simulator_adapter_ids == (torch_adapter.ADAPTER_ID,)
+    assert deep_learning.pack.simulator_adapter_ids == ()
 
 
 def test_check_compatibility_accepts_compilable_graph() -> None:

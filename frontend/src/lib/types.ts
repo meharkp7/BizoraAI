@@ -460,3 +460,15 @@ export interface AdapterSummary {
   adapter_version: string;
   description: string;
 }
+
+export interface SimulationPreviewSection {
+  heading: string;
+  lines: string[];
+}
+
+export interface SimulationPreview {
+  pack_id: string;
+  title: string;
+  sections: SimulationPreviewSection[];
+  warnings: string[];
+}

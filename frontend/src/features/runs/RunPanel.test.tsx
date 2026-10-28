@@ -46,4 +46,48 @@ describe("RunPanel", () => {
       seed: 7,
     });
   });
+
+  it("submits the selected adapter instead of the default", async () => {
+    let createdConfig: unknown = null;
+    server.use(
+      http.get("/api/v1/experiments/adapters", () =>
+        HttpResponse.json([
+          {
+            adapter_id: "bizora.deterministic-test",
+            adapter_version: "0.1.0",
+            description: "Deterministic validation.",
+          },
+          {
+            adapter_id: "bizora.ngspice",
+            adapter_version: "0.1.0",
+            description: "SPICE-class circuit simulation.",
+          },
+        ]),
+      ),
+      http.post("/api/v1/experiments/runs", async ({ request }) => {
+        const body = (await request.json()) as { run_id: string; config: unknown };
+        createdConfig = body.config;
+        return HttpResponse.json(
+          { run_id: body.run_id, state: "pending" },
+          { status: 201 },
+        );
+      }),
+      http.post("/api/v1/experiments/runs/:runId/execute", ({ params }) =>
+        HttpResponse.json({ run_id: params.runId, state: "succeeded" }),
+      ),
+    );
+    render(<RunPanel projectId="project-1" graph={graphFixture} />, { wrapper });
+
+    await screen.findByRole("option", { name: /bizora\.ngspice/ });
+    fireEvent.change(screen.getByLabelText("Adapter"), {
+      target: { value: "bizora.ngspice" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: `Run v${graphFixture.version}` }));
+
+    expect(await screen.findByText("Run finished:")).toBeInTheDocument();
+    expect(createdConfig).toMatchObject({
+      adapter_id: "bizora.ngspice",
+      adapter_version: "0.1.0",
+    });
+  });
 });

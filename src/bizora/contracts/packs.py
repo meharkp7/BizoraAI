@@ -131,6 +131,26 @@ class PackPreflightFinding(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
 
 
+class SimulationPreviewSection(BaseModel):
+    """One headed block of a pack's simulation preview."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    heading: str = Field(min_length=1, max_length=128)
+    lines: tuple[str, ...] = Field(default=(), max_length=400)
+
+
+class SimulationPreview(BaseModel):
+    """A pack's human-readable summary of what it would simulate."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    pack_id: str = Field(pattern=_SLUG_PATTERN.pattern, max_length=128)
+    title: str = Field(min_length=1, max_length=200)
+    sections: tuple[SimulationPreviewSection, ...] = Field(default=(), max_length=20)
+    warnings: tuple[str, ...] = Field(default=(), max_length=100)
+
+
 class CopilotToolSpec(BaseModel):
     """One pack-provided tool the copilot may call."""
 

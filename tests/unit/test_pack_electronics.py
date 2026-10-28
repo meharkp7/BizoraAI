@@ -44,7 +44,7 @@ def test_electronics_pack_implements_the_interface() -> None:
 
 
 def test_pack_copilot_tools_and_simulators_are_honest() -> None:
-    """Two valid tool specs ship; no simulator is connected yet."""
+    """Two valid tool specs ship; the ngspice simulator is connected."""
     tools = electronics.copilot_tools
     assert len(tools) == 2
     assert {tool.tool_name for tool in tools} == {
@@ -52,8 +52,8 @@ def test_pack_copilot_tools_and_simulators_are_honest() -> None:
         "electronics_preflight",
     }
     assert all(tool.description and tool.input_schema for tool in tools)
-    # ngspice lands in Phase 5; until then the pack reports no adapters.
-    assert electronics.simulator_adapter_ids == ()
+    # Phase 5 connected the local ngspice adapter.
+    assert electronics.simulator_adapter_ids == ("bizora.ngspice",)
 
 
 def test_default_registry_routes_each_pack_by_tags() -> None:

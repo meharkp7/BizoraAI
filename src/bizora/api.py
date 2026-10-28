@@ -32,6 +32,7 @@ from bizora.contracts.domain import GraphEntities
 from bizora.contracts.execution import AdapterSummary
 from bizora.contracts.graph import MethodologyGraph
 from bizora.contracts.layout import GraphLayout
+from bizora.contracts.packs import SimulationPreview
 from bizora.contracts.patches import GraphPatch, GraphPatchBatch
 from bizora.contracts.run import (
     ArtifactRecord,
@@ -52,7 +53,7 @@ from bizora.core.component_service import preflight_replacement
 from bizora.core.config import get_settings
 from bizora.core.copilot_service import answer_copilot
 from bizora.core.diff_service import RevisionDiffService
-from bizora.core.entity_service import resolve_graph
+from bizora.core.entity_service import preview_graph, resolve_graph
 from bizora.core.errors import BizoraError, ErrorCode
 from bizora.core.execution_service import ExecutionService, WorkerConfig
 from bizora.core.extraction_persistence_service import (
@@ -609,6 +610,47 @@ def get_graph_entities(
 
     graph = MethodologyGraph.model_validate(record.graph_payload)
     return resolve_graph(graph)
+
+
+@router.get(
+    "/api/v1/graphs/{project_id}/{graph_id}/revisions/{version}/simulation-preview",
+    response_model=SimulationPreview,
+    tags=["graphs"],
+)
+def get_simulation_preview(
+    project_id: str,
+    graph_id: str,
+    version: int,
+    session: Session = DB_SESSION_DEPENDENCY,
+) -> SimulationPreview:
+    """Return the routed pack's simulation preview for one revision."""
+    if version < 1:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Version must be a positive integer.",
+        )
+
+    record = get_graph_revision(
+        session,
+        project_id=project_id,
+        graph_id=graph_id,
+        version=version,
+    )
+
+    if record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Graph revision not found.",
+        )
+
+    graph = MethodologyGraph.model_validate(record.graph_payload)
+    preview = preview_graph(graph)
+    if preview is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No simulation preview for this revision.",
+        )
+    return preview
 
 
 @router.get(

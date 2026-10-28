@@ -46,6 +46,7 @@ import {
 } from "./patchBuilders.ts";
 import { EvidencePanel } from "./EvidencePanel.tsx";
 import { RunPanel } from "../runs/RunPanel.tsx";
+import { SimulationPreview } from "../runs/SimulationPreview.tsx";
 import { DiffPanel } from "./DiffPanel.tsx";
 import styles from "./WorkspacePage.module.css";
 
@@ -645,6 +646,11 @@ function WorkspaceLoaded({
             }
           />
           <EvidencePanel node={selectedNode} edge={selectedEdge} />
+          <SimulationPreview
+            projectId={projectId}
+            graphId={graph.graph_id}
+            version={graph.version}
+          />
           <RunPanel projectId={projectId} graph={graph} />
           <CopilotPanel
             projectId={projectId}

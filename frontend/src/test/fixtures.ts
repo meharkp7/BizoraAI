@@ -15,6 +15,7 @@ import type {
   PaperExtractionResponse,
   ParsedPaper,
   RunComparison,
+  SimulationPreview,
 } from "../lib/types.ts";
 
 export const entitiesFixture: GraphEntities = {
@@ -378,3 +379,13 @@ export const adaptersFixture: AdapterSummary[] = [
     description: "Validate inputs and echo reproducibility fields without external effects.",
   },
 ];
+
+export const simulationPreviewFixture: SimulationPreview = {
+  pack_id: "electronics",
+  title: "SPICE circuit preview",
+  sections: [
+    { heading: "Netlist", lines: ["V1 in 0 DC 5", "R1 in out 1k", "R2 out 0 1k"] },
+    { heading: "Bill of materials (3 parts)", lines: ["V1: Supply voltage x1", "R1, R2: Resistor x2"] },
+  ],
+  warnings: ["WARN: electronics_missing_pullup: node d1 wants a pull-up"],
+};

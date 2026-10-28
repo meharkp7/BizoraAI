@@ -45,6 +45,8 @@ from bizora.contracts.packs import (
     PartRef,
     PartResolution,
     RenderSpec,
+    SimulationPreview,
+    SimulationPreviewSection,
 )
 from bizora.contracts.patches import GraphPatch, PatchOperation
 from bizora.core.entity_registry import EntityTypeDef, InterfaceDef
@@ -1968,7 +1970,11 @@ class DeepLearningPack:
             threshold=THRESHOLD,
             entity_types=ENTITY_TYPES,
             catalog=COMPONENTS,
-            simulator_adapter_ids=(TORCH_ADAPTER_ID,),
+            # torch-train exists but cannot execute anywhere yet (no torch
+            # locally, no Modal credentials, local runner refuses ISOLATED),
+            # so the pack honestly reports no runnable adapters. Flip this
+            # together with default-registry registration when execution lands.
+            simulator_adapter_ids=(),
         )
 
     @property
@@ -2041,6 +2047,48 @@ class DeepLearningPack:
     ) -> CompiledModule:
         """Compile graph layers to a validated torch module (see compiler)."""
         return compile_graph_to_torch(graph, module_name=module_name)
+
+    def simulation_preview(self, graph: MethodologyGraph) -> SimulationPreview | None:
+        """Summarize compiled layers and shapes; compile errors become warnings."""
+        bound = [node for node in graph.nodes if node.config.get("layer")]
+        if not bound:
+            return None
+        try:
+            compiled = compile_graph_to_torch(graph)
+        except GraphCompileError as exc:
+            return SimulationPreview(
+                pack_id=PACK_ID,
+                title="PyTorch module preview",
+                sections=(),
+                warnings=tuple(error[:500] for error in exc.errors),
+            )
+        layer_lines = [
+            f"{layer.layer_id} ({layer.template_id}): "
+            f"{compiled.shapes.get(layer.node_id)}"
+            for layer in compiled.layers
+        ]
+        source_lines = compiled.source.splitlines()
+        truncated = source_lines[:120]
+        if len(source_lines) > len(truncated):
+            truncated = [
+                *truncated,
+                f"... ({len(source_lines) - len(truncated)} more lines)",
+            ]
+        return SimulationPreview(
+            pack_id=PACK_ID,
+            title="PyTorch module preview",
+            sections=(
+                SimulationPreviewSection(
+                    heading=f"Layers ({len(compiled.layers)})",
+                    lines=tuple(layer_lines),
+                ),
+                SimulationPreviewSection(
+                    heading=f"Generated source ({compiled.module_name})",
+                    lines=tuple(truncated),
+                ),
+            ),
+            warnings=(),
+        )
 
 
 pack = DeepLearningPack()

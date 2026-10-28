@@ -17,6 +17,7 @@ import {
   paperExtractionFixture,
   parsedPaperFixture,
   preflightFixture,
+  simulationPreviewFixture,
   succeededRun,
   tableFixture,
   tableFixture2,
@@ -140,6 +141,11 @@ export const handlers = [
   ),
 
   http.get("/api/v1/experiments/adapters", () => HttpResponse.json(adaptersFixture)),
+
+  http.get(
+    "/api/v1/graphs/:projectId/:graphId/revisions/:version/simulation-preview",
+    () => HttpResponse.json(simulationPreviewFixture),
+  ),
 ];
 
 export const server = setupServer(...handlers);
