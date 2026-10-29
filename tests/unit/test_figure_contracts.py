@@ -135,3 +135,31 @@ def test_request_rejects_empty_figures() -> None:
             created_by="test-user",
             figures=(),
         )
+
+
+def test_build_figure_set_keeps_full_surrounding_text() -> None:
+    """Attachments carry up to 4000 chars; records must accept them all."""
+    request = FigureDescriptionRequest(
+        project_id="project-1",
+        graph_id="graph-1",
+        source_id="paper-1",
+        created_by="test-user",
+        figures=(
+            FigureAttachment(
+                figure_id="fig-1",
+                page=5,
+                image_bytes=FAKE_IMAGE_BYTES,
+                mime_type="image/jpeg",
+                surrounding_text="x" * 4000,
+            ),
+        ),
+    )
+    figure_set, warnings = build_figure_set(
+        request,
+        FigureDescriptionList(
+            figures=(FigureDescription(figure_id="fig-1", kind="plot"),)
+        ),
+    )
+
+    assert warnings == ()
+    assert figure_set.figures[0].context == "x" * 4000

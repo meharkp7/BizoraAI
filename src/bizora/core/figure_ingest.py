@@ -18,7 +18,7 @@ from bizora.core.pdf import MAX_PDF_PAGES, PDF_MAGIC_PREFIX
 MAX_FIGURES = 50
 MAX_BYTES_PER_IMAGE = 8_000_000
 
-FIGURE_MENTION_PATTERN = re.compile(r"\bFig(?:ure)?\.?\s+\d+[A-Za-z]?")
+FIGURE_MENTION_PATTERN = re.compile(r"\bFig(?:ure)?\.?\s+\d+[A-Za-z]?", re.IGNORECASE)
 
 _EXTENSION_MIME_TYPES = {
     ".png": "image/png",
@@ -126,3 +126,23 @@ def extract_figures_from_pdf(
 def find_figure_mentions(text: str) -> tuple[str, ...]:
     """Return generic figure labels (e.g. 'Figure 3') mentioned in text."""
     return tuple(match.group(0) for match in FIGURE_MENTION_PATTERN.finditer(text))
+
+
+CAPTION_WINDOW_CHARS = 600
+
+
+def caption_candidates(text: str) -> tuple[str, ...]:
+    """Return caption windows starting at each figure mention.
+
+    Each candidate runs from its mention through the following
+    caption-length window, whitespace-collapsed. The vision model
+    picks the candidate that captions its image; candidates carry no
+    interpretation of their own.
+    """
+    candidates: list[str] = []
+    for match in FIGURE_MENTION_PATTERN.finditer(text):
+        window = text[match.start() : match.start() + CAPTION_WINDOW_CHARS]
+        collapsed = " ".join(window.split())
+        if collapsed and collapsed not in candidates:
+            candidates.append(collapsed)
+    return tuple(candidates)

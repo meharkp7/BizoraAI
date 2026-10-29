@@ -220,7 +220,9 @@ async def evaluate_paper(
             if not refresh:
                 graph = _read_cached_graph(cache_file)
         if graph is None:
-            graph = await MethodologyExtractionService.extract_draft(provider, request)
+            graph = await MethodologyExtractionService.extract_draft(
+                provider, request, use_cache=not refresh
+            )
             _record_usage(provider, usage)
             if cache_file is not None:
                 _write_cached_graph(cache_file, provider_name, pdf.sha256, graph)

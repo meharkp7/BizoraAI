@@ -88,6 +88,35 @@ def test_preflight_endpoint_rejects_unknown_component(client: TestClient) -> Non
     assert response.json()["error"]["code"] == "RESOURCE_NOT_FOUND"
 
 
+def test_removal_preflight_endpoint_reports_blast_radius(client: TestClient) -> None:
+    """Removal preflight names neighbors, dropped edges, and paper claims."""
+    _seed(client, "sram")
+    response = client.post(
+        "/api/v1/graphs/fixture-sram/main/revisions/1/nodes/sense-amplifier/removal-preflight",
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["target_node_id"] == "sense-amplifier"
+    assert body["neighbor_node_ids"] == ["sram-cell", "leakage-monitor"]
+    assert body["dropped_edge_ids"] == ["e-cell-sense", "e-sense-monitor"]
+    assert body["evidence"]
+
+    revision = client.get("/api/v1/graphs/fixture-sram/main/revisions/1")
+    assert revision.json()["version"] == 1
+
+
+def test_removal_preflight_endpoint_rejects_unknown_node(client: TestClient) -> None:
+    """Unknown nodes report 404 with the standard error shape."""
+    _seed(client, "sram")
+    response = client.post(
+        "/api/v1/graphs/fixture-sram/main/revisions/1/nodes/no-such-node/removal-preflight",
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "RESOURCE_NOT_FOUND"
+
+
 def test_copilot_endpoint_answers_from_graph_state(client: TestClient) -> None:
     """Copilot replacements validate and propose without applying."""
     _seed(client, "quant")

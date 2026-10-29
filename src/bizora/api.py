@@ -14,7 +14,8 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from bizora.adapters.registry import create_default_registry
@@ -27,10 +28,12 @@ from bizora.contracts.components import (
     CopilotRequest,
     CopilotResponse,
     PreflightRequest,
+    RemovalPreflight,
 )
 from bizora.contracts.diff import GraphRevisionDiff
 from bizora.contracts.domain import GraphEntities
 from bizora.contracts.execution import AdapterSummary
+from bizora.contracts.figures import PaperFigure, ResponseUsage
 from bizora.contracts.graph import MethodologyGraph
 from bizora.contracts.layout import GraphLayout
 from bizora.contracts.packs import SimulationPreview
@@ -52,7 +55,7 @@ from bizora.contracts.table import (
 from bizora.copilot.tools import CopilotContext
 from bizora.core.comparison_service import ComparisonService
 from bizora.core.component_catalog import get_component, search_components
-from bizora.core.component_service import preflight_replacement
+from bizora.core.component_service import preflight_removal, preflight_replacement
 from bizora.core.config import get_settings
 from bizora.core.copilot_service import answer_copilot_async
 from bizora.core.diff_service import RevisionDiffService
@@ -62,6 +65,7 @@ from bizora.core.execution_service import ExecutionService, WorkerConfig
 from bizora.core.extraction_persistence_service import (
     ExtractionPersistenceService,
 )
+from bizora.core.figure_service import ingest_paper_figures, list_graph_figures
 from bizora.core.graph_persistence_service import GraphPersistenceService
 from bizora.core.layout_service import LayoutService
 from bizora.core.papers import (
@@ -73,8 +77,8 @@ from bizora.core.papers import (
     suggest_source_id,
 )
 from bizora.core.patch_service import GraphPatchService
-from bizora.core.pdf import PdfText, extract_text_from_pdf
-from bizora.core.reported_service import reported_metrics_for_tables
+from bizora.core.pdf import PdfText, extract_page_texts, extract_text_from_pdf
+from bizora.core.reported_service import discover_reported_metrics, reported_metrics_for_tables
 from bizora.core.run_service import ExperimentRunService
 from bizora.core.table_persistence_service import TablePersistenceService
 from bizora.db.repository import (
@@ -83,6 +87,7 @@ from bizora.db.repository import (
     extracted_table_from_record,
     get_graph_revision,
     get_latest_graph_revision,
+    get_paper_figure,
     list_artifacts_for_run,
     list_experiment_runs,
     list_extracted_tables,
@@ -101,6 +106,7 @@ from bizora.providers.base import (
 from bizora.providers.baseten import BasetenMethodologyProvider
 from bizora.providers.copilot import CopilotProvider
 from bizora.providers.fireworks import FireworksMethodologyProvider
+from bizora.providers.muse import MuseMethodologyProvider
 from bizora.providers.muse_copilot import MuseCopilotProvider
 from bizora.providers.tables import TableExtractionRequest
 from bizora.streaming.bus import get_shared_bus
@@ -108,6 +114,20 @@ from bizora.streaming.bus import get_shared_bus
 logger = logging.getLogger(__name__)
 
 DB_SESSION_DEPENDENCY = Depends(get_db_session)
+
+
+def get_muse_provider() -> MuseMethodologyProvider:
+    """Create the Muse vision provider or fail clearly when unconfigured."""
+    try:
+        return MuseMethodologyProvider()
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Muse credentials are missing.",
+        ) from exc
+
+
+MUSE_PROVIDER_DEPENDENCY = Depends(get_muse_provider)
 
 
 def get_fireworks_provider() -> FireworksMethodologyProvider:
@@ -769,6 +789,23 @@ def preflight_node_replacement(
     return preflight_replacement(graph, node_id, request.component_id, request.config)
 
 
+@router.post(
+    "/api/v1/graphs/{project_id}/{graph_id}/revisions/{version}/nodes/{node_id}/removal-preflight",
+    response_model=RemovalPreflight,
+    tags=["graphs"],
+)
+def preflight_node_removal(
+    project_id: str,
+    graph_id: str,
+    version: int,
+    node_id: str,
+    session: Session = DB_SESSION_DEPENDENCY,
+) -> RemovalPreflight:
+    """Preview removing one node: neighbors, dropped edges, paper claims."""
+    graph = _revision_or_404(session, project_id, graph_id, version)
+    return preflight_removal(graph, node_id)
+
+
 def _copilot_provider_or_none() -> CopilotProvider | None:
     """Return the LLM copilot provider, or None when no key is configured.
 
@@ -820,6 +857,17 @@ async def ask_copilot(
     def list_metrics(run_id: str) -> list[MetricRecord]:
         return [metric_record_from_row(row) for row in list_metrics_for_run(session, run_id)]
 
+    def list_tables() -> list[ExtractedTable]:
+        return [
+            extracted_table_from_record(record)
+            for record in list_extracted_tables(
+                session, project_id=project_id, graph_id=graph_id
+            )
+        ]
+
+    def list_figures() -> list[PaperFigure]:
+        return list(list_graph_figures(session, project_id=project_id, graph_id=graph_id))
+
     context = CopilotContext(
         graph=graph,
         selected_node_id=request.selected_node_id,
@@ -827,6 +875,8 @@ async def ask_copilot(
         list_runs=list_runs,
         get_run=get_run,
         list_metrics=list_metrics,
+        list_tables=list_tables,
+        list_figures=list_figures,
     )
     return await answer_copilot_async(
         graph,
@@ -899,6 +949,109 @@ def get_saved_graph_layout(
         graph_id=graph_id,
         version=version,
     )
+
+
+class FigureIngestResponse(BaseModel):
+    """Outcome of one figure-overlay ingest, served to the UI."""
+
+    figures: list[PaperFigure] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    truncated: bool = False
+    skipped: int = 0
+    usage: list[ResponseUsage] = Field(default_factory=list)
+
+
+@router.post(
+    "/api/v1/graphs/{project_id}/{graph_id}/revisions/{version}/figures",
+    response_model=FigureIngestResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["graphs"],
+)
+async def ingest_graph_figures(
+    project_id: str,
+    graph_id: str,
+    version: int,
+    file: UploadFile,
+    source_id: str | None = Form(default=None),
+    created_by: str | None = Form(default=None, max_length=128),
+    session: Session = DB_SESSION_DEPENDENCY,
+    provider: MuseMethodologyProvider = MUSE_PROVIDER_DEPENDENCY,
+) -> FigureIngestResponse:
+    """Ingest one PDF's figures for a revision: describe, localize, persist.
+
+    The source paper travels with the request because figure bytes are
+    never stored elsewhere. A PDF with no embedded images yields an
+    empty figure list, never invented figures.
+    """
+    graph = _revision_or_404(session, project_id, graph_id, version)
+    data, _ = await _read_upload(file)
+    resolved_source = (
+        source_id.strip() if source_id and source_id.strip() else graph.source_ids[0]
+    )
+    resolved_author = (
+        created_by.strip() if created_by and created_by.strip() else DEFAULT_CREATED_BY
+    )
+    try:
+        report = await ingest_paper_figures(
+            session,
+            graph=graph,
+            pdf_bytes=data,
+            page_texts=extract_page_texts(data),
+            source_id=resolved_source,
+            created_by=resolved_author,
+            provider=provider,
+        )
+    except MethodologyProviderError as exc:
+        logger.warning("Figure vision provider failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Figure vision provider failed.",
+        ) from exc
+    return FigureIngestResponse(
+        figures=list(report.figures),
+        warnings=list(report.warnings),
+        truncated=report.truncated,
+        skipped=report.skipped,
+        usage=list(report.usage),
+    )
+
+
+@router.get(
+    "/api/v1/graphs/{project_id}/{graph_id}/figures",
+    response_model=list[PaperFigure],
+    tags=["graphs"],
+)
+def list_revision_figures(
+    project_id: str,
+    graph_id: str,
+    session: Session = DB_SESSION_DEPENDENCY,
+) -> list[PaperFigure]:
+    """List one graph's persisted figures with their regions."""
+    return list(
+        list_graph_figures(session, project_id=project_id, graph_id=graph_id)
+    )
+
+
+@router.get(
+    "/api/v1/graphs/{project_id}/{graph_id}/figures/{figure_id}/image",
+    tags=["graphs"],
+)
+def get_figure_image(
+    project_id: str,
+    graph_id: str,
+    figure_id: str,
+    session: Session = DB_SESSION_DEPENDENCY,
+) -> Response:
+    """Serve one persisted figure's image bytes."""
+    record = get_paper_figure(
+        session, project_id=project_id, graph_id=graph_id, figure_id=figure_id
+    )
+    if record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Figure not found.",
+        )
+    return Response(content=record.image_bytes, media_type=record.mime_type or "image/png")
 
 
 @router.get(
@@ -1065,6 +1218,34 @@ def list_run_reported_metrics(
         )
     ]
     return list(reported_metrics_for_tables(tables, names or []))
+
+
+@router.get(
+    "/api/v1/graphs/{project_id}/{graph_id}/reported-metrics",
+    response_model=list[PaperReportedMetric],
+    tags=["graphs"],
+)
+def list_graph_reported_metrics(
+    project_id: str,
+    graph_id: str,
+    session: Session = DB_SESSION_DEPENDENCY,
+    names: Annotated[list[str] | None, Query()] = None,
+) -> list[PaperReportedMetric]:
+    """Quote the paper's reported numbers from the graph's tables.
+
+    With names, quotes exactly those metrics; without, discovers
+    every numeric header. Every entry is labelled by the caller as
+    reported by the paper — the baseline Stage 2 compares against.
+    """
+    tables = [
+        extracted_table_from_record(record)
+        for record in list_extracted_tables(
+            session, project_id=project_id, graph_id=graph_id
+        )
+    ]
+    if names:
+        return list(reported_metrics_for_tables(tables, names))
+    return list(discover_reported_metrics(tables))
 
 
 @router.post(

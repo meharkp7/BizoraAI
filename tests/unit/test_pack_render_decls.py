@@ -2,8 +2,8 @@
 
 Every entity type declares how it renders: a 2D symbol id, an
 optional representative 3D model key, and whether it is physical.
-Non-physical entities never reach the hardware scene; unresolved
-physical nodes keep a neutral placeholder instead of a kind shape.
+Non-physical entities never reach the hardware scene, and nodes
+without a part model stay in the 2D views with an honest note.
 """
 
 from bizora.packs import ProfiledPack, default_registry
@@ -71,3 +71,12 @@ def test_memory_cell_is_a_physical_symbol_without_a_package_model() -> None:
     assert cell.physical is True
     assert cell.symbol == "bitcell"
     assert cell.model_3d is None
+
+
+def test_every_pack_exposes_unmapped_telemetry() -> None:
+    """The telemetry slot exists on all packs and stays unmapped for now."""
+    packs = list(REGISTRY.packs)
+
+    assert len(packs) == 6
+    for pack in packs:
+        assert pack.telemetry_mapping() is None, pack.pack_id

@@ -17,6 +17,7 @@ from bizora.contracts.components import (
     CompatibilityPreflight,
     ComponentDetail,
     ConstraintWarning,
+    RemovalPreflight,
 )
 from bizora.contracts.domain import (
     GENERIC_DOMAIN,
@@ -274,4 +275,34 @@ def preflight_replacement(
         warnings=tuple(warnings),
         candidate=_resolve_candidate(graph, candidate, component),
         candidate_label=component.label,
+    )
+
+
+def preflight_removal(graph: MethodologyGraph, node_id: str) -> RemovalPreflight:
+    """Preview removing one node: neighbors, dropped edges, paper claims (no writes)."""
+    target = next((node for node in graph.nodes if node.id == node_id), None)
+    if target is None:
+        raise BizoraError(
+            ErrorCode.RESOURCE_NOT_FOUND,
+            f"Node {node_id!r} does not exist in this revision.",
+            details={"node_id": node_id},
+        )
+    incident = [edge for edge in graph.edges if edge.source == node_id or edge.target == node_id]
+    neighbors: list[str] = []
+    for edge in incident:
+        other = edge.target if edge.source == node_id else edge.source
+        if other != node_id and other not in neighbors:
+            neighbors.append(other)
+    evidence = list(target.evidence)
+    seen = set(evidence)
+    for edge in incident:
+        for ref in edge.evidence:
+            if ref not in seen:
+                seen.add(ref)
+                evidence.append(ref)
+    return RemovalPreflight(
+        target_node_id=node_id,
+        neighbor_node_ids=tuple(neighbors),
+        dropped_edge_ids=tuple(edge.id for edge in incident),
+        evidence=tuple(evidence),
     )

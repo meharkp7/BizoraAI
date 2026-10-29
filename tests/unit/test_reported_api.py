@@ -114,3 +114,32 @@ def test_list_run_reported_metrics_empty_without_names_or_tables(
     assert (
         client.get("/api/v1/experiments/runs/run-api-1/reported-metrics").json() == []
     )
+
+
+def test_graph_reported_metrics_discovers_and_quotes(
+    client_with_db: tuple[TestClient, Callable[[], Session]],
+) -> None:
+    """The graph endpoint discovers numbers, or quotes named ones."""
+    client, session_factory = client_with_db
+    session = session_factory()
+    try:
+        seed_table(session)
+    finally:
+        session.close()
+
+    discovered = client.get("/api/v1/graphs/project-api/graph-api/reported-metrics")
+    assert discovered.status_code == 200
+    names = [entry["name"] for entry in discovered.json()]
+    assert names == ["AlphaFold2 — TM-score", "Baseline — TM-score"]
+    assert all(entry["table_id"] == "table-1" for entry in discovered.json())
+
+    quoted = client.get(
+        "/api/v1/graphs/project-api/graph-api/reported-metrics",
+        params={"names": ["TM-score"]},
+    )
+    assert quoted.status_code == 200
+    assert [entry["raw_value"] for entry in quoted.json()] == ["0.92", "0.71"]
+
+    empty = client.get("/api/v1/graphs/unknown/graph/reported-metrics")
+    assert empty.status_code == 200
+    assert empty.json() == []

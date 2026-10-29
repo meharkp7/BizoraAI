@@ -105,10 +105,19 @@ def extract_tags(*texts: str) -> tuple[DomainTag, ...]:
     return tuple(DomainTag(label=label) for label in labels)
 
 
+def _squash(text: str) -> str:
+    """Drop spacing so "bit cell" and "bit-cell" match "bitcell".
+
+    Papers and extraction write the same words spaced, hyphenated, or
+    joined; identity matching must not hinge on the separator.
+    """
+    return text.replace(" ", "").replace("-", "").replace("_", "")
+
+
 def match_terms(haystack: str, terms: tuple[str, ...]) -> tuple[str, ...]:
     """Return the terms that occur in the haystack, in term order."""
-    lowered = haystack.lower()
-    return tuple(term for term in terms if term in lowered)
+    squashed = _squash(haystack.lower())
+    return tuple(term for term in terms if _squash(term) in squashed)
 
 
 def _dedup_overlapping(matched: tuple[str, ...]) -> tuple[str, ...]:
@@ -139,10 +148,67 @@ def _match_score(
     )
 
 
+def _label_coverage(label: str, terms: tuple[str, ...]) -> tuple[int, int]:
+    """Count label words covered by an entity's terms: (covered, total).
+
+    A word counts when it contains a term ("quantization" carries
+    "quant"); words under three letters never count, so "at" cannot
+    ride inside "compensation".
+    """
+    tokens = [token for token in tokenize(label) if len(token) >= 3]
+    covered = sum(
+        1
+        for token in tokens
+        if any(_squash(term) in _squash(token) for term in terms)
+    )
+    return covered, len(tokens)
+
+
 def _label_names_entity(label: str, entity_types: tuple[EntityTypeDef, ...]) -> bool:
-    """True when the label alone matches any entity type's terms."""
-    lowered = label.lower()
-    return any(match_terms(lowered, candidate.match_terms) for candidate in entity_types)
+    """True when one entity's terms cover at least half the label's words.
+
+    The label is the node's identity, so a process node escapes to a
+    physical entity only when the label substantially names it:
+    "Demodulator" does, but "Temperature Compensation Sizing" shares
+    just one word with the bias controller and stays a process.
+    """
+    for candidate in entity_types:
+        covered, total = _label_coverage(label, candidate.match_terms)
+        if total > 0 and covered * 2 >= total:
+            return True
+    return False
+
+
+_DEFINITIONAL_DESCRIPTION_WORDS = 4
+
+
+def _config_values_text(config: object) -> str:
+    """Render config values (never keys) for identity matching.
+
+    A value states what the node is ("cell_type": "6T SRAM"); a key
+    only names an attribute ("bitcell_area_um2" reports a measurement
+    about bitcells on a node that is not one).
+    """
+    if not isinstance(config, dict):
+        return ""
+    return " ".join(str(value) for value in config.values())
+
+
+def _anchored_off_label(
+    description: str | None, config: object, candidate: EntityTypeDef
+) -> bool:
+    """True when config values or a terse description can carry a match.
+
+    Config-declared identity ("cell_type": "6T SRAM") anchors, as does a
+    description of a few words ("VDD supply rail"), which reads as a
+    definition rather than prose. Longer prose may only mention
+    related hardware, never identify the node.
+    """
+    if _exact_identity(config, candidate.identity_keys):
+        return True
+    if match_terms(_config_values_text(config), candidate.match_terms):
+        return True
+    return description is not None and len(description.split()) <= _DEFINITIONAL_DESCRIPTION_WORDS
 
 
 def _node_text(label: str, description: str | None, kind: str, config: object) -> str:
@@ -153,18 +219,39 @@ def _node_text(label: str, description: str | None, kind: str, config: object) -
     return " ".join(parts)
 
 
+def _normalize_domain_hint(domain_hint: str | None) -> str | None:
+    """Normalize a model-produced label for registry lookup."""
+    if domain_hint is None:
+        return None
+    normalized = domain_hint.strip().lower().replace("_", "-").replace(" ", "-")
+    return normalized or None
+
+
 def detect_domain(
     title: str,
     brief_text: str,
     nodes: tuple[tuple[str, str | None, str, object], ...],
     registry: PackRegistry,
+    *,
+    domain_hint: str | None = None,
 ) -> DomainClassification:
-    """Route graph text to the best pack, or fall back to explore-only.
+    """Route a graph to the best pack, or fall back to explore-only.
 
-    Graph text becomes open-vocabulary tags; the registry picks the
-    highest-affinity pack. Unknown text routes to no pack and classifies
-    as generic, never a guess.
+    A model-produced label that names a registered pack wins outright;
+    anything else falls back to lexical routing, where graph text becomes
+    open-vocabulary tags and the registry picks the highest-affinity
+    pack. Unknown text routes to no pack and classifies as generic,
+    never a guess.
     """
+    normalized = _normalize_domain_hint(domain_hint)
+    if normalized is not None:
+        pack = registry.get(normalized)
+        if pack is not None:
+            profile = getattr(pack, "profile", None)
+            domain = profile.domain if profile is not None else pack.pack_id
+            return DomainClassification(
+                domain=domain, confidence=0.9, signals=("model-label",)
+            )
     haystack = " ".join(
         [title, brief_text]
         + [
@@ -214,6 +301,10 @@ def resolve_node(
     a dataset must not resolve to a meter, but "Demodulator" still
     resolves to the demodulator block). Datasets always resolve by
     kind: data is never hardware, so any hardware match is spurious.
+    Physical candidates need the same anchoring: a match with no
+    label or config anchor only counts when the description is a
+    terse definition, so "65nm CMOS Fabrication" never becomes a
+    memory cell through a passing mention of bitcells.
     """
     if kind in NON_PHYSICAL_NODE_KINDS and (
         kind == NodeKind.DATASET.value
@@ -241,6 +332,8 @@ def resolve_node(
         label_matched = _dedup_overlapping(match_terms(label.lower(), candidate.match_terms))
         total_matched = _dedup_overlapping(match_terms(text, candidate.match_terms))
         if not total_matched:
+            continue
+        if not label_matched and not _anchored_off_label(description, config, candidate):
             continue
         score = _match_score(label_matched, total_matched)
         if score > best_score:

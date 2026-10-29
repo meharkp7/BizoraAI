@@ -30,6 +30,7 @@ from bizora.contracts.packs import (
     ResolutionConfidence,
     ResolutionLevel,
     SimulationPreview,
+    TelemetryMapping,
 )
 from bizora.contracts.patches import GraphPatch, PatchOperation
 from bizora.core.entity_registry import (
@@ -94,7 +95,13 @@ class LexicalPack:
             entity_types=entity_types,
             threshold=threshold,
         )
-        self._catalog = tuple(ComponentDetail.model_validate(entry) for entry in catalog)
+        symbols = {item.type_id: item.symbol for item in entity_types}
+        self._catalog = tuple(
+            ComponentDetail.model_validate(entry).model_copy(
+                update={"symbol": symbols.get(entry.get("entity_type", ""), "generic")}
+            )
+            for entry in catalog
+        )
         self._simulators = simulator_adapter_ids
         self._assets = assets
         self._preview_builder = simulation_preview_builder
@@ -299,6 +306,10 @@ class LexicalPack:
         if self._preview_builder is None:
             return None
         return self._preview_builder(graph)
+
+    def telemetry_mapping(self) -> TelemetryMapping | None:
+        """Return None: no pack maps live telemetry yet (Stage 2)."""
+        return None
 
     def _match_exact(self, part_number: str | None) -> ComponentDetail | None:
         if not part_number:

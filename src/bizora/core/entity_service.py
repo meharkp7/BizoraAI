@@ -59,7 +59,9 @@ def preview_graph(graph: MethodologyGraph) -> SimulationPreview | None:
 def classify_graph(graph: MethodologyGraph) -> DomainClassification:
     """Detect the research domain behind one graph revision."""
     nodes = tuple((node.label, node.description, node.kind, node.config) for node in graph.nodes)
-    return detect_domain(graph.title, _brief_text(graph), nodes, default_registry())
+    return detect_domain(
+        graph.title, _brief_text(graph), nodes, default_registry(), domain_hint=graph.domain_hint
+    )
 
 
 def resolve_graph(graph: MethodologyGraph) -> GraphEntities:

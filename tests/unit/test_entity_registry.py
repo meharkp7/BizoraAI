@@ -59,6 +59,34 @@ def test_detect_domain_needs_two_distinct_signals() -> None:
     assert classification.domain == "generic"
 
 
+def test_detect_domain_prefers_model_label() -> None:
+    """A valid model-produced label wins over lexical signals."""
+    classification = detect_domain(
+        "NBTI aging in 6T SRAM",
+        "Body-bias compensation reduces leakage.",
+        (("6T SRAM cell", None, "component", {}),),
+        REGISTRY,
+        domain_hint="iot",
+    )
+
+    assert classification.domain == "iot"
+    assert classification.signals == ("model-label",)
+
+
+def test_detect_domain_ignores_unregistered_model_label() -> None:
+    """An unknown model label falls back to lexical detection."""
+    classification = detect_domain(
+        "NBTI aging in 6T SRAM",
+        "Body-bias compensation reduces leakage.",
+        (("6T SRAM cell", None, "component", {}),),
+        REGISTRY,
+        domain_hint="hardware-security",
+    )
+
+    assert classification.domain == "electronics"
+    assert "sram" in classification.signals
+
+
 def test_resolve_node_matches_entity_type_and_records_terms() -> None:
     """A temperature sensor resolves to the sensor-module entity type."""
     resolution = resolve_node(
@@ -166,6 +194,79 @@ def test_resolve_node_keeps_ambiguous_kinds_text_matched() -> None:
 
     assert resolution.entity_type == "voltage-source"
     assert resolution.physical is True
+
+
+def test_resolve_node_ignores_prose_mentions_without_label_anchor() -> None:
+    """A process node stays generic when only its long description names a part."""
+    resolution = resolve_node(
+        profile("electronics"),
+        "fab",
+        "65nm CMOS Fabrication",
+        "Standard 65nm CMOS process implementation with bitcell area 4.38 um2",
+        "component",
+        {},
+    )
+
+    assert resolution.entity_type == "generic-component"
+    assert resolution.generic is True
+    assert resolution.matched_terms == ()
+
+
+def test_resolve_node_accepts_config_stated_identity() -> None:
+    """Config-declared identity anchors a match the label does not state."""
+    resolution = resolve_node(
+        profile("electronics"),
+        "cell",
+        "Array site",
+        "One site of a large memory array with shared periphery circuits",
+        "component",
+        {"cell_type": "6T SRAM"},
+    )
+
+    assert resolution.entity_type == "memory-cell"
+    assert resolution.generic is False
+
+
+def test_resolve_node_ignores_config_keys_naming_measurements() -> None:
+    """A config key reporting bitcell area does not make a fab node a cell."""
+    resolution = resolve_node(
+        profile("electronics"),
+        "fab",
+        "65nm CMOS Fabrication",
+        "Standard 65nm CMOS process implementation with measured areas",
+        "component",
+        {"technology_nm": 65, "bitcell_area_um2": 4.38},
+    )
+
+    assert resolution.entity_type == "generic-component"
+    assert resolution.generic is True
+
+
+def test_resolve_node_matches_terms_across_spacing_variants() -> None:
+    """Spaced, hyphenated, and joined spellings identify the same entity."""
+    for label in ("Bit Cell Cross-Coupled Pair", "Bit-Cell Array", "Bitcell"):
+        resolution = resolve_node(
+            profile("electronics"), "cell", label, None, "component", {}
+        )
+
+        assert resolution.entity_type == "memory-cell", label
+        assert resolution.generic is False, label
+
+
+def test_resolve_node_requires_label_coverage_for_process_escape() -> None:
+    """One shared word does not promote an operation into a physical part."""
+    resolution = resolve_node(
+        profile("electronics"),
+        "comp",
+        "CTAT/PTAT Temperature Compensation Sizing",
+        "Optimization of transistor sizes via Monte Carlo simulations",
+        "operation",
+        {},
+    )
+
+    assert resolution.entity_type == "operation"
+    assert resolution.physical is False
+    assert resolution.generic is False
 
 
 def test_resolve_node_carries_pack_render_declaration() -> None:

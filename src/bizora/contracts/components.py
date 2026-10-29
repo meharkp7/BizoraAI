@@ -16,6 +16,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from bizora.contracts.domain import EntityResolution, InterfaceSpec, MissingInterface
+from bizora.contracts.evidence import EvidenceRef
 
 ConfigFieldType = Literal["string", "number", "boolean", "enum"]
 
@@ -88,6 +89,12 @@ class ComponentSummary(BaseModel):
     manufacturer: str | None = Field(default=None, max_length=128)
     part_number: str | None = Field(default=None, max_length=128)
     headline: str = Field(min_length=1, max_length=300)
+    symbol: str = Field(
+        default="generic",
+        min_length=1,
+        max_length=64,
+        description="Pack-declared 2D symbol id, enriched from the entity type at load.",
+    )
 
 
 class ComponentDetail(ComponentSummary):
@@ -135,6 +142,26 @@ class CompatibilityPreflight(BaseModel):
     warnings: tuple[ConstraintWarning, ...] = ()
     candidate: EntityResolution
     candidate_label: str = Field(min_length=1, max_length=300)
+
+
+class RemovalPreflight(BaseModel):
+    """Blast radius for removing one node: neighbors, edges, paper claims."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    target_node_id: str = Field(min_length=1, max_length=128)
+    neighbor_node_ids: tuple[str, ...] = Field(
+        default=(),
+        description="Connected blocks adjacent to the removed node.",
+    )
+    dropped_edge_ids: tuple[str, ...] = Field(
+        default=(),
+        description="Incident edges that would disappear with the node.",
+    )
+    evidence: tuple[EvidenceRef, ...] = Field(
+        default=(),
+        description="Paper evidence on the node and its dropped edges.",
+    )
 
 
 class CopilotProposal(BaseModel):

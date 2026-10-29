@@ -24,8 +24,12 @@ from bizora.contracts.figures import (
     FigureDescriptionList,
     FigureDescriptionRequest,
     FigureDescriptionResult,
+    FigureRegionList,
+    RegionLocalizationRequest,
+    RegionLocalizationResult,
     ResponseUsage,
     build_figure_set,
+    build_region_set,
 )
 from bizora.contracts.graph import MethodologyGraph
 from bizora.providers.base import (
@@ -42,6 +46,60 @@ INLINE_FILE_LIMIT_BYTES = 50_000_000
 
 GRAPH_SCHEMA_NAME = "MethodologyGraph"
 FIGURES_SCHEMA_NAME = "FigureDescriptions"
+REGIONS_SCHEMA_NAME = "FigureRegions"
+
+# Minimal flat schemas for the vision calls. The generated Pydantic
+# schemas ($defs/$ref, anyOf unions, patterns) degrade constrained
+# vision output on this model; these plain shapes elicit clean JSON
+# while local Pydantic validation stays the strict gate.
+FIGURE_OUTPUT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "figures": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "figure_id": {"type": "string"},
+                    "label": {"type": ["string", "null"]},
+                    "caption": {"type": ["string", "null"]},
+                    "kind": {
+                        "type": "string",
+                        "enum": ["diagram", "schematic", "plot", "photo", "equation", "unknown"],
+                    },
+                    "confidence": {"type": ["number", "null"]},
+                },
+                "required": ["figure_id", "label", "caption", "kind", "confidence"],
+                "additionalProperties": False,
+            },
+        }
+    },
+    "required": ["figures"],
+    "additionalProperties": False,
+}
+
+REGION_OUTPUT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "regions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "figure_id": {"type": "string"},
+                    "bbox": {"type": "array", "items": {"type": "number"}},
+                    "node_id": {"type": ["string", "null"]},
+                    "label": {"type": "string"},
+                    "confidence": {"type": ["number", "null"]},
+                },
+                "required": ["figure_id", "bbox", "node_id", "label", "confidence"],
+                "additionalProperties": False,
+            },
+        }
+    },
+    "required": ["regions"],
+    "additionalProperties": False,
+}
 
 
 class MuseProviderError(MethodologyProviderError):
@@ -118,7 +176,11 @@ _METHODOLOGY_INSTRUCTIONS = (
     "You extract a research paper from any field into a structured "
     "methodology graph. Return only a JSON object representing a "
     "MethodologyGraph with schema_version, project_id, graph_id, version, "
-    "title, source_ids, nodes, edges, created_by, parent_version, and brief. "
+    "title, source_ids, nodes, edges, created_by, parent_version, brief, "
+    "and domain_hint. Set domain_hint to the paper's system domain as a "
+    "short lowercase label, preferring one of: electronics, deep-learning, "
+    "signal-processing, quantization, distributed-systems, iot; use your "
+    "best short label when none fits, or null when the domain is unclear. "
     "Nodes cover the paper's components, workflow steps, datasets, "
     "baselines, and experiments. Node kind must be one of: input, "
     "preprocessing, model, operation, loss, optimizer, evaluation, output, "
@@ -146,12 +208,38 @@ _FIGURE_INSTRUCTIONS = (
     "Return only a JSON object shaped "
     '{"figures": [{"figure_id": str, "label": str | null, '
     '"caption": str | null, "kind": str, "confidence": float | null}]}. '
-    "Echo each figure_id exactly as given. Set label to the printed label "
-    "(for example 'Figure 3') or null when none is visible. Transcribe the "
-    "caption from the surrounding text or null when absent. Set kind to one "
-    "of: diagram, schematic, plot, photo, equation, unknown. Never invent "
-    "labels, captions, or content that is not visible in the image or the "
-    "surrounding text."
+    "Echo each figure_id exactly as given, one entry per figure. "
+    "Output ONLY the JSON object: no markdown, no commentary, no extra "
+    "keys. Decide from the image pixels first, then ground words in the "
+    "hints. Set kind to the ONE visual form that fits this image: photo "
+    "for camera, microscope, or die shots; plot for charts, graphs, and "
+    "histograms; schematic for circuit diagrams; diagram for block and "
+    "flow diagrams; equation for math; unknown only when the image "
+    "matches none of these. Set caption to the full caption-candidate "
+    "text whose words describe visible content in this image; when no "
+    "candidate matches, null. Set label to the figure mention at the "
+    "start of the chosen caption candidate (for example 'Figure 3'); "
+    "when caption is null, label is null too. Never invent, shorten, "
+    "or reword labels and captions: transcribe exactly or use null."
+)
+
+_REGION_INSTRUCTIONS = (
+    "You locate methodology components inside research-paper figures, in any "
+    "research field. Each request lists graph nodes (id, kind, label) and "
+    "carries figure images. Return only a JSON object shaped "
+    '{"regions": [{"figure_id": str, "bbox": [x, y, width, height], '
+    '"node_id": str | null, "label": str, "confidence": float | null}]}. '
+    "Echo each figure_id exactly as given. Output ONLY the JSON "
+    "object: no markdown, no commentary, no extra keys. Bboxes use "
+    "normalized 0..1 coordinates: x and y mark the top-left corner as "
+    "fractions of the image width and height, width and height are "
+    "fractions of the image size. Localize every distinct labeled "
+    "component, sub-panel, and legended feature: typical figures yield "
+    "several regions, not one. Set node_id to a listed node id whenever "
+    "the region clearly depicts that component; otherwise null. Label "
+    "each region with its visible caption or a short neutral "
+    "description. Never invent regions, boxes, or node links that are "
+    "not visible in the image."
 )
 
 
@@ -320,7 +408,15 @@ class MuseMethodologyProvider:
                 f"Page: {figure.page if figure.page is not None else 'unknown'}",
             ]
             if figure.label_hint:
-                hint_lines.append(f"Label hint: {figure.label_hint}")
+                hint_lines.append(
+                    "Label hints (printed labels found on this page; "
+                    f"use one only if it belongs to this image): {figure.label_hint}"
+                )
+            if figure.caption_hint:
+                hint_lines.append(
+                    "Caption candidates (transcribe the one that captions "
+                    f"this image):\n{figure.caption_hint}"
+                )
             if figure.surrounding_text:
                 hint_lines.append(f"Surrounding text:\n{figure.surrounding_text}")
             content.append({"type": "input_text", "text": "\n".join(hint_lines)})
@@ -335,7 +431,7 @@ class MuseMethodologyProvider:
             instructions=_FIGURE_INSTRUCTIONS,
             content=content,
             schema_name=FIGURES_SCHEMA_NAME,
-            schema=FigureDescriptionList.model_json_schema(),
+            schema=FIGURE_OUTPUT_SCHEMA,
         )
         raw = self._response_json_object(data, what="figure description")
 
@@ -351,6 +447,72 @@ class MuseMethodologyProvider:
         figure_set, warnings = build_figure_set(request, descriptions)
         return FigureDescriptionResult(
             draft_figures=figure_set,
+            provider_name=self.provider_name,
+            model_name=self._model_name,
+            warnings=warnings,
+            usage=self.last_usage,
+        )
+
+    async def localize_regions(
+        self,
+        request: RegionLocalizationRequest,
+    ) -> RegionLocalizationResult:
+        """Locate graph nodes inside figure images, merged with trusted IDs."""
+        node_lines = ["Graph nodes (link a region only to these ids):"]
+        for node in request.nodes:
+            line = f"- {node.node_id} [{node.kind}] {node.label}"
+            if node.description:
+                line += f": {node.description}"
+            node_lines.append(line)
+        content: list[dict[str, str]] = [
+            {"type": "input_text", "text": "\n".join(node_lines)}
+        ]
+        for figure in request.figures:
+            encoded = base64.b64encode(figure.image_bytes).decode("ascii")
+            hint_lines = [
+                f"Figure ID: {figure.figure_id}",
+                f"Page: {figure.page if figure.page is not None else 'unknown'}",
+            ]
+            if figure.label_hint:
+                hint_lines.append(
+                    "Label hints (printed labels found on this page; "
+                    f"use one only if it belongs to this image): {figure.label_hint}"
+                )
+            if figure.caption_hint:
+                hint_lines.append(
+                    "Caption candidates (the one that captions "
+                    f"this image):\n{figure.caption_hint}"
+                )
+            if figure.surrounding_text:
+                hint_lines.append(f"Surrounding text:\n{figure.surrounding_text}")
+            content.append({"type": "input_text", "text": "\n".join(hint_lines)})
+            content.append(
+                {
+                    "type": "input_image",
+                    "image_url": f"data:{figure.mime_type};base64,{encoded}",
+                }
+            )
+
+        data = await self._create_response(
+            instructions=_REGION_INSTRUCTIONS,
+            content=content,
+            schema_name=REGIONS_SCHEMA_NAME,
+            schema=REGION_OUTPUT_SCHEMA,
+        )
+        raw = self._response_json_object(data, what="figure region")
+
+        if not isinstance(raw, dict):
+            raise MuseProviderError("Muse output must be a JSON object.")
+        try:
+            proposals = FigureRegionList.model_validate(raw)
+        except ValidationError as exc:
+            raise MuseProviderError(
+                "Muse returned an invalid figure region response."
+            ) from exc
+
+        region_set, warnings = build_region_set(request, proposals)
+        return RegionLocalizationResult(
+            draft_regions=region_set,
             provider_name=self.provider_name,
             model_name=self._model_name,
             warnings=warnings,

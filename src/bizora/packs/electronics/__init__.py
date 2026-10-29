@@ -32,6 +32,7 @@ from bizora.contracts.packs import (
     PartResolution,
     RenderSpec,
     SimulationPreview,
+    TelemetryMapping,
 )
 from bizora.contracts.patches import GraphPatch
 from bizora.packs.electronics.data import (
@@ -157,6 +158,10 @@ class ElectronicsPack:
     def simulation_preview(self, graph: MethodologyGraph) -> SimulationPreview | None:
         """Return the wired builder's preview, or None when the pack offers none."""
         return self._lexical.simulation_preview(graph)
+
+    def telemetry_mapping(self) -> TelemetryMapping | None:
+        """Return None: no pack maps live telemetry yet (Stage 2)."""
+        return self._lexical.telemetry_mapping()
 
 
 pack = ElectronicsPack()

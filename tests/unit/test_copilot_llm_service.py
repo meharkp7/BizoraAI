@@ -275,3 +275,60 @@ def test_async_entry_rejects_bad_mode() -> None:
         raise AssertionError("expected ValueError")
 
     asyncio.run(run_test())
+
+
+def test_flat_final_answer_coerces_to_typed_citations() -> None:
+    """Flat schema citations narrow to their kind before validation."""
+    from bizora.copilot.service import _parse_final_answer
+
+    answer = _parse_final_answer(
+        json.dumps(
+            {
+                "reply": "The filter corner is 4 kHz per the paper.",
+                "citations": [
+                    {
+                        "kind": "evidence",
+                        "source_id": EVAL_SOURCE_ID,
+                        "page": 3,
+                        "quote": None,
+                        "figure_label": None,
+                        "run_id": None,
+                        "metric_name": None,
+                        "component_id": None,
+                    },
+                    {
+                        "kind": "run",
+                        "source_id": None,
+                        "page": None,
+                        "quote": None,
+                        "figure_label": None,
+                        "run_id": "run-eval-1",
+                        "metric_name": "accuracy",
+                        "component_id": None,
+                    },
+                ],
+                "proposal": None,
+                "assumed": False,
+            }
+        )
+    )
+
+    assert answer.reply.startswith("The filter corner")
+    assert answer.citations[0].kind == "evidence"
+    assert answer.citations[1].kind == "run"
+
+
+def test_flat_output_schema_matches_answer_contract() -> None:
+    """The flat schema must stay in sync with CopilotAnswer fields."""
+    from bizora.copilot.citations import CopilotAnswer
+    from bizora.copilot.service import COPILOT_ANSWER_OUTPUT_SCHEMA
+
+    assert set(COPILOT_ANSWER_OUTPUT_SCHEMA["properties"]) == set(
+        CopilotAnswer.model_fields
+    )
+    assert set(COPILOT_ANSWER_OUTPUT_SCHEMA["required"]) == set(
+        CopilotAnswer.model_fields
+    )
+    item = COPILOT_ANSWER_OUTPUT_SCHEMA["properties"]["citations"]["items"]
+    assert set(item["properties"]["kind"]["enum"]) == {"evidence", "run", "component"}
+    assert "$defs" not in COPILOT_ANSWER_OUTPUT_SCHEMA

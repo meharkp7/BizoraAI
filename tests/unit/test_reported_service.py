@@ -2,7 +2,7 @@
 
 from bizora.contracts.streaming import PaperReportedMetric
 from bizora.contracts.table import ExtractedTable
-from bizora.core.reported_service import reported_metrics_for_tables
+from bizora.core.reported_service import discover_reported_metrics, reported_metrics_for_tables
 
 
 def _table(
@@ -112,3 +112,44 @@ def test_multiple_tables_accumulate_without_duplicates() -> None:
 
     assert len(entries) == 2
     assert all(isinstance(entry, PaperReportedMetric) for entry in entries)
+
+
+def test_discover_quotes_cells_with_pair_names() -> None:
+    entries = discover_reported_metrics([_column_table()])
+
+    assert [(entry.name, entry.raw_value) for entry in entries] == [
+        ("Ours — Accuracy", "0.92"),
+        ("Baseline — Accuracy", "0.71"),
+    ]
+    assert all(entry.source_id == "paper-1" for entry in entries)
+    assert all(entry.locator for entry in entries)
+    assert all(entry.quote for entry in entries)
+
+
+def test_discover_reads_comparison_tables() -> None:
+    table = _table(
+        "table-cmp",
+        ("Metric", "Prior", "This Work"),
+        (("Uniqueness (%)", "50.01", "49.53"), ("Type", "SRAM", "PUF")),
+    )
+    entries = discover_reported_metrics([table])
+
+    assert [(entry.name, entry.raw_value, entry.unit) for entry in entries] == [
+        ("Uniqueness (%) — Prior", "50.01", "%"),
+        ("Uniqueness (%) — This Work", "49.53", "%"),
+    ]
+
+
+def test_discover_ignores_text_only_tables() -> None:
+    table = _table("table-9", ("A", "B"), (("x", "y"),))
+    assert discover_reported_metrics([table]) == ()
+    assert discover_reported_metrics([]) == ()
+
+
+def test_discover_merges_repeat_values() -> None:
+    entries = discover_reported_metrics([_column_table(), _column_table()])
+
+    assert [(entry.name, entry.raw_value) for entry in entries] == [
+        ("Ours — Accuracy", "0.92"),
+        ("Baseline — Accuracy", "0.71"),
+    ]

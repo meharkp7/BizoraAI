@@ -62,6 +62,19 @@ def test_search_supports_category_filter() -> None:
     assert "electronics" in list_domains()
 
 
+def test_catalog_entries_carry_entity_symbols() -> None:
+    """Every entry projects its entity type's pack-declared symbol."""
+    assert len(CATALOG) >= 50
+    for detail in CATALOG.values():
+        profile = pack_profile(detail.domain)
+        expected = next(
+            entity.symbol for entity in profile.entity_types if entity.type_id == detail.entity_type
+        )
+        assert detail.symbol == expected, detail.component_id
+    hits = search_components("2N3904")
+    assert hits[0].symbol == "transistor"
+
+
 def test_preflight_approves_transistor_replacement() -> None:
     """2N3904 keeps the access-transistor interfaces and preserves edges."""
     graph = load_graph("sram")

@@ -21,6 +21,7 @@ from bizora.contracts.packs import (
     PartResolution,
     RenderSpec,
     SimulationPreview,
+    TelemetryMapping,
 )
 from bizora.contracts.patches import GraphPatch
 
@@ -78,6 +79,14 @@ class DomainPack(Protocol):
 
     def simulation_preview(self, graph: MethodologyGraph) -> SimulationPreview | None:
         """Return what this pack would simulate, or None when it offers none."""
+        ...
+
+    def telemetry_mapping(self) -> TelemetryMapping | None:
+        """Return which live signals light up which entity types.
+
+        None means unmapped: the pack declares no telemetry yet and the
+        measured-overlay channel stays empty for its graphs.
+        """
         ...
 
 

@@ -114,6 +114,27 @@ class RenderSpec(BaseModel):
     )
 
 
+class TelemetrySignal(BaseModel):
+    """One live signal a run can stream onto graph nodes or edges."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    signal: str = Field(pattern=_SLUG_PATTERN.pattern, max_length=128)
+    unit: str | None = Field(default=None, max_length=32)
+    applies_to: tuple[str, ...] = Field(
+        default=(),
+        description="Entity type ids this signal lights up; empty means any node.",
+    )
+
+
+class TelemetryMapping(BaseModel):
+    """Which live signals light up which entity types (Stage 2)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    signals: tuple[TelemetrySignal, ...] = ()
+
+
 class PackPreflightSeverity(StrEnum):
     """Whether a pack preflight finding blocks the edit."""
 

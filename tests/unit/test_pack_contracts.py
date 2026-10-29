@@ -20,6 +20,7 @@ from bizora.contracts.packs import (
     ResolutionConfidence,
     ResolutionLevel,
     SimulationPreview,
+    TelemetryMapping,
     normalize_tag_label,
 )
 from bizora.contracts.patches import GraphPatch
@@ -80,6 +81,9 @@ class ToyPack:
         return ()
 
     def simulation_preview(self, graph: MethodologyGraph) -> SimulationPreview | None:
+        return None
+
+    def telemetry_mapping(self) -> TelemetryMapping | None:
         return None
 
 

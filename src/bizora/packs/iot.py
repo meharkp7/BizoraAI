@@ -26,6 +26,7 @@ from bizora.contracts.packs import (
     PartResolution,
     RenderSpec,
     SimulationPreview,
+    TelemetryMapping,
 )
 from bizora.contracts.patches import GraphPatch, PatchOperation
 from bizora.core.entity_registry import EntityTypeDef, InterfaceDef
@@ -1362,6 +1363,10 @@ class IoTPack:
     def simulation_preview(self, graph: MethodologyGraph) -> SimulationPreview | None:
         """Return the wired builder's preview, or None when the pack offers none."""
         return self._lexical.simulation_preview(graph)
+
+    def telemetry_mapping(self) -> TelemetryMapping | None:
+        """Return None: no pack maps live telemetry yet (Stage 2)."""
+        return self._lexical.telemetry_mapping()
 
 
 pack = IoTPack()

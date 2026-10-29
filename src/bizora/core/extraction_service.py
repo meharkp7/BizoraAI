@@ -4,6 +4,7 @@
 from bizora.contracts.assumptions import annotate_graph
 from bizora.contracts.graph import MethodologyGraph
 from bizora.core.errors import BizoraError, ErrorCode, GraphValidationError
+from bizora.core.extraction_cache import draft_key, load_draft, rekey_draft, save_draft
 from bizora.core.graph_service import GraphService
 from bizora.providers.base import (
     MethodologyExtractionRequest,
@@ -18,13 +19,22 @@ class MethodologyExtractionService:
     async def extract_draft(
         provider: MethodologyProvider,
         request: MethodologyExtractionRequest,
+        *,
+        use_cache: bool = True,
     ) -> MethodologyGraph:
         """Extract a draft and validate it without persisting it."""
 
-        result = await provider.extract_methodology(request)
+        key = draft_key(request.paper_text, provider)
+        cached = load_draft(key) if use_cache else None
+        if cached is not None:
+            draft = rekey_draft(cached, request)
+        else:
+            result = await provider.extract_methodology(request)
+            draft = result.draft_graph
+            save_draft(key, draft)
         # Mark every claim without evidence as assumed (with a reason) so
         # the draft visibly distinguishes fact from inference (R2).
-        graph = annotate_graph(result.draft_graph)
+        graph = annotate_graph(draft)
 
         # Ensure the provider returned a graph for the requested resource.
         if (

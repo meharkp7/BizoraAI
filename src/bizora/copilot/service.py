@@ -41,6 +41,96 @@ from bizora.providers.copilot import (
     CopilotUsage,
 )
 
+# Minimal flat schema for the final answer. The generated Pydantic
+# schema ($defs/$ref, unions) degrades constrained output on this
+# model into gibberish; this plain shape elicits clean JSON while
+# local validation stays the strict gate.
+COPILOT_ANSWER_OUTPUT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "reply": {"type": "string"},
+        "citations": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "kind": {"type": "string", "enum": ["evidence", "run", "component"]},
+                    "source_id": {"type": ["string", "null"]},
+                    "page": {"type": ["number", "null"]},
+                    "quote": {"type": ["string", "null"]},
+                    "figure_label": {"type": ["string", "null"]},
+                    "run_id": {"type": ["string", "null"]},
+                    "metric_name": {"type": ["string", "null"]},
+                    "component_id": {"type": ["string", "null"]},
+                },
+                "required": [
+                    "kind",
+                    "source_id",
+                    "page",
+                    "quote",
+                    "figure_label",
+                    "run_id",
+                    "metric_name",
+                    "component_id",
+                ],
+                "additionalProperties": False,
+            },
+        },
+        "proposal": {
+            "type": ["object", "null"],
+            "properties": {
+                "node_id": {"type": "string"},
+                "component_id": {"type": ["string", "null"]},
+                "kind": {"type": "string"},
+                "label": {"type": "string"},
+                "description": {"type": ["string", "null"]},
+                "config": {"type": "object"},
+                "rationale": {"type": "string"},
+            },
+            "required": [
+                "node_id",
+                "component_id",
+                "kind",
+                "label",
+                "description",
+                "config",
+                "rationale",
+            ],
+            "additionalProperties": False,
+        },
+        "assumed": {"type": "boolean"},
+    },
+    "required": ["reply", "citations", "proposal", "assumed"],
+    "additionalProperties": False,
+}
+
+_CITATION_KEYS: dict[str, tuple[str, ...]] = {
+    "evidence": ("source_id", "page", "quote", "figure_label"),
+    "run": ("run_id", "metric_name"),
+    "component": ("component_id",),
+}
+
+
+def _coerce_flat_citation(raw: Any) -> Any:
+    """Narrow one flat citation dict to its kind's relevant keys.
+
+    The flat output schema carries every citation field on every
+    citation; the typed contracts forbid unknown keys, so coercion
+    keeps the kind plus its own non-null fields before validation.
+    Already-typed citations pass through untouched.
+    """
+    if not isinstance(raw, dict):
+        return raw
+    kind = raw.get("kind")
+    if kind not in _CITATION_KEYS:
+        return raw
+    coerced: dict[str, Any] = {"kind": kind}
+    for key in _CITATION_KEYS[kind]:
+        value = raw.get(key)
+        if value is not None:
+            coerced[key] = value
+    return coerced
+
 
 @dataclass
 class CopilotRunReport:
@@ -194,6 +284,11 @@ def _parse_final_answer(content: str) -> CopilotAnswer:
         if lines and lines[-1].strip() == "```":
             lines = lines[:-1]
         data = json.loads("\n".join(lines))
+    if isinstance(data, dict) and isinstance(data.get("citations"), list):
+        data = {
+            **data,
+            "citations": [_coerce_flat_citation(raw) for raw in data["citations"]],
+        }
     return CopilotAnswer.model_validate(data)
 
 
@@ -260,7 +355,7 @@ async def answer_with_llm(
 
     history.append(CopilotMessage(role="user", content=FINAL_ANSWER_INSTRUCTION))
     final: CopilotAssistantTurn = await provider.chat(
-        history, [], response_schema=CopilotAnswer.model_json_schema()
+        history, [], response_schema=COPILOT_ANSWER_OUTPUT_SCHEMA
     )
     run_report.turns.append(CopilotAssistantTurn(content=final.content))
     if final.usage is not None:

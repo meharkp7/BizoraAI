@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from bizora.contracts.experiment import ExperimentConfig, ResultKind
+from bizora.contracts.figures import FigureRecord, FigureRegion, PaperFigure
 from bizora.contracts.graph import MethodologyGraph
 from bizora.contracts.layout import GraphLayout
 from bizora.contracts.run import (
@@ -29,6 +30,7 @@ from bizora.db.models import (
     GraphLayoutRecord,
     GraphRevisionRecord,
     MetricRecordRow,
+    PaperFigureRecord,
 )
 
 
@@ -639,3 +641,126 @@ def list_extracted_tables(
         .order_by(ExtractedTableRecord.table_id.asc())
     )
     return list(session.scalars(statement))
+
+
+def paper_figure_from_record(record: PaperFigureRecord) -> PaperFigure:
+    """Convert a persisted figure row into its contract (no image bytes)."""
+    regions = tuple(
+        FigureRegion.model_validate(region)
+        for region in record.regions_payload.get("regions", [])
+    )
+    return PaperFigure(
+        figure_id=record.figure_id,
+        project_id=record.project_id,
+        graph_id=record.graph_id,
+        source_id=record.source_id,
+        created_by=record.created_by,
+        page=record.page,
+        label=record.label,
+        caption=record.caption,
+        kind=record.kind,
+        mime_type=record.mime_type,
+        sha256=record.sha256,
+        byte_size=record.byte_size,
+        width=record.width,
+        height=record.height,
+        confidence=record.confidence,
+        regions=regions,
+    )
+
+
+def save_paper_figure(
+    session: Session,
+    *,
+    project_id: str,
+    graph_id: str,
+    source_id: str,
+    created_by: str,
+    figure: FigureRecord,
+    regions: tuple[FigureRegion, ...],
+    image_bytes: bytes,
+) -> PaperFigureRecord:
+    """Stage one paper figure and flush it without committing."""
+    record = PaperFigureRecord(
+        project_id=project_id,
+        graph_id=graph_id,
+        figure_id=figure.figure_id,
+        source_id=source_id,
+        created_by=created_by,
+        page=figure.page,
+        label=figure.label,
+        caption=figure.caption,
+        kind=figure.kind.value,
+        mime_type=figure.mime_type,
+        sha256=figure.sha256,
+        byte_size=figure.byte_size,
+        width=figure.width,
+        height=figure.height,
+        context=figure.context,
+        confidence=figure.confidence,
+        image_bytes=image_bytes,
+        regions_payload={
+            "regions": [region.model_dump(mode="json") for region in regions]
+        },
+    )
+    session.add(record)
+    try:
+        session.flush()
+    except IntegrityError as exc:
+        session.rollback()
+        raise BizoraError(
+            ErrorCode.RESOURCE_CONFLICT,
+            "The paper figure conflicts with an existing database record.",
+            details={
+                "project_id": project_id,
+                "graph_id": graph_id,
+                "figure_id": figure.figure_id,
+            },
+        ) from exc
+    return record
+
+
+def list_paper_figures(
+    session: Session,
+    *,
+    project_id: str,
+    graph_id: str,
+) -> list[PaperFigureRecord]:
+    """List one graph's paper figures in page order, then figure id."""
+    statement = (
+        select(PaperFigureRecord)
+        .where(
+            PaperFigureRecord.project_id == project_id,
+            PaperFigureRecord.graph_id == graph_id,
+        )
+        .order_by(
+            PaperFigureRecord.page.asc().nulls_last(),
+            PaperFigureRecord.figure_id.asc(),
+        )
+    )
+    return list(session.scalars(statement))
+
+
+def get_paper_figure(
+    session: Session,
+    *,
+    project_id: str,
+    graph_id: str,
+    figure_id: str,
+) -> PaperFigureRecord | None:
+    """Fetch one paper figure row, or None when absent."""
+    statement = select(PaperFigureRecord).where(
+        PaperFigureRecord.project_id == project_id,
+        PaperFigureRecord.graph_id == graph_id,
+        PaperFigureRecord.figure_id == figure_id,
+    )
+    return session.scalars(statement).first()
+
+
+def delete_paper_figures(session: Session, *, project_id: str, graph_id: str) -> int:
+    """Delete one graph's paper figures, returning the removed row count."""
+    rows = list_paper_figures(session, project_id=project_id, graph_id=graph_id)
+    for row in rows:
+        session.delete(row)
+    session.flush()
+    return len(rows)

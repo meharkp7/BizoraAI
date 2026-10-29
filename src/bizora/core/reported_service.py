@@ -89,6 +89,94 @@ def reported_metrics_for_tables(
             wanted.setdefault(_match_key(cleaned), cleaned)
     if not wanted:
         return ()
+    return _deduplicated(tables, wanted)
+
+
+MAX_DISCOVERED_METRICS = 200
+
+
+def _paren_unit(text: str) -> str | None:
+    """Extract a trailing parenthetical unit, if present."""
+    match = re.search(r"\(([^()]*)\)\s*$", text.strip())
+    if match is None:
+        return None
+    unit = " ".join(match.group(1).split())
+    return unit or None
+
+
+def _discover_table(table: ExtractedTable) -> list[PaperReportedMetric]:
+    """Quote every purely numeric value cell with a pair name.
+
+    The entry name joins the row label and column header ("Ours —
+    Accuracy"), which reads correctly in both table orientations:
+    results tables ("Ours — Accuracy" = 0.92) and comparison tables
+    ("Uniqueness — This Work" = 49.53). Cells that are not purely
+    numeric ("SRAM", "N/A", annotated values) emit nothing rather
+    than a misparsed number.
+    """
+    entries: list[PaperReportedMetric] = []
+    for row_number, row in enumerate(table.rows, start=1):
+        label = row[0].strip() if row else ""
+        for position, cell in enumerate(row[1:], start=1):
+            value, unit = _parse_value(cell)
+            if value is None:
+                continue
+            header = (
+                table.columns[position].strip()
+                if position < len(table.columns)
+                else ""
+            )
+            if label and header:
+                name = f"{label} — {header}"
+            else:
+                name = header or label or f"Row {row_number}"
+            entry = _entry(
+                name,
+                cell,
+                table,
+                quote=f"{cell.strip()} ({name})",
+                locator=(
+                    f"Table {table.table_id}: row {row_number} "
+                    f"('{label}'): column '{header}'"
+                ),
+            )
+            entries.append(
+                entry.model_copy(
+                    update={
+                        "unit": unit
+                        or _paren_unit(header)
+                        or _paren_unit(label)
+                    }
+                )
+            )
+    return entries
+
+
+def discover_reported_metrics(
+    tables: Sequence[ExtractedTable],
+) -> tuple[PaperReportedMetric, ...]:
+    """Quote every numeric value cell in every table, deduplicated.
+
+    Discovery powers the reported-results panel: entry names join
+    the paper's own row label and column header, so nothing is
+    invented and comparison tables read correctly. Repeat
+    name/value pairs merge; output is capped for sanity.
+    """
+    merged: list[PaperReportedMetric] = []
+    seen: set[tuple[str, str]] = set()
+    for table in tables:
+        for entry in _discover_table(table):
+            key = (entry.name, entry.raw_value)
+            if key not in seen:
+                seen.add(key)
+                merged.append(entry)
+    return tuple(merged[:MAX_DISCOVERED_METRICS])
+
+
+def _deduplicated(
+    tables: Sequence[ExtractedTable],
+    wanted: dict[str, str],
+) -> tuple[PaperReportedMetric, ...]:
     entries: list[PaperReportedMetric] = []
     seen: set[tuple[str, str, str]] = set()
     for table in tables:

@@ -106,6 +106,15 @@ class MethodologyGraph(BaseModel):
     created_by: str = Field(min_length=1, max_length=128)
     parent_version: int | None = Field(default=None, ge=1)
     brief: ResearchBrief | None = None
+    domain_hint: str | None = Field(
+        default=None,
+        max_length=64,
+        description=(
+            "Model-produced domain label from extraction. Detection trusts it "
+            "only when it names a registered pack, and falls back to lexical "
+            "routing otherwise."
+        ),
+    )
 
     @model_validator(mode="after")
     def validate_version_lineage(self) -> "MethodologyGraph":

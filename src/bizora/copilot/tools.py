@@ -16,16 +16,20 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from bizora.contracts.components import CopilotProposal
+from bizora.contracts.figures import PaperFigure
 from bizora.contracts.graph import MethodologyGraph
 from bizora.contracts.run import ExperimentRun, MetricRecord
+from bizora.contracts.table import ExtractedTable
 from bizora.copilot.pack_tools import execute_pack_tool
 from bizora.core.component_catalog import get_component, search_components
 from bizora.core.component_service import (
     build_replacement_node,
+    preflight_removal,
     preflight_replacement,
 )
 from bizora.core.diff_service import RevisionDiffService
 from bizora.core.errors import BizoraError
+from bizora.core.reported_service import reported_metrics_for_tables
 from bizora.packs.base import DomainPack
 from bizora.providers.copilot import CopilotToolSpec
 
@@ -40,6 +44,8 @@ class CopilotContext:
     list_runs: Callable[[], list[ExperimentRun]] | None = None
     get_run: Callable[[str], ExperimentRun | None] | None = None
     list_metrics: Callable[[str], list[MetricRecord]] | None = None
+    list_tables: Callable[[], list[ExtractedTable]] | None = None
+    list_figures: Callable[[], list[PaperFigure]] | None = None
     write_log: list[str] = field(default_factory=list)
     pack: DomainPack | None = None
 
@@ -68,6 +74,18 @@ class CopilotContext:
         if self.list_metrics is None:
             return []
         return self.list_metrics(run_id)
+
+    def tables(self) -> list[ExtractedTable]:
+        """List extracted results tables visible to this question."""
+        if self.list_tables is None:
+            return []
+        return self.list_tables()
+
+    def figures(self) -> list[PaperFigure]:
+        """List ingested paper figures visible to this question."""
+        if self.list_figures is None:
+            return []
+        return self.list_figures()
 
 
 def _node_payload(graph: MethodologyGraph, node_id: str) -> dict[str, Any] | None:
@@ -290,6 +308,25 @@ def tool_run_preflight(context: CopilotContext, arguments: dict[str, Any]) -> di
     }
 
 
+def tool_run_removal_preflight(
+    context: CopilotContext, arguments: dict[str, Any]
+) -> dict[str, Any]:
+    """Preview removing one node: neighbors, dropped edges, paper claims."""
+    node_id = arguments.get("node_id")
+    if not isinstance(node_id, str) or not node_id.strip():
+        return {"error": "node_id must be a non-empty string."}
+    try:
+        preflight = preflight_removal(context.graph, node_id.strip())
+    except BizoraError as exc:
+        return {"error": str(exc)}
+    return {
+        "target_node_id": preflight.target_node_id,
+        "neighbor_node_ids": list(preflight.neighbor_node_ids),
+        "dropped_edge_ids": list(preflight.dropped_edge_ids),
+        "evidence": [ref.model_dump(mode="json") for ref in preflight.evidence],
+    }
+
+
 def tool_propose_patch(context: CopilotContext, arguments: dict[str, Any]) -> dict[str, Any]:
     """Build a patch proposal for human approval; never applies it."""
     node_id = arguments.get("node_id")
@@ -344,6 +381,113 @@ def tool_propose_patch(context: CopilotContext, arguments: dict[str, Any]) -> di
     }
 
 
+MAX_TABLE_ROWS_PER_TOOL_CALL = 12
+
+
+def _short_text(text: str, limit: int) -> str:
+    cleaned = " ".join(text.split())
+    return cleaned[:limit]
+
+
+def tool_read_tables(context: CopilotContext, arguments: dict[str, Any]) -> dict[str, Any]:
+    """Read the paper's extracted results tables, optionally one table."""
+    tables = context.tables()
+    if not tables:
+        return {"tables": [], "note": "No results tables were extracted for this graph."}
+    wanted = arguments.get("table_id")
+    if isinstance(wanted, str) and wanted.strip():
+        tables = [table for table in tables if table.table_id == wanted.strip()]
+        if not tables:
+            return {"error": f"No table has id {wanted.strip()!r}."}
+    payload = [
+        {
+            "table_id": table.table_id,
+            "caption": table.caption,
+            "page": table.page,
+            "quote": table.quote,
+            "columns": list(table.columns),
+            "rows": [list(row) for row in table.rows[:MAX_TABLE_ROWS_PER_TOOL_CALL]],
+            "truncated_rows": max(0, len(table.rows) - MAX_TABLE_ROWS_PER_TOOL_CALL),
+        }
+        for table in tables
+    ]
+    evidence = [
+        {
+            "source_id": table.source_id,
+            "page": table.page,
+            "quote": _short_text(f"{table.caption} {table.quote or ''}", 2000),
+            "figure_label": None,
+        }
+        for table in tables
+    ]
+    return {"tables": payload, "target": {"id": "tables", "evidence": evidence}}
+
+
+def tool_read_figures(context: CopilotContext, arguments: dict[str, Any]) -> dict[str, Any]:
+    """Read the paper's ingested figures with their localized regions."""
+    figures = context.figures()
+    if not figures:
+        return {"figures": [], "note": "No figures were ingested for this graph."}
+    wanted = arguments.get("figure_id")
+    if isinstance(wanted, str) and wanted.strip():
+        figures = [figure for figure in figures if figure.figure_id == wanted.strip()]
+        if not figures:
+            return {"error": f"No figure has id {wanted.strip()!r}."}
+    payload = [
+        {
+            "figure_id": figure.figure_id,
+            "label": figure.label,
+            "kind": figure.kind.value,
+            "page": figure.page,
+            "caption": _short_text(figure.caption or "", 1200),
+            "regions": [
+                {"label": region.label, "node_id": region.node_id}
+                for region in figure.regions
+            ],
+        }
+        for figure in figures
+    ]
+    evidence = [
+        {
+            "source_id": figure.source_id,
+            "page": figure.page,
+            "quote": _short_text(figure.caption or figure.label or "", 2000) or None,
+            "figure_label": figure.label,
+        }
+        for figure in figures
+    ]
+    return {"figures": payload, "target": {"id": "figures", "evidence": evidence}}
+
+
+def tool_quote_reported(
+    context: CopilotContext, arguments: dict[str, Any]
+) -> dict[str, Any]:
+    """Quote the paper's reported numbers for named metrics."""
+    names = arguments.get("names")
+    if not isinstance(names, list) or not names:
+        return {"error": "names must be a non-empty list of metric names."}
+    cleaned = [name.strip() for name in names if isinstance(name, str) and name.strip()]
+    if not cleaned:
+        return {"error": "names must be a non-empty list of metric names."}
+    tables = context.tables()
+    if not tables:
+        return {"entries": [], "note": "No results tables were extracted for this graph."}
+    entries = reported_metrics_for_tables(tables, cleaned)
+    evidence = [
+        {
+            "source_id": entry.source_id,
+            "page": entry.page,
+            "quote": entry.quote,
+            "figure_label": None,
+        }
+        for entry in entries
+    ]
+    return {
+        "entries": [entry.model_dump(mode="json") for entry in entries],
+        "target": {"id": "reported-metrics", "evidence": evidence},
+    }
+
+
 TOOL_HANDLERS = {
     "search_library": tool_search_library,
     "read_evidence": tool_read_evidence,
@@ -351,7 +495,11 @@ TOOL_HANDLERS = {
     "diff_revisions": tool_diff_revisions,
     "query_runs": tool_query_runs,
     "run_preflight": tool_run_preflight,
+    "run_removal_preflight": tool_run_removal_preflight,
     "propose_patch": tool_propose_patch,
+    "read_tables": tool_read_tables,
+    "read_figures": tool_read_figures,
+    "quote_reported": tool_quote_reported,
 }
 
 
@@ -434,6 +582,17 @@ TOOL_SPECS: tuple[CopilotToolSpec, ...] = (
         },
     ),
     CopilotToolSpec(
+        name="run_removal_preflight",
+        description="Preview removing one node: neighbors, dropped edges, paper claims.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "node_id": _string_prop("Graph node id to hypothetically remove."),
+            },
+            "required": ["node_id"],
+        },
+    ),
+    CopilotToolSpec(
         name="propose_patch",
         description=("Build a patch proposal for human approval. Never applies anything."),
         parameters={
@@ -447,6 +606,41 @@ TOOL_SPECS: tuple[CopilotToolSpec, ...] = (
                 "rationale": _string_prop("Why this change is suggested."),
             },
             "required": ["node_id", "rationale"],
+        },
+    ),
+    CopilotToolSpec(
+        name="read_tables",
+        description="Read the paper's extracted results tables.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "table_id": _string_prop("One table to read; omit to list all tables."),
+            },
+        },
+    ),
+    CopilotToolSpec(
+        name="read_figures",
+        description="Read the paper's figures with localized component regions.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "figure_id": _string_prop("One figure to read; omit to list all figures."),
+            },
+        },
+    ),
+    CopilotToolSpec(
+        name="quote_reported",
+        description="Quote the paper's reported numbers for named metrics.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "names": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Metric names to quote from the tables.",
+                },
+            },
+            "required": ["names"],
         },
     ),
 )

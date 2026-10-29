@@ -8,14 +8,21 @@ import pytest
 
 from bizora.contracts.figures import (
     FigureAttachment,
+    FigureDescription,
     FigureDescriptionRequest,
+    FigureKind,
+    FigureRegionProposal,
+    NodeHint,
+    RegionLocalizationRequest,
 )
 from bizora.providers.base import (
     MethodologyExtractionRequest,
     MethodologyProvider,
 )
 from bizora.providers.muse import (
+    FIGURE_OUTPUT_SCHEMA,
     MUSE_API_KEY_ENV_VAR,
+    REGION_OUTPUT_SCHEMA,
     MuseMethodologyProvider,
     MuseProviderError,
 )
@@ -206,6 +213,113 @@ def test_describe_figures_returns_merged_set() -> None:
         content = observed_request["input"][0]["content"]
         assert [block["type"] for block in content] == ["input_text", "input_image"]
         assert content[1]["image_url"].startswith("data:image/png;base64,")
+
+    asyncio.run(run_test())
+
+
+def make_region_request() -> RegionLocalizationRequest:
+    return RegionLocalizationRequest(
+        project_id="project-1",
+        graph_id="graph-1",
+        source_id="paper-1",
+        created_by="test-user",
+        figures=(
+            FigureAttachment(
+                figure_id="fig-1",
+                page=2,
+                image_bytes=b"\x89PNG-fake-bytes",
+                mime_type="image/png",
+                surrounding_text="Figure 1 shows the cell.",
+                label_hint="Figure 1",
+            ),
+        ),
+        nodes=(
+            NodeHint(node_id="bitcell", label="6T SRAM bitcell", kind="component"),
+            NodeHint(node_id="sense", label="Sense amplifier", kind="component"),
+        ),
+    )
+
+
+def test_localize_regions_returns_merged_set() -> None:
+    async def run_test() -> None:
+        observed_request: dict[str, object] = {}
+        fake_regions = {
+            "regions": [
+                {
+                    "figure_id": "fig-1",
+                    "bbox": [0.1, 0.2, 0.3, 0.25],
+                    "node_id": "bitcell",
+                    "label": "bitcell array",
+                    "confidence": 0.8,
+                },
+                {
+                    "figure_id": "fig-1",
+                    "bbox": [0.5, 0.5, 0.2, 0.2],
+                    "node_id": "ghost-node",
+                    "label": "mystery block",
+                    "confidence": None,
+                },
+            ]
+        }
+
+        def fake_handler(request: httpx.Request) -> httpx.Response:
+            observed_request.update(json.loads(request.content))
+            return httpx.Response(
+                200, json=make_fake_responses_envelope(json.dumps(fake_regions))
+            )
+
+        async with make_fake_client(httpx.MockTransport(fake_handler)) as client:
+            provider = MuseMethodologyProvider(
+                api_key=FAKE_API_KEY, model_name=FAKE_MODEL, client=client
+            )
+            result = await provider.localize_regions(make_region_request())
+
+        assert result.provider_name == "muse"
+        first, second = result.draft_regions.regions
+        assert first.region_id == "fig-1-r1"
+        assert first.node_id == "bitcell"
+        assert first.bbox == (0.1, 0.2, 0.3, 0.25)
+        assert second.region_id == "fig-1-r2"
+        assert second.node_id is None
+        assert len(result.warnings) == 1
+        text_format = observed_request["text"]["format"]
+        assert text_format["name"] == "FigureRegions"
+        content = observed_request["input"][0]["content"]
+        assert [block["type"] for block in content] == [
+            "input_text",
+            "input_text",
+            "input_image",
+        ]
+        assert "bitcell" in content[0]["text"]
+
+    asyncio.run(run_test())
+
+
+def test_flat_vision_schemas_match_contracts() -> None:
+    """The minimal vision schemas must stay in sync with the contracts."""
+    figure_item = FIGURE_OUTPUT_SCHEMA["properties"]["figures"]["items"]
+    assert set(figure_item["properties"]) == set(FigureDescription.model_fields)
+    assert set(figure_item["required"]) == set(FigureDescription.model_fields)
+    assert set(figure_item["properties"]["kind"]["enum"]) == {kind.value for kind in FigureKind}
+    assert "$defs" not in FIGURE_OUTPUT_SCHEMA
+
+    region_item = REGION_OUTPUT_SCHEMA["properties"]["regions"]["items"]
+    assert set(region_item["properties"]) == set(FigureRegionProposal.model_fields)
+    assert set(region_item["required"]) == set(FigureRegionProposal.model_fields)
+    assert "$defs" not in REGION_OUTPUT_SCHEMA
+
+
+def test_localize_regions_rejects_invalid_response() -> None:
+    async def run_test() -> None:
+        def fake_handler(_: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json=make_fake_responses_envelope("not JSON"))
+
+        async with make_fake_client(httpx.MockTransport(fake_handler)) as client:
+            provider = MuseMethodologyProvider(
+                api_key=FAKE_API_KEY, model_name=FAKE_MODEL, client=client
+            )
+            with pytest.raises(MuseProviderError, match="invalid figure region response"):
+                await provider.localize_regions(make_region_request())
 
     asyncio.run(run_test())
 

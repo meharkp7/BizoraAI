@@ -20,8 +20,8 @@ from bizora.core.config import get_settings
 from bizora.db.base import Base
 
 WORKTREE_ROOT = Path(__file__).resolve().parents[2]
-EXPECTED_HEAD = "0009_project_members"
-EXPECTED_REVISION_COUNT = 9
+EXPECTED_HEAD = "0010_paper_figures"
+EXPECTED_REVISION_COUNT = 10
 
 
 def _script() -> ScriptDirectory:

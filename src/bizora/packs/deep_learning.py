@@ -51,6 +51,7 @@ from bizora.contracts.packs import (
     ResolutionLevel,
     SimulationPreview,
     SimulationPreviewSection,
+    TelemetryMapping,
 )
 from bizora.contracts.patches import GraphPatch, PatchOperation
 from bizora.core.entity_registry import EntityTypeDef, InterfaceDef, tokenize
@@ -2249,6 +2250,10 @@ class DeepLearningPack:
             ),
             warnings=(),
         )
+
+    def telemetry_mapping(self) -> TelemetryMapping | None:
+        """Return None: no pack maps live telemetry yet (Stage 2)."""
+        return self._lexical.telemetry_mapping()
 
 
 pack = DeepLearningPack()

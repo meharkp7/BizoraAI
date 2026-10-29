@@ -72,6 +72,7 @@ def summarize(detail: ComponentDetail) -> ComponentSummary:
         manufacturer=detail.manufacturer,
         part_number=detail.part_number,
         headline=detail.headline,
+        symbol=detail.symbol,
     )
 
 

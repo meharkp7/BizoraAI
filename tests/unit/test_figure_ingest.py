@@ -1,6 +1,7 @@
 """Tests for figure/diagram image ingestion from PDFs."""
 
 from bizora.core.figure_ingest import (
+    caption_candidates,
     extract_figures_from_pdf,
     find_figure_mentions,
 )
@@ -121,7 +122,17 @@ def test_find_figure_mentions() -> None:
         "Figure 3",
         "Fig. 2a",
     )
+    assert find_figure_mentions("FIGURE 5. Die photo.") == ("FIGURE 5",)
     assert find_figure_mentions("No labels here.") == ()
+
+
+def test_caption_candidates_window_each_mention() -> None:
+    text = "FIGURE 5. Die photo and layout. Body text follows. Figure 6 shows more."
+    candidates = caption_candidates(text)
+    assert len(candidates) == 2
+    assert candidates[0].startswith("FIGURE 5. Die photo")
+    assert candidates[1].startswith("Figure 6 shows more.")
+    assert caption_candidates("No labels here.") == ()
 
 
 def test_page_texts_support_surrounding_text() -> None:
