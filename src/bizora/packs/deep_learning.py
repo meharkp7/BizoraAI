@@ -103,6 +103,7 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "layer",
         ("embed", "tokeniz", "positional"),
         (tensor_iface(),),
+        symbol="embedding",
     ),
     EntityTypeDef(
         "attention-block",
@@ -110,6 +111,7 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "layer",
         ("attention", "self-attention", "multi-head", "mha"),
         (tensor_iface(),),
+        symbol="attention",
     ),
     EntityTypeDef(
         "feedforward-block",
@@ -117,6 +119,7 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "layer",
         ("feed-forward", "ffn", "mlp", "linear", "dense"),
         (tensor_iface(),),
+        symbol="feedforward",
     ),
     EntityTypeDef(
         "normalization",
@@ -124,6 +127,7 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "layer",
         ("normaliz", "layernorm", "rmsnorm", "batchnorm"),
         (tensor_iface(),),
+        symbol="normalization",
     ),
     EntityTypeDef(
         "loss-function",
@@ -131,6 +135,8 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "compute",
         ("loss", "objective", "cross-entropy", "mse"),
         (tensor_iface(), InterfaceDef("gradients", "tensor")),
+        physical=False,
+        symbol="loss",
     ),
     EntityTypeDef(
         "optimizer",
@@ -138,6 +144,8 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "compute",
         ("optimiz", "adam", "sgd", "scheduler", "learning rate"),
         (InterfaceDef("gradients", "tensor"), InterfaceDef("state", "storage")),
+        physical=False,
+        symbol="optimizer",
     ),
     EntityTypeDef(
         "dataloader",
@@ -145,6 +153,8 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "storage",
         ("dataset", "dataloader", "corpus", "shard", "batch", "training"),
         (tensor_iface(),),
+        physical=False,
+        symbol="dataset",
     ),
     EntityTypeDef(
         "model-evaluator",
@@ -152,6 +162,8 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "compute",
         ("evaluat", "benchmark", "metric", "validation", "test set"),
         (data_iface(),),
+        physical=False,
+        symbol="evaluator",
     ),
 )
 

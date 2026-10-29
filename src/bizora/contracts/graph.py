@@ -22,6 +22,24 @@ class NodeKind(StrEnum):
     COMPONENT = "component"
 
 
+#: Node kinds that are processes or data by definition, never hardware.
+#: Resolution routes these to process entities without text matching,
+#: so a dataset can never resolve to a physical instrument no matter
+#: which measurement words its description carries. Ambiguous kinds
+#: (input, output, model, component) still resolve by text: a supply
+#: input is hardware while an image input is data.
+NON_PHYSICAL_NODE_KINDS = frozenset(
+    {
+        NodeKind.PREPROCESSING.value,
+        NodeKind.OPERATION.value,
+        NodeKind.LOSS.value,
+        NodeKind.OPTIMIZER.value,
+        NodeKind.EVALUATION.value,
+        NodeKind.DATASET.value,
+    }
+)
+
+
 class RelationKind(StrEnum):
     DATA_FLOW = "data_flow"
     CONTROL_FLOW = "control_flow"

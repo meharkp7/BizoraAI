@@ -446,6 +446,8 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "format",
         ("weight", "weights", "parameter", "tensor", "checkpoint"),
         (tensor_iface(),),
+        physical=False,
+        symbol="tensor",
     ),
     EntityTypeDef(
         "quant-format",
@@ -454,6 +456,8 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         ("nf4", "fp16", "fp32", "int8", "int4", "format", "dtype", "quant"),
         (tensor_iface(), InterfaceDef("config", "config")),
         identity_keys=("format", "dtype", "bits"),
+        physical=False,
+        symbol="format",
     ),
     EntityTypeDef(
         "inference-engine",
@@ -461,6 +465,8 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "compute",
         ("inference", "inference engine", "runtime", "server", "vllm", "llama.cpp"),
         (tensor_iface(), InterfaceDef("api", "protocol")),
+        physical=False,
+        symbol="engine",
     ),
     EntityTypeDef(
         "quant-evaluator",
@@ -468,6 +474,8 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "compute",
         ("evaluat", "perplexity", "benchmark", "accuracy", "error metric"),
         (data_iface(),),
+        physical=False,
+        symbol="evaluator",
     ),
 )
 

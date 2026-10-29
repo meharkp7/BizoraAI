@@ -54,15 +54,22 @@ def test_sram_resolution_identifies_circuit_entities() -> None:
 
 
 def test_distributed_resolution_identifies_services_and_storage() -> None:
-    """Coordinator, workers, and storage resolve to their own entity types."""
+    """Services resolve structurally; dataset-kind nodes stay process data.
+
+    Storage and replica carry kind=dataset, so they resolve to the
+    dataset process entity instead of the structural storage node:
+    datasets render in the process view, never as hardware.
+    """
     entities = resolve_graph(load_fixture("distributed"))
     by_node = {entity.node_id: entity for entity in entities.entities}
 
     assert by_node["clients"].entity_type == "client"
     assert by_node["coordinator"].entity_type == "coordinator"
     assert by_node["workers"].entity_type == "worker"
-    assert by_node["storage"].entity_type == "storage-node"
-    assert by_node["replica"].entity_type == "storage-node"
+    assert by_node["storage"].entity_type == "dataset"
+    assert by_node["storage"].physical is False
+    assert by_node["replica"].entity_type == "dataset"
+    assert by_node["replica"].physical is False
 
 
 def test_quant_resolution_identifies_pipeline_stages() -> None:
@@ -89,11 +96,12 @@ def test_signal_resolution_identifies_pipeline_stages() -> None:
 
 
 def test_deeplearning_resolution_identifies_layers_and_data() -> None:
-    """Training data resolves to the data loader, not an embedding layer."""
+    """Training data stays a process dataset; layers resolve structurally."""
     entities = resolve_graph(load_fixture("deeplearning"))
     by_node = {entity.node_id: entity for entity in entities.entities}
 
-    assert by_node["training-data"].entity_type == "dataloader"
+    assert by_node["training-data"].entity_type == "dataset"
+    assert by_node["training-data"].physical is False
     assert by_node["embedding"].entity_type == "embedding"
     assert by_node["attention"].entity_type == "attention-block"
     assert by_node["optimizer"].entity_type == "optimizer"

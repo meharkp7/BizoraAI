@@ -105,7 +105,17 @@ def _resolve_candidate(
     )
     if resolved.generic:
         # The catalog pins the identity even when registry vocabulary cannot
-        # re-derive it from the generated label.
+        # re-derive it from the generated label. Catalog parts are physical
+        # by definition; the render declaration comes from the entry's
+        # entity type, falling back to a generic symbol when unknown.
+        render = next(
+            (
+                entity
+                for entity in profile.entity_types
+                if entity.type_id == component.entity_type
+            ),
+            None,
+        )
         return EntityResolution(
             node_id=candidate.id,
             domain=classification.domain,
@@ -113,6 +123,9 @@ def _resolve_candidate(
             display_label=component.label,
             generic=component.generic,
             category=component.category,
+            physical=True,
+            symbol=render.symbol if render is not None else "generic",
+            model_3d=render.model_3d if render is not None else None,
             interfaces=tuple(
                 InterfaceSpec(name=iface.name, kind=iface.kind, params=dict(iface.params))
                 for iface in component.interfaces

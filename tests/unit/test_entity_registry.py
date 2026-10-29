@@ -126,6 +126,71 @@ def test_resolve_node_prefers_longer_term_on_label_tie() -> None:
     assert resolution.entity_type == "demodulator"
 
 
+def test_resolve_node_routes_process_kinds_apart_from_text() -> None:
+    """A dataset stays a dataset even when its text names instruments."""
+    resolution = resolve_node(
+        profile("electronics"),
+        "ds",
+        "Dataset",
+        "CRP measurements from the probe station for evaluation",
+        "dataset",
+        {},
+    )
+
+    assert resolution.entity_type == "dataset"
+    assert resolution.physical is False
+    assert resolution.symbol == "dataset"
+    assert resolution.model_3d is None
+    assert resolution.category == "process"
+    assert resolution.generic is False
+    assert resolution.confidence == 1.0
+
+
+def test_resolve_node_routes_every_process_kind() -> None:
+    """Operations, evaluations, losses, optimizers, and preprocessing agree."""
+    for kind in ("operation", "evaluation", "loss", "optimizer", "preprocessing"):
+        resolution = resolve_node(
+            profile("electronics"), "n", "Some node", "VDD supply transistor", kind, {}
+        )
+
+        assert resolution.entity_type == kind, kind
+        assert resolution.physical is False, kind
+        assert resolution.generic is False, kind
+
+
+def test_resolve_node_keeps_ambiguous_kinds_text_matched() -> None:
+    """Inputs and models still resolve by text: a supply input is hardware."""
+    resolution = resolve_node(
+        profile("electronics"), "in", "Input", "VDD supply rail", "input", {}
+    )
+
+    assert resolution.entity_type == "voltage-source"
+    assert resolution.physical is True
+
+
+def test_resolve_node_carries_pack_render_declaration() -> None:
+    """Matched resolutions carry the pack's physicality, symbol, and model."""
+    resolution = resolve_node(
+        profile("iot"), "temp", "Temperature sensor", None, "component", {}
+    )
+
+    assert resolution.physical is True
+    assert resolution.symbol == "sensor"
+    assert resolution.model_3d is None
+
+
+def test_generic_fallbacks_stay_visible_physical() -> None:
+    """Unknown nodes keep a physical placeholder, never vanish or fake a part."""
+    resolution = resolve_node(
+        profile("electronics"), "x", "Xyzzq widget", None, "component", {}
+    )
+
+    assert resolution.generic is True
+    assert resolution.physical is True
+    assert resolution.symbol == "generic"
+    assert resolution.model_3d is None
+
+
 def test_resolve_node_falls_back_to_generic_component() -> None:
     """An unmatched node resolves to an explicit generic fallback."""
     resolution = resolve_node(

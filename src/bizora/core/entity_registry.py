@@ -24,6 +24,7 @@ from bizora.contracts.domain import (
     MissingInterface,
     ReplacementCompatibility,
 )
+from bizora.contracts.graph import NON_PHYSICAL_NODE_KINDS, NodeKind
 from bizora.contracts.packs import DomainTag
 
 if TYPE_CHECKING:
@@ -50,6 +51,12 @@ class EntityTypeDef:
     interfaces: tuple[InterfaceDef, ...] = ()
     # Config keys whose values pin an exact identity (model numbers, ...).
     identity_keys: tuple[str, ...] = ()
+    # Pack-declared render spec: physicality gates the hardware scene,
+    # symbol names the 2D glyph, and model_3d optionally names a
+    # representative 3D visual for nodes without a catalog part.
+    physical: bool = True
+    symbol: str = "generic"
+    model_3d: str | None = None
 
 
 @dataclass(frozen=True)
@@ -132,6 +139,12 @@ def _match_score(
     )
 
 
+def _label_names_entity(label: str, entity_types: tuple[EntityTypeDef, ...]) -> bool:
+    """True when the label alone matches any entity type's terms."""
+    lowered = label.lower()
+    return any(match_terms(lowered, candidate.match_terms) for candidate in entity_types)
+
+
 def _node_text(label: str, description: str | None, kind: str, config: object) -> str:
     parts = [label, kind]
     if description:
@@ -193,7 +206,33 @@ def resolve_node(
     kind: str,
     config: object,
 ) -> EntityResolution:
-    """Resolve one node to the best entity type, or a generic fallback."""
+    """Resolve one node to the best entity type, or a generic fallback.
+
+    Process kinds resolve by kind alone unless the label itself names
+    a pack entity: the label is the node's identity, while description
+    words may only mention related hardware ("CRP measurements ..." on
+    a dataset must not resolve to a meter, but "Demodulator" still
+    resolves to the demodulator block). Datasets always resolve by
+    kind: data is never hardware, so any hardware match is spurious.
+    """
+    if kind in NON_PHYSICAL_NODE_KINDS and (
+        kind == NodeKind.DATASET.value
+        or not _label_names_entity(label, profile.entity_types)
+    ):
+        return EntityResolution(
+            node_id=node_id,
+            domain=profile.domain,
+            entity_type=kind,
+            display_label=label,
+            generic=False,
+            category="process",
+            physical=False,
+            symbol=kind,
+            model_3d=None,
+            interfaces=(),
+            matched_terms=(),
+            confidence=1.0,
+        )
     text = _node_text(label, description, kind, config)
     best: EntityTypeDef | None = None
     best_terms: tuple[str, ...] = ()
@@ -216,6 +255,9 @@ def resolve_node(
             display_label=label,
             generic=True,
             category=profile.fallback_category,
+            physical=True,
+            symbol="generic",
+            model_3d=None,
             interfaces=(),
             matched_terms=(),
             confidence=0.0,
@@ -235,6 +277,9 @@ def resolve_node(
         display_label=identity or best.display,
         generic=False,
         category=best.category,
+        physical=best.physical,
+        symbol=best.symbol,
+        model_3d=best.model_3d,
         interfaces=interfaces,
         matched_terms=best_terms,
         confidence=round(confidence, 3),
@@ -250,6 +295,9 @@ def resolve_generic(node_id: str, label: str) -> EntityResolution:
         display_label=label,
         generic=True,
         category="generic",
+        physical=True,
+        symbol="generic",
+        model_3d=None,
         interfaces=(),
         matched_terms=(),
         confidence=0.0,
