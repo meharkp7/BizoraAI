@@ -1,6 +1,8 @@
-import type { GraphEntities } from "../../lib/types.ts";
-import type { AssetSummary } from "./assetModels.ts";
-import { GeometryGlyph, SymbolGlyph } from "./CategoryGlyph.tsx";
+import type { GraphEntities, MeasuredOverlay } from "../../lib/types.ts";
+import { EMPTY_OVERLAY } from "../../lib/types.ts";
+import type { AssetSummary, PartLegendEntry } from "./assetModels.ts";
+import { measuredSummary } from "./flowElements.ts";
+import { SymbolGlyph } from "./SymbolGlyph.tsx";
 import { domainLabel, legendEntries } from "./graph3d.ts";
 import styles from "./EntityLegend.module.css";
 
@@ -39,30 +41,26 @@ export function AssetProvenanceBadge({ summary }: { summary: AssetSummary | null
 
 export function EntityLegend({
   entities,
-  assetSummary = null,
-  glyphs = "solids",
-  title = "3D shape key",
+  title = "Symbol key",
+  inline = false,
 }: {
   entities: GraphEntities | null;
-  assetSummary?: AssetSummary | null;
-  /** Solids match the 3D scene; symbols serve 2D views without solids. */
-  glyphs?: "solids" | "symbols";
   title?: string;
+  /** Stack in the page flow instead of overlaying the stage corner. */
+  inline?: boolean;
 }) {
   const entries = legendEntries(entities);
   if (entries.length === 0) return null;
   return (
-    <aside className={styles.legend} aria-label={title}>
+    <aside
+      className={inline ? `${styles.legend} ${styles.legendInline}` : styles.legend}
+      aria-label={title}
+    >
       <DomainBadge entities={entities} />
-      <AssetProvenanceBadge summary={assetSummary} />
       <ul className={styles.list}>
         {entries.map((entry) => (
           <li key={entry.symbol} className={styles.row}>
-            {glyphs === "symbols" ? (
-              <SymbolGlyph symbol={entry.symbol} />
-            ) : (
-              <GeometryGlyph geometry={entry.geometry} />
-            )}
+            <SymbolGlyph symbol={entry.symbol} />
             <span className={styles.name}>
               {entry.label}
               <span className={styles.count} aria-label={`${entry.count} components`}>
@@ -72,6 +70,66 @@ export function EntityLegend({
             <span className={styles.types}>{entry.entityTypes.join(" · ")}</span>
           </li>
         ))}
+      </ul>
+    </aside>
+  );
+}
+
+export function PartLegend({
+  entities,
+  parts,
+  assetSummary = null,
+  unmodeled = 0,
+  overlay = EMPTY_OVERLAY,
+}: {
+  entities: GraphEntities | null;
+  parts: PartLegendEntry[];
+  assetSummary?: AssetSummary | null;
+  unmodeled?: number;
+  overlay?: MeasuredOverlay;
+}) {
+  if (parts.length === 0) return null;
+  const measuredCount = parts.reduce(
+    (sum, part) => sum + (overlay.nodes[part.nodeId]?.length ?? 0),
+    0,
+  );
+  return (
+    <aside className={styles.legend} aria-label="3D part key">
+      <DomainBadge entities={entities} />
+      <AssetProvenanceBadge summary={assetSummary} />
+      {measuredCount > 0 ? (
+        <p className={styles.badge} role="note">
+          {measuredCount} measured {measuredCount === 1 ? "value" : "values"} from run{" "}
+          {overlay.run_id ?? "unknown"}.
+        </p>
+      ) : null}
+      {unmodeled > 0 ? (
+        <p className={styles.badge} role="note">
+          {unmodeled} more {unmodeled === 1 ? "component has" : "components have"} no part model
+          and {unmodeled === 1 ? "stays" : "stay"} in the 2D views.
+        </p>
+      ) : null}
+      <ul className={styles.list}>
+        {parts.map((part) => {
+          const summary = measuredSummary(overlay.nodes[part.nodeId]);
+          return (
+            <li key={part.nodeId} className={styles.row}>
+              <span
+                className={styles.badgeDot}
+                data-generic={part.provenance === "illustrative"}
+                aria-hidden="true"
+              />
+              <span className={styles.name}>
+                {part.partLabel}
+                <span className={styles.count}>{part.provenance}</span>
+                {summary ? <span className={styles.count}>measured: {summary}</span> : null}
+              </span>
+              <span className={styles.types}>
+                {[part.nodeLabel, part.entityType].filter(Boolean).join(" · ")}
+              </span>
+            </li>
+          );
+        })}
       </ul>
     </aside>
   );

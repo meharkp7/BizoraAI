@@ -90,6 +90,22 @@
   letter-spacing: 0.06em;
 }
 
+.assumed {
+  font-size: 0.625rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-warn);
+}
+
+.measured {
+  font-size: 0.625rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-olive);
+}
+
 .added .diff {
   color: var(--color-olive);
 }

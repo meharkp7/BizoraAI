@@ -11,7 +11,7 @@ import type {
   NodeKind,
 } from "../../lib/types.ts";
 import { EmptyState, ErrorState, LoadingState } from "../../components/states.tsx";
-import { CategoryGlyph } from "../canvas/CategoryGlyph.tsx";
+import { SymbolGlyph } from "../canvas/SymbolGlyph.tsx";
 import { categoryLabel, domainLabel } from "../canvas/graph3d.ts";
 import { replaceNodePatch } from "../workspace/patchBuilders.ts";
 import { ConfigForm } from "./ConfigForm.tsx";
@@ -163,7 +163,7 @@ function DetailBody({
   return (
     <div className={styles.detail}>
       <div className={styles.head}>
-        <CategoryGlyph category={detail.category} size={20} />
+        <SymbolGlyph symbol={detail.symbol || "generic"} size={20} />
         <div>
           <div className={styles.title}>{detail.label}</div>
           <div className={styles.meta}>

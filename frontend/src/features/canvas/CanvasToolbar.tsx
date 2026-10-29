@@ -146,12 +146,21 @@ export function CanvasToolbar({
       <div className={styles.viewToggle} role="group" aria-label="Canvas view">
         <button
           type="button"
-          onClick={() => onViewChange("2d")}
+          onClick={() => onViewChange("structure")}
           disabled={disabled}
-          aria-pressed={view === "2d"}
-          title="Flat canvas: every node, editable"
+          aria-pressed={view === "structure"}
+          title="Structure: the paper's architecture as a block diagram"
         >
-          2D
+          Structure
+        </button>
+        <button
+          type="button"
+          onClick={() => onViewChange("flow")}
+          disabled={disabled}
+          aria-pressed={view === "flow"}
+          title="Flow: step-by-step walkthrough of the method"
+        >
+          Flow
         </button>
         <button
           type="button"
@@ -161,33 +170,6 @@ export function CanvasToolbar({
           title="3D structure: physical parts only"
         >
           3D
-        </button>
-        <button
-          type="button"
-          onClick={() => onViewChange("process")}
-          disabled={disabled}
-          aria-pressed={view === "process"}
-          title="Process flow: data and computation steps"
-        >
-          Process
-        </button>
-        <button
-          type="button"
-          onClick={() => onViewChange("schematic")}
-          disabled={disabled}
-          aria-pressed={view === "schematic"}
-          title="Chip schematic: electronics symbols"
-        >
-          Schematic
-        </button>
-        <button
-          type="button"
-          onClick={() => onViewChange("floorplan")}
-          disabled={disabled}
-          aria-pressed={view === "floorplan"}
-          title="Array floorplan: memory layout"
-        >
-          Floorplan
         </button>
       </div>
     </div>

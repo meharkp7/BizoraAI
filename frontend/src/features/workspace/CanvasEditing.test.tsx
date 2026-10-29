@@ -20,7 +20,7 @@ function renderPage(onVersionChange: (version: number) => void, version = 2) {
       projectId="project-1"
       graphId="graph-1"
       version={version}
-      view="2d" onViewChange={() => {}} onVersionChange={onVersionChange}
+      view="structure" onViewChange={() => {}} onVersionChange={onVersionChange}
     />,
     { wrapper },
   );
@@ -122,7 +122,7 @@ describe("canvas editing", () => {
     await userEvent.click(screen.getByRole("button", { name: "← Older" }));
     expect(onVersionChange).toHaveBeenCalledWith(1);
     view.rerender(
-      <WorkspacePage projectId="project-1" graphId="graph-1" version={1} view="2d" onViewChange={() => {}} onVersionChange={onVersionChange} />,
+      <WorkspacePage projectId="project-1" graphId="graph-1" version={1} view="structure" onViewChange={() => {}} onVersionChange={onVersionChange} />,
     );
     await screen.findByRole("heading", { name: "Vision transformer" });
     await userEvent.click(screen.getByRole("button", { name: "Undo" }));

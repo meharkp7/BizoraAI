@@ -80,6 +80,8 @@ export interface MethodologyGraph {
   created_by: string;
   parent_version: number | null;
   brief?: ResearchBrief | null;
+  /** Model-produced domain label from extraction; null when unclear. */
+  domain_hint?: string | null;
 }
 
 export type PatchOperation =
@@ -138,6 +140,24 @@ export interface GraphEntities {
   classification: DomainClassification;
   entities: EntityResolution[];
 }
+
+/** One live measurement on a node or an edge (Stage 2 fills this). */
+export interface OverlayValue {
+  signal: string;
+  value: number;
+  unit: string | null;
+}
+
+/** Measured-overlay channel: live run values keyed by node and edge id.
+ *  Empty until a real run exists; every view renders from the graph plus
+ *  this channel and decorates nodes/edges when values arrive. */
+export interface MeasuredOverlay {
+  run_id: string | null;
+  nodes: Record<string, OverlayValue[]>;
+  edges: Record<string, OverlayValue[]>;
+}
+
+export const EMPTY_OVERLAY: MeasuredOverlay = { run_id: null, nodes: {}, edges: {} };
 
 export interface NodePosition {
   node_id: string;
@@ -323,6 +343,46 @@ export interface ExtractedTable {
   created_by: string;
 }
 
+/** One localized component region inside a paper figure. Bbox is
+ *  normalized x, y, width, height in 0..1; node_id is null when the
+ *  region depicts no graph node. */
+export interface FigureRegion {
+  region_id: string;
+  figure_id: string;
+  bbox: [number, number, number, number];
+  node_id: string | null;
+  label: string;
+  confidence: number | null;
+}
+
+/** One persisted paper figure with its regions (no image bytes). */
+export interface PaperFigure {
+  figure_id: string;
+  project_id: string;
+  graph_id: string;
+  source_id: string;
+  created_by: string;
+  page: number | null;
+  label: string | null;
+  caption: string | null;
+  kind: string;
+  mime_type: string | null;
+  sha256: string | null;
+  byte_size: number | null;
+  width: number | null;
+  height: number | null;
+  confidence: number | null;
+  regions: FigureRegion[];
+}
+
+/** Outcome of a figure-overlay ingest. */
+export interface FigureIngestResponse {
+  figures: PaperFigure[];
+  warnings: string[];
+  truncated: boolean;
+  skipped: number;
+}
+
 /** One number quoted from the paper; mirrors backend PaperReportedMetric JSON. */
 export interface PaperReportedMetric {
   name: string;
@@ -412,6 +472,8 @@ export interface ComponentSummary {
   manufacturer: string | null;
   part_number: string | null;
   headline: string;
+  /** Pack-declared 2D symbol id, enriched from the entity type. */
+  symbol: string;
 }
 
 export interface ComponentDetail extends ComponentSummary {
@@ -446,6 +508,13 @@ export interface CompatibilityPreflight {
   warnings: ConstraintWarning[];
   candidate: EntityResolution;
   candidate_label: string;
+}
+
+export interface RemovalPreflight {
+  target_node_id: string;
+  neighbor_node_ids: string[];
+  dropped_edge_ids: string[];
+  evidence: EvidenceRef[];
 }
 
 export interface CopilotProposal {

@@ -1,6 +1,6 @@
 import { Handle, Position } from "@xyflow/react";
 import type { Node, NodeProps } from "@xyflow/react";
-import type { Provenance } from "../../lib/types.ts";
+import type { OverlayValue, Provenance } from "../../lib/types.ts";
 import styles from "./MethodNode.module.css";
 
 export type NodeDiffStatus = "added" | "changed";
@@ -11,6 +11,10 @@ export interface MethodNodeData extends Record<string, unknown> {
   provenance: Provenance;
   confidence: number | null;
   diffStatus: NodeDiffStatus | null;
+  /** True when the correction loop flagged this node as assumed. */
+  assumed: boolean;
+  /** Live measured values from the overlay channel, if any. */
+  measured: OverlayValue[];
 }
 
 export type MethodNodeType = Node<MethodNodeData, "method">;
@@ -56,6 +60,21 @@ export function MethodNode({ data, selected }: NodeProps<MethodNodeType>) {
           <span className={styles.conf}>{data.confidence.toFixed(2)}</span>
         ) : null}
         {data.diffStatus ? <span className={styles.diff}>{data.diffStatus}</span> : null}
+        {data.assumed ? (
+          <span className={styles.assumed} title="Assumed: not stated by the paper">
+            assumed
+          </span>
+        ) : null}
+        {data.measured.length > 0 ? (
+          <span
+            className={styles.measured}
+            title={data.measured
+              .map((entry) => `${entry.signal}=${entry.value}${entry.unit ?? ""}`)
+              .join(", ")}
+          >
+            measured
+          </span>
+        ) : null}
       </div>
       <Handle type="source" position={Position.Bottom} className={styles.handle} />
     </div>

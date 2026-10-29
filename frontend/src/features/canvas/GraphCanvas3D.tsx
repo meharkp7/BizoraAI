@@ -2,32 +2,36 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { CSS2DObject, CSS2DRenderer } from "three/addons/renderers/CSS2DRenderer.js";
-import { ErrorState } from "../../components/states.tsx";
+import { EmptyState, ErrorState } from "../../components/states.tsx";
 import { useTheme, useWorkspaceSelection } from "../../lib/store.ts";
-import type { GraphEntities, GraphLayout, MethodologyGraph } from "../../lib/types.ts";
+import type {
+  GraphEntities,
+  GraphLayout,
+  MeasuredOverlay,
+  MethodologyGraph,
+} from "../../lib/types.ts";
+import { EMPTY_OVERLAY } from "../../lib/types.ts";
 import {
   buildProceduralGroup,
   loadGlbModel,
   loadRequests,
   meshSpecs,
+  partLegendEntries,
   provenanceLabel,
   provenanceOf,
   specsByNodeId,
   summarizeProvenance,
 } from "./assetModels.ts";
 import type { NodeAssetSpec, ProceduralPartRole } from "./assetModels.ts";
-import { EntityLegend } from "./EntityLegend.tsx";
+import { PartLegend } from "./EntityLegend.tsx";
 import {
   EDGE_COLOR,
-  KIND_COLORS,
   SELECT_COLOR,
   boundingSphere,
   fitDistance,
   resolutionsByNodeId,
   toWorldPositions,
-  visualFor,
 } from "./graph3d.ts";
-import type { ArchetypeGeometry } from "./graph3d.ts";
 import styles from "./GraphCanvas3D.module.css";
 
 const NODE_RADIUS = 1.1;
@@ -59,6 +63,7 @@ export function GraphCanvas3D({
   entitiesPending = false,
   entitiesError = null,
   assetSpecs = null,
+  overlay = EMPTY_OVERLAY,
 }: {
   graph: MethodologyGraph;
   layout: GraphLayout | null;
@@ -66,10 +71,23 @@ export function GraphCanvas3D({
   entitiesPending?: boolean;
   entitiesError?: string | null;
   assetSpecs?: NodeAssetSpec[] | null;
+  overlay?: MeasuredOverlay;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [failed, setFailed] = useState(false);
   const assetSummary = useMemo(() => summarizeProvenance(assetSpecs), [assetSpecs]);
+  // Parts-only scene: a node renders if and only if the backend serves a
+  // part model for it. Everything else stays in the 2D views, counted
+  // honestly in the legend instead of faked with a generic solid.
+  const parts = useMemo(
+    () => partLegendEntries(assetSpecs, graph.nodes, resolutionsByNodeId(entities)),
+    [assetSpecs, graph, entities],
+  );
+  const modeledIds = useMemo(() => {
+    const ids = new Set(graph.nodes.map((node) => node.id));
+    return new Set(parts.map((part) => part.nodeId).filter((id) => ids.has(id)));
+  }, [parts, graph]);
+  const unmodeled = graph.nodes.length - modeledIds.size;
   const [coarsePointer] = useState(
     () =>
       typeof window !== "undefined" &&
@@ -90,7 +108,12 @@ export function GraphCanvas3D({
     const onDispose: (() => void)[] = [];
     try {
       const positions = toWorldPositions(graph, layout);
-      const { center, radius } = boundingSphere(positions);
+      // The camera fits the rendered models, not the unmodeled nodes that
+      // stay in the 2D views: fitting ghosts would shrink real parts.
+      const rendered = new Map(
+        [...positions.entries()].filter(([id]) => modeledIds.has(id)),
+      );
+      const { center, radius } = boundingSphere(rendered);
       const background = new THREE.Color(themeBackground());
 
       const scene = new THREE.Scene();
@@ -105,7 +128,7 @@ export function GraphCanvas3D({
       const aim = { x: 1, y: 0.85, z: 1 };
       // Exact rotation-invariant fit: neither diagonal views nor orbiting
       // can clip corners; the margin covers the sphere bodies.
-      const distance = fitDistance(positions, aim, camera.fov, aspect, NODE_RADIUS, 1.1);
+      const distance = fitDistance(rendered, aim, camera.fov, aspect, NODE_RADIUS, 1.1);
       const direction = new THREE.Vector3(aim.x, aim.y, aim.z).normalize();
       camera.position.set(
         center.x + direction.x * distance,
@@ -130,83 +153,15 @@ export function GraphCanvas3D({
       fill.position.set(center.x - distance, center.y + distance * 0.5, center.z - distance);
       scene.add(fill);
 
-      const resolutions = resolutionsByNodeId(entities);
-      const geometries = new Map<ArchetypeGeometry, THREE.BufferGeometry>();
-      const geometryFor = (archetype: ArchetypeGeometry): THREE.BufferGeometry => {
-        const cached = geometries.get(archetype);
-        if (cached) return cached;
-        let built: THREE.BufferGeometry;
-        switch (archetype) {
-          case "box":
-            built = new THREE.BoxGeometry(1.7, 1.7, 1.7);
-            break;
-          case "slab":
-            built = new THREE.BoxGeometry(2.4, 0.7, 2.4);
-            break;
-          case "cylinder":
-            built = new THREE.CylinderGeometry(0.85, 0.85, 1.5, 24);
-            break;
-          case "cone":
-            built = new THREE.ConeGeometry(1.0, 1.9, 24);
-            break;
-          case "torus":
-            built = new THREE.TorusGeometry(0.8, 0.34, 16, 28);
-            break;
-          case "octahedron":
-            built = new THREE.OctahedronGeometry(1.2);
-            break;
-          case "tetrahedron":
-            built = new THREE.TetrahedronGeometry(1.35);
-            break;
-          case "icosahedron":
-            built = new THREE.IcosahedronGeometry(1.15);
-            break;
-          case "dodecahedron":
-            built = new THREE.DodecahedronGeometry(1.15);
-            break;
-          case "sphere":
-          default:
-            built = new THREE.SphereGeometry(NODE_RADIUS, 32, 24);
-            break;
-        }
-        geometries.set(archetype, built);
-        disposables.push(built);
-        return built;
-      };
-      const kindMaterials = new Map<string, THREE.MeshStandardMaterial>();
-      const selectedMaterial = new THREE.MeshStandardMaterial({
-        color: SELECT_COLOR,
-        emissive: SELECT_COLOR,
-        emissiveIntensity: 0.45,
-        roughness: 0.5,
-        metalness: 0.05,
-      });
-      disposables.push(selectedMaterial);
-      const materialFor = (kind: string): THREE.MeshStandardMaterial => {
-        const cached = kindMaterials.get(kind);
-        if (cached) return cached;
-        const material = new THREE.MeshStandardMaterial({
-          color: KIND_COLORS[kind as keyof typeof KIND_COLORS] ?? EDGE_COLOR,
-          roughness: 0.55,
-          metalness: 0.05,
-        });
-        kindMaterials.set(kind, material);
-        disposables.push(material);
-        return material;
-      };
-
-      const nodeMeshes = new Map<string, THREE.Mesh>();
       const modelGroups = new Map<string, THREE.Group>();
       const pickRoots: THREE.Object3D[] = [];
       const nodeTags = new Map<string, { element: HTMLDivElement; marker: CSS2DObject }>();
       const specs = specsByNodeId(assetSpecs);
+      // Label markers exist for every modeled node, floating at the node
+      // position until their model group arrives to parent them.
       for (const node of graph.nodes) {
+        if (!modeledIds.has(node.id)) continue;
         const point = positions.get(node.id) ?? { x: 0, y: 0, z: 0 };
-        const resolution = resolutions.get(node.id);
-        const mesh = new THREE.Mesh(geometryFor(visualFor(resolution)), materialFor(node.kind));
-        mesh.position.set(point.x, point.y, point.z);
-        mesh.userData.nodeId = node.id;
-        mesh.userData.kind = node.kind;
         const tag = document.createElement("div");
         tag.className = `${styles.tag} ${styles.tagHidden}`;
         const inner = document.createElement("div");
@@ -231,16 +186,14 @@ export function GraphCanvas3D({
         tag.appendChild(inner);
         const marker = new CSS2DObject(tag);
         marker.visible = false;
-        mesh.add(marker);
-        scene.add(mesh);
-        nodeMeshes.set(node.id, mesh);
-        pickRoots.push(mesh);
+        marker.position.set(point.x, point.y, point.z);
+        scene.add(marker);
         nodeTags.set(node.id, { element: tag, marker });
       }
 
-      // Generated package solids swap in synchronously over the archetype
-      // placeholders, normalized to the node size. Specs with a model URI
-      // skip this path: the GLB loader below owns them instead.
+      // Generated package solids render synchronously, normalized to the
+      // node size. Specs with a model URI skip this path: the GLB loader
+      // below owns them instead. Nodes without a spec render nothing.
       const bodyMaterial = new THREE.MeshStandardMaterial({
         color: "#4a4a55",
         roughness: 0.42,
@@ -256,9 +209,9 @@ export function GraphCanvas3D({
         role === "body" ? bodyMaterial : leadMaterial;
       for (const spec of meshSpecs(assetSpecs)) {
         if (spec.asset_uri || spec.mesh === null) continue;
-        const mesh = nodeMeshes.get(spec.node_id);
+        if (!modeledIds.has(spec.node_id)) continue;
         const point = positions.get(spec.node_id);
-        if (!mesh || !point) continue;
+        if (!point) continue;
         const group = buildProceduralGroup(spec.mesh, proceduralMaterial);
         const box = new THREE.Box3().setFromObject(group);
         const size = box.getSize(new THREE.Vector3());
@@ -273,11 +226,10 @@ export function GraphCanvas3D({
         );
         group.userData.nodeId = spec.node_id;
         group.userData.baseScale = scale;
-        mesh.visible = false;
         const swappedTag = nodeTags.get(spec.node_id);
         if (swappedTag) {
-          // The placeholder hides, so the label marker must move to the
-          // group or selection/hover tags never enter the DOM.
+          // The marker reparents to the model so the label tracks it;
+          // without a model the marker stays floating at the position.
           group.add(swappedTag.marker);
           swappedTag.marker.position.set(center.x * scale, center.y * scale, center.z * scale);
         }
@@ -295,9 +247,9 @@ export function GraphCanvas3D({
         });
       }
 
-      // GLB models load asynchronously over the archetype placeholders:
-      // a resolved model swaps in normalized to the node size, while a
-      // missing or failing URL keeps the placeholder honestly in place.
+      // GLB models load asynchronously, normalized to the node size. A
+      // missing or failing URL leaves the node out of the scene: no
+      // model, no marker.
       let cancelled = false;
       const pendingLoads = new Map<string, Promise<THREE.Group>>();
       const loadCached = (url: string): Promise<THREE.Group> => {
@@ -308,9 +260,9 @@ export function GraphCanvas3D({
         return started;
       };
       for (const request of loadRequests(assetSpecs)) {
-        const mesh = nodeMeshes.get(request.nodeId);
+        if (!modeledIds.has(request.nodeId)) continue;
         const point = positions.get(request.nodeId);
-        if (!mesh || !point) continue;
+        if (!point) continue;
         void loadCached(request.url).then(
           (group) => {
             if (cancelled) return;
@@ -327,7 +279,6 @@ export function GraphCanvas3D({
             );
             group.userData.nodeId = request.nodeId;
             group.userData.baseScale = scale;
-            mesh.visible = false;
             const swappedTag = nodeTags.get(request.nodeId);
             if (swappedTag) {
               group.add(swappedTag.marker);
@@ -357,7 +308,7 @@ export function GraphCanvas3D({
             });
           },
           () => {
-            // Keep the archetype placeholder: no model, no silent swap.
+            // Leave the node out: no model, no silent stand-in.
           },
         );
       }
@@ -368,6 +319,7 @@ export function GraphCanvas3D({
       const edgeLines = new Map<string, THREE.Line>();
       const edgeTags = new Map<string, { element: HTMLDivElement; marker: CSS2DObject }>();
       for (const edge of graph.edges) {
+        if (!modeledIds.has(edge.source) || !modeledIds.has(edge.target)) continue;
         const from = positions.get(edge.source);
         const to = positions.get(edge.target);
         if (!from || !to) continue;
@@ -425,12 +377,8 @@ export function GraphCanvas3D({
       const applySelection = (nodeIds: readonly string[], edgeIds: readonly string[]): void => {
         const nodes = new Set(nodeIds);
         const edges = new Set(edgeIds);
-        for (const [id, mesh] of nodeMeshes) {
+        for (const id of modeledIds) {
           const selected = nodes.has(id);
-          mesh.material = selected
-            ? selectedMaterial
-            : materialFor(mesh.userData.kind as string);
-          mesh.scale.setScalar(selected ? SELECT_SCALE : 1);
           const group = modelGroups.get(id);
           if (group) {
             const base = group.userData.baseScale as number;
@@ -583,7 +531,7 @@ export function GraphCanvas3D({
       labelRenderer?.domElement.remove();
     };
     // Scene lifetime: rebuild per graph object; selection syncs via the store.
-  }, [graph, layout, entities, assetSpecs, failed]);
+  }, [graph, layout, entities, assetSpecs, failed, modeledIds]);
 
   if (failed) {
     return (
@@ -593,12 +541,24 @@ export function GraphCanvas3D({
       />
     );
   }
+  if (modeledIds.size === 0) {
+    return (
+      <EmptyState
+        title="No part models in this view."
+        detail={
+          graph.nodes.length === 0
+            ? "There is nothing to show in 3D."
+            : "Nothing here resolves to a catalog part model yet; the 2D views show every component."
+        }
+      />
+    );
+  }
   return (
     <div
       ref={hostRef}
       className={styles.stage}
       role="application"
-      aria-label={`3D methodology graph: ${graph.nodes.length} components, ${graph.edges.length} connections. Drag to orbit, scroll to zoom, click a component to inspect it.`}
+      aria-label={`3D methodology graph: ${modeledIds.size} part models. Drag to orbit, scroll to zoom, click a component to inspect it.`}
     >
       <p className={styles.hint}>
         {coarsePointer
@@ -607,14 +567,21 @@ export function GraphCanvas3D({
       </p>
       {entitiesError ? (
         <p className={styles.entitiesWarning} role="alert">
-          Component identities unavailable ({entitiesError}); showing generic markers.
+          Component identities unavailable ({entitiesError}); showing part models without
+          identity labels.
         </p>
       ) : entitiesPending ? (
         <p className={styles.entitiesNote} role="status">
           Resolving component identities…
         </p>
       ) : null}
-      <EntityLegend entities={entities} assetSummary={assetSummary} />
+      <PartLegend
+        entities={entities}
+        parts={parts}
+        assetSummary={assetSummary}
+        unmodeled={unmodeled}
+        overlay={overlay}
+      />
     </div>
   );
 }

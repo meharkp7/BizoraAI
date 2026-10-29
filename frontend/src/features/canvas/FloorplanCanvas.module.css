@@ -76,3 +76,9 @@
   fill: var(--color-ink-faint);
   font-size: 9px;
 }
+
+.measured {
+  fill: var(--color-olive);
+  font-size: 9px;
+  font-weight: 600;
+}

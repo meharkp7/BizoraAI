@@ -1,6 +1,6 @@
 import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { SymbolGlyph } from "./CategoryGlyph.tsx";
+import { SymbolGlyph } from "./SymbolGlyph.tsx";
 
 describe("SymbolGlyph", () => {
   it("draws distinct art per schematic and process symbol", () => {

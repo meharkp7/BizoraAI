@@ -10,6 +10,7 @@ import {
   diffFixture,
   entitiesFixture,
   failedRun,
+  figuresFixture,
   graphFixture,
   layoutFixture,
   metricsFixture,
@@ -115,6 +116,20 @@ export const handlers = [
   http.get("/api/v1/graphs/:projectId/:graphId/tables", ({ params }) => {
     if (params["projectId"] === "project-1" && params["graphId"] === "graph-1") {
       return HttpResponse.json([tableFixture, tableFixture2]);
+    }
+    return HttpResponse.json([]);
+  }),
+
+  http.get("/api/v1/graphs/:projectId/:graphId/figures", ({ params }) => {
+    if (params["projectId"] === "project-1" && params["graphId"] === "graph-1") {
+      return HttpResponse.json(figuresFixture);
+    }
+    return HttpResponse.json([]);
+  }),
+
+  http.get("/api/v1/graphs/:projectId/:graphId/reported-metrics", ({ params }) => {
+    if (params["projectId"] === "project-1" && params["graphId"] === "graph-1") {
+      return HttpResponse.json(reportedMetricsFixture);
     }
     return HttpResponse.json([]);
   }),

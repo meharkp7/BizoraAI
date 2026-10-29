@@ -1,0 +1,231 @@
+.trigger {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.trigger > button {
+  padding: var(--space-1) var(--space-3);
+  background: transparent;
+  color: var(--color-ink);
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 0.875rem;
+  align-self: flex-start;
+}
+
+.trigger > button:not(:disabled):hover {
+  border-color: var(--color-ink);
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-ink-faint);
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 0.45);
+  padding: var(--space-4);
+}
+
+.dialog {
+  width: min(960px, 94vw);
+  max-height: 90vh;
+  overflow: auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.head h2 {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.head button {
+  padding: var(--space-1) var(--space-3);
+  background: transparent;
+  color: var(--color-ink);
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-bottom: var(--space-2);
+}
+
+.tabs button {
+  padding: var(--space-1) var(--space-3);
+  background: transparent;
+  color: var(--color-ink);
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.tabs button[aria-selected="true"] {
+  background: var(--color-ink);
+  color: var(--color-surface);
+  border-color: var(--color-ink);
+}
+
+.meta {
+  margin: 0 0 var(--space-1);
+  font-size: 0.8125rem;
+  color: var(--color-ink-soft);
+}
+
+.caption {
+  margin: 0 0 var(--space-2);
+  font-size: 0.875rem;
+}
+
+.stage {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+
+.image {
+  display: block;
+  max-width: 100%;
+  max-height: 56vh;
+  border: 1px solid var(--color-line-strong);
+}
+
+.linked {
+  position: absolute;
+  padding: 0;
+  background: rgb(255 255 255 / 0.08);
+  border: 2px solid var(--color-accent-strong);
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.65);
+  cursor: pointer;
+}
+
+.linked:hover {
+  background: rgb(255 255 255 / 0.2);
+}
+
+.active {
+  border-color: var(--color-olive);
+  box-shadow: 0 0 0 2px var(--color-olive);
+}
+
+.unlinked {
+  position: absolute;
+  border: 2px dashed var(--color-ink-faint);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.regionList {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.regionRow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: 0.875rem;
+}
+
+.regionLabel {
+  font-weight: 600;
+}
+
+.nodeLink {
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--color-accent-strong);
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.unlinkedTag {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-ink-faint);
+}
+
+.conf {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--color-ink-faint);
+}
+
+.ingest {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.ingestRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.ingestRow button {
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-ink);
+  color: var(--color-surface);
+  border: 1px solid var(--color-ink);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.formError {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-danger);
+}
+
+.report {
+  font-size: 0.875rem;
+}
+
+.report p {
+  margin: 0 0 var(--space-1);
+}
+
+.report ul {
+  margin: 0;
+  padding-left: var(--space-4);
+}

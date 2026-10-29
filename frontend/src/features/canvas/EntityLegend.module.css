@@ -11,6 +11,11 @@
   pointer-events: auto;
 }
 
+.legendInline {
+  position: static;
+  max-width: none;
+}
+
 .badge {
   display: flex;
   align-items: baseline;

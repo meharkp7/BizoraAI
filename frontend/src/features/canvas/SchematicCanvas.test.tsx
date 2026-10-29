@@ -49,6 +49,23 @@ describe("SchematicCanvas", () => {
     ).toBeInTheDocument();
   });
 
+  it("hides unconnected parts instead of floating them", () => {
+    const graph = {
+      ...graphFixture,
+      nodes: [...graphFixture.nodes, { ...graphFixture.nodes[0], id: "lonely", label: "Lonely" }],
+    };
+    const entities: GraphEntities = {
+      ...entitiesFixture,
+      entities: [
+        ...entitiesFixture.entities,
+        { ...entitiesFixture.entities[0], node_id: "lonely" },
+      ],
+    };
+    const { container } = render(<SchematicCanvas graph={graph} entities={entities} />);
+    expect(container.querySelector('[data-node-id="lonely"]')).not.toBeInTheDocument();
+    expect(screen.getByText(/1 unconnected part hidden/)).toBeInTheDocument();
+  });
+
   it("selects a node on click", () => {
     const { container } = render(
       <SchematicCanvas graph={graphFixture} entities={entitiesFixture} />,
@@ -56,6 +73,24 @@ describe("SchematicCanvas", () => {
 
     fireEvent.click(container.querySelector('[data-node-id="input"]') as Element);
     expect(useWorkspaceSelection.getState().selectedNodeIds).toEqual(["input"]);
+  });
+
+  it("shows measured values from the overlay channel", () => {
+    const { container } = render(
+      <SchematicCanvas
+        graph={graphFixture}
+        entities={entitiesFixture}
+        overlay={{
+          run_id: "run-7",
+          nodes: { input: [{ signal: "V", value: 1.2, unit: "V" }] },
+          edges: { e1: [{ signal: "I", value: 3, unit: "mA" }] },
+        }}
+      />,
+    );
+    expect(screen.getByText(/2 measured values from run run-7/)).toBeInTheDocument();
+    expect(container.querySelector('[data-node-id="input"]')?.textContent).toContain(
+      "measured: V=1.2V",
+    );
   });
 
   it("explains an empty schematic instead of drawing guesses", () => {

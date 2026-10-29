@@ -1,7 +1,9 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { entitiesFixture } from "../../test/fixtures.ts";
-import { AssetProvenanceBadge, EntityLegend } from "./EntityLegend.tsx";
+import { entitiesFixture, graphFixture } from "../../test/fixtures.ts";
+import { partLegendEntries } from "./assetModels.ts";
+import { resolutionsByNodeId } from "./graph3d.ts";
+import { AssetProvenanceBadge, PartLegend } from "./EntityLegend.tsx";
 
 describe("AssetProvenanceBadge", () => {
   it("announces measured and illustrative counts", () => {
@@ -29,20 +31,36 @@ describe("AssetProvenanceBadge", () => {
   });
 });
 
-describe("EntityLegend asset indicator", () => {
-  it("shows the provenance line alongside the shape key", () => {
+describe("PartLegend asset indicator", () => {
+  const parts = partLegendEntries(
+    [
+      {
+        node_id: "input",
+        label: "6T bitcell",
+        asset_uri: null,
+        fallback_package: null,
+        illustrative: false,
+        mesh: null,
+      },
+    ],
+    graphFixture.nodes,
+    resolutionsByNodeId(entitiesFixture),
+  );
+
+  it("shows the provenance line alongside the part key", () => {
     render(
-      <EntityLegend
+      <PartLegend
         entities={entitiesFixture}
+        parts={parts}
         assetSummary={{ measured: 1, illustrative: 1, total: 2 }}
       />,
     );
     expect(screen.getByRole("status")).toHaveTextContent("3D models: 1 measured · 1 illustrative");
-    expect(screen.getByRole("complementary", { name: "3D shape key" })).toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "3D part key" })).toBeInTheDocument();
   });
 
-  it("omits the provenance line when no specs are attached", () => {
-    render(<EntityLegend entities={entitiesFixture} />);
+  it("omits the provenance line when no summary is attached", () => {
+    render(<PartLegend entities={entitiesFixture} parts={parts} />);
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 });

@@ -1,8 +1,10 @@
 import { useMemo } from "react";
 import { useWorkspaceSelection } from "../../lib/store.ts";
-import type { GraphEntities, MethodologyGraph } from "../../lib/types.ts";
-import { SymbolGlyph } from "./CategoryGlyph.tsx";
-import { chipScope, schematicBoxes } from "./chipViews.ts";
+import type { GraphEntities, MeasuredOverlay, MethodologyGraph } from "../../lib/types.ts";
+import { EMPTY_OVERLAY } from "../../lib/types.ts";
+import { SymbolGlyph } from "./SymbolGlyph.tsx";
+import { chipScope, connectedScope, schematicBoxes } from "./chipViews.ts";
+import { measuredSummary } from "./flowElements.ts";
 import type { SchematicBox } from "./chipViews.ts";
 import { prettyEntityType, symbolLabel } from "./graph3d.ts";
 import styles from "./SchematicCanvas.module.css";
@@ -142,16 +144,19 @@ function CompactSymbol({
 export function SchematicCanvas({
   graph,
   entities,
+  overlay = EMPTY_OVERLAY,
 }: {
   graph: MethodologyGraph;
   entities: GraphEntities | null;
+  overlay?: MeasuredOverlay;
 }) {
   const scope = useMemo(() => chipScope(graph, entities), [graph, entities]);
-  const { boxes, width, height } = useMemo(() => schematicBoxes(scope), [scope]);
+  const { scope: wired, droppedCount } = useMemo(() => connectedScope(scope), [scope]);
+  const { boxes, width, height } = useMemo(() => schematicBoxes(wired), [wired]);
   const { selectedNodeIds, selectNodes } = useWorkspaceSelection();
   const labels = useMemo(
-    () => new Map(scope.graph.nodes.map((node) => [node.id, node.label])),
-    [scope],
+    () => new Map(wired.graph.nodes.map((node) => [node.id, node.label])),
+    [wired],
   );
   const centers = useMemo(
     () =>
@@ -160,6 +165,12 @@ export function SchematicCanvas({
       ),
     [boxes],
   );
+  const measuredCount = useMemo(() => {
+    let count = 0;
+    for (const node of wired.graph.nodes) count += overlay.nodes[node.id]?.length ?? 0;
+    for (const edge of wired.graph.edges) count += overlay.edges[edge.id]?.length ?? 0;
+    return count;
+  }, [wired, overlay]);
 
   if (scope.graph.nodes.length === 0) {
     return (
@@ -176,8 +187,14 @@ export function SchematicCanvas({
     <div className={styles.stage}>
       <p className={styles.note} role="note">
         Layout follows the canvas flow; wiring is illustrative, not a netlist.
-        {scope.hiddenCount > 0
-          ? ` ${scope.hiddenCount} ${scope.hiddenCount === 1 ? "node" : "nodes"} without an identified electronics part ${scope.hiddenCount === 1 ? "is" : "are"} hidden.`
+        {measuredCount > 0
+          ? ` ${measuredCount} measured ${measuredCount === 1 ? "value" : "values"} from run ${overlay.run_id ?? "unknown"}.`
+          : null}
+        {droppedCount > 0
+          ? ` ${droppedCount} unconnected ${droppedCount === 1 ? "part" : "parts"} hidden (no drawn connections).`
+          : null}
+        {wired.hiddenCount - droppedCount > 0
+          ? ` ${wired.hiddenCount - droppedCount} ${wired.hiddenCount - droppedCount === 1 ? "node" : "nodes"} without an identified electronics part ${wired.hiddenCount - droppedCount === 1 ? "is" : "are"} hidden.`
           : null}
       </p>
       <svg
@@ -186,7 +203,7 @@ export function SchematicCanvas({
         role="group"
         aria-label="Chip schematic"
       >
-        {scope.graph.edges.map((edge) => {
+        {wired.graph.edges.map((edge) => {
           const from = centers.get(edge.source);
           const to = centers.get(edge.target);
           if (!from || !to) return null;
@@ -204,7 +221,7 @@ export function SchematicCanvas({
         {boxes.map((box) => {
           const selected = selectedNodeIds.includes(box.nodeId);
           const entityType =
-            scope.resolutions.get(box.nodeId)?.entity_type ?? "generic-component";
+            wired.resolutions.get(box.nodeId)?.entity_type ?? "generic-component";
           return (
             <g
               key={box.nodeId}
@@ -233,6 +250,16 @@ export function SchematicCanvas({
                   entityType={entityType}
                 />
               )}
+              {measuredSummary(overlay.nodes[box.nodeId]) ? (
+                <text
+                  x={box.w / 2}
+                  y={box.expanded ? 10 : box.h + 12}
+                  textAnchor="middle"
+                  className={styles.measured}
+                >
+                  {`measured: ${measuredSummary(overlay.nodes[box.nodeId])}`}
+                </text>
+              ) : null}
             </g>
           );
         })}

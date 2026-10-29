@@ -79,6 +79,12 @@
   font-size: 9px;
 }
 
+.measured {
+  fill: var(--color-olive);
+  font-size: 9px;
+  font-weight: 600;
+}
+
 .rail {
   fill: var(--color-ink-soft);
   font-size: 9px;

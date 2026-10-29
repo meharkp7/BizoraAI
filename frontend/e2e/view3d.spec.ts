@@ -79,45 +79,54 @@ test.beforeEach(async ({ page }) => {
     }
   });
   await page.route("**/api/v1/graphs/**/revisions/*/render-specs", async (route) => {
+    const box = {
+      parts: [
+        {
+          name: "body",
+          vertices: [
+            [-2.45, 0, -1.95],
+            [2.45, 0, -1.95],
+            [2.45, 1.75, -1.95],
+            [-2.45, 1.75, -1.95],
+            [-2.45, 0, 1.95],
+            [2.45, 0, 1.95],
+            [2.45, 1.75, 1.95],
+            [-2.45, 1.75, 1.95],
+          ],
+          faces: [
+            [0, 1, 2],
+            [0, 2, 3],
+            [4, 6, 5],
+            [4, 7, 6],
+            [0, 4, 5],
+            [0, 5, 1],
+            [2, 6, 7],
+            [2, 7, 3],
+            [0, 3, 7],
+            [0, 7, 4],
+            [1, 5, 6],
+            [1, 6, 2],
+          ],
+        },
+      ],
+    };
     await route.fulfill({
       json: [
+        {
+          node_id: "input",
+          label: "Embedding table",
+          asset_uri: null,
+          fallback_package: "soic-8",
+          illustrative: true,
+          mesh: box,
+        },
         {
           node_id: "encoder",
           label: "Attention block",
           asset_uri: null,
           fallback_package: "soic-8",
           illustrative: true,
-          mesh: {
-            parts: [
-              {
-                name: "body",
-                vertices: [
-                  [-2.45, 0, -1.95],
-                  [2.45, 0, -1.95],
-                  [2.45, 1.75, -1.95],
-                  [-2.45, 1.75, -1.95],
-                  [-2.45, 0, 1.95],
-                  [2.45, 0, 1.95],
-                  [2.45, 1.75, 1.95],
-                  [-2.45, 1.75, 1.95],
-                ],
-                faces: [
-                  [0, 1, 2],
-                  [0, 2, 3],
-                  [4, 6, 5],
-                  [4, 7, 6],
-                  [0, 4, 5],
-                  [0, 5, 1],
-                  [2, 6, 7],
-                  [2, 7, 3],
-                  [0, 3, 7],
-                  [0, 7, 4],
-                  [1, 5, 6],
-                  [1, 6, 2],
-                ],
-              },
-            ],
-          },
+          mesh: box,
         },
       ],
     });
@@ -180,12 +189,13 @@ test("3D explorer renders without console errors and toggles views", async ({ pa
   await expect(stage).toBeVisible();
   await expect(stage.locator("canvas")).toHaveCount(1);
   // Tags stay hidden until hover or selection so dense graphs stay legible.
-  await expect(stage.getByText("Image")).toBeHidden();
-  await expect(stage.getByText("Transformer encoder")).toBeHidden();
+  // Exact text isolates the floating tags from the legend rows beneath.
+  await expect(stage.getByText("Image", { exact: true })).toBeHidden();
+  await expect(stage.getByText("Transformer encoder", { exact: true })).toBeHidden();
   expect(problems).toEqual([]);
 
-  // Toggle back to 2D through the toolbar control.
-  await page.getByRole("group", { name: "Canvas view" }).getByRole("button", { name: "2D" }).click();
+  // Toggle back to Structure through the toolbar control.
+  await page.getByRole("group", { name: "Canvas view" }).getByRole("button", { name: "Structure" }).click();
   await expect(page.locator(".react-flow__node")).toHaveCount(2);
   expect(problems).toEqual([]);
 });
@@ -197,20 +207,22 @@ test("3D list selection syncs to the inspector", async ({ page }) => {
 
   await page.locator("ul[aria-label='Graph nodes'] li").nth(1).click();
   await expect(page.getByRole("button", { name: "Replace component" })).toBeVisible();
-  await expect(stage.getByText("Transformer encoder")).toBeVisible();
+  await expect(stage.getByText("Transformer encoder", { exact: true })).toBeVisible();
 });
 
-test("3D legend shows the domain and shape key", async ({ page }) => {
+test("3D legend shows the domain and part key", async ({ page }) => {
   await page.goto(WORKSPACE_URL);
   const stage = page.getByRole("application", { name: /3D methodology graph/ });
   await expect(stage).toBeVisible();
-  const legend = stage.getByRole("complementary", { name: "3D shape key" });
+  const legend = stage.getByRole("complementary", { name: "3D part key" });
   await expect(legend).toBeVisible();
   await expect(legend.getByText(/Deep learning · 90% confidence/)).toBeVisible();
   const rows = legend.locator("li");
   await expect(rows).toHaveCount(2);
-  await expect(rows.nth(0)).toContainText("Embedding");
-  await expect(rows.nth(1)).toContainText("Attention");
+  await expect(rows.nth(0)).toContainText("Embedding table");
+  await expect(rows.nth(0)).toContainText("illustrative");
+  await expect(rows.nth(1)).toContainText("Attention block");
+  await expect(rows.nth(1)).toContainText("Transformer encoder");
   await expect(rows.nth(1)).toContainText("Attention Block");
 });
 
@@ -228,6 +240,6 @@ test("3D swaps in package visuals and reports provenance counts", async ({ page 
   await page.goto(WORKSPACE_URL);
   const stage = page.getByRole("application", { name: /3D methodology graph/ });
   await expect(stage).toBeVisible();
-  const legend = stage.getByRole("complementary", { name: "3D shape key" });
-  await expect(legend.getByText("3D models: 0 measured · 1 illustrative")).toBeVisible();
+  const legend = stage.getByRole("complementary", { name: "3D part key" });
+  await expect(legend.getByText("3D models: 0 measured · 2 illustrative")).toBeVisible();
 });

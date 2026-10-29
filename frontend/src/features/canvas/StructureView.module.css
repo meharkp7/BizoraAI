@@ -1,0 +1,31 @@
+.view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-height: 0;
+}
+
+.modes {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.modes button {
+  padding: var(--space-1) var(--space-3);
+  background: transparent;
+  color: var(--color-ink);
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.modes button[aria-pressed="true"] {
+  background: var(--color-ink);
+  color: var(--color-surface);
+  border-color: var(--color-ink);
+}
+
+.modes button:not(:disabled):hover {
+  border-color: var(--color-ink);
+}

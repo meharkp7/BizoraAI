@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 import type { EntityResolution, GraphEntities } from "../../lib/types.ts";
 import { entitiesFixture, graphFixture } from "../../test/fixtures.ts";
 import {
-  KIND_COLORS,
-  archetypeFor,
   boundingSphere,
   categoryLabel,
   domainLabel,
@@ -15,7 +13,6 @@ import {
   splitGraph,
   symbolLabel,
   toWorldPositions,
-  visualFor,
 } from "./graph3d.ts";
 
 function resolution(overrides: Partial<EntityResolution>): EntityResolution {
@@ -48,26 +45,6 @@ describe("3D world mapping", () => {
     expect(encoder?.z).toBeCloseTo((Math.cos(0.65) - 1) * 6, 5);
   });
 
-  it("colors every node kind with a muted earth tone", () => {
-    expect(Object.keys(KIND_COLORS).sort()).toEqual(
-      [
-        "component",
-        "dataset",
-        "evaluation",
-        "input",
-        "loss",
-        "model",
-        "operation",
-        "optimizer",
-        "output",
-        "preprocessing",
-      ].sort(),
-    );
-    for (const color of Object.values(KIND_COLORS)) {
-      expect(Number.isInteger(color)).toBe(true);
-    }
-  });
-
   it("bounds nodes in a sphere for camera fitting", () => {
     const positions = toWorldPositions(graphFixture, null);
     const points = [...positions.values()];
@@ -94,75 +71,39 @@ describe("3D world mapping", () => {
   });
 });
 
-describe("library category glyphs", () => {
-  it("maps each category to a distinct primitive within a domain", () => {
-    // Electronics set: every category renders a different shape.
-    const electronics = ["package", "discrete", "power", "sensor", "passive"].map(archetypeFor);
-    expect(new Set(electronics).size).toBe(electronics.length);
-    // Deep-learning set, including the flattened layer slab.
-    expect(archetypeFor("layer")).toBe("slab");
-    expect(archetypeFor("storage")).toBe("cylinder");
-    expect(archetypeFor("service")).toBe("dodecahedron");
-  });
-
-  it("falls back to the sphere for unknown or missing categories", () => {
-    expect(archetypeFor("quantum-foam")).toBe("sphere");
-    expect(archetypeFor(null)).toBe("sphere");
-    expect(archetypeFor(undefined)).toBe("sphere");
-    expect(categoryLabel("quantum-foam")).toBe("Generic");
+describe("display labels", () => {
+  it("labels known categories, symbols, and domains", () => {
+    expect(categoryLabel("package")).toBe("Package");
     expect(categoryLabel("process")).toBe("Process");
-    expect(domainLabel("astrophysics")).toBe("Generic");
-  });
-});
-
-describe("render-spec visuals", () => {
-  it("derives 3D shapes from the pack-declared symbol, never the category", () => {
-    // Same coarse category, different entities: the symbol decides.
-    expect(visualFor(resolution({ symbol: "bitcell", category: "package" }))).toBe("box");
-    expect(visualFor(resolution({ symbol: "chip", category: "package" }))).toBe("box");
-    expect(visualFor(resolution({ symbol: "attention", category: "layer" }))).toBe("slab");
-    expect(visualFor(resolution({ symbol: "transistor", category: "discrete" }))).toBe("cone");
-    // A misleading category cannot smuggle in a hardware shape.
-    expect(visualFor(resolution({ symbol: "dataset", category: "sensor" }))).toBe("cylinder");
-  });
-
-  it("lets an explicit model_3d key override the symbol visual", () => {
-    expect(visualFor(resolution({ symbol: "bitcell", model_3d: "cylinder" }))).toBe("cylinder");
-    // Unknown model keys fall back to the neutral sphere, never crash.
-    expect(visualFor(resolution({ symbol: "bitcell", model_3d: "quantum-foam" }))).toBe(
-      "sphere",
-    );
-  });
-
-  it("renders unknown, generic, and missing resolutions as neutral spheres", () => {
-    expect(visualFor(resolution({ symbol: "quantum-foam" }))).toBe("sphere");
-    expect(visualFor(resolution({ generic: true, symbol: "generic" }))).toBe("sphere");
-    expect(visualFor(null)).toBe("sphere");
-    expect(visualFor(undefined)).toBe("sphere");
-  });
-
-  it("labels symbols with curated names and a kebab-case fallback", () => {
+    expect(categoryLabel("quantum-foam")).toBe("Generic");
     expect(symbolLabel("senseamp")).toBe("Sense amplifier");
     expect(symbolLabel("adc")).toBe("Data converter");
     expect(symbolLabel("mcu")).toBe("Microcontroller");
     expect(symbolLabel("bitcell")).toBe("Bitcell");
-    expect(symbolLabel("quantum-foam")).toBe("Quantum Foam");
+    expect(domainLabel("deep-learning")).toBe("Deep learning");
   });
 
+  it("prettifies unknown symbols and domains instead of collapsing them", () => {
+    expect(symbolLabel("quantum-foam")).toBe("Quantum Foam");
+    // Model-produced labels for unseen domains must display as-is.
+    expect(domainLabel("astrophysics")).toBe("Astrophysics");
+    expect(domainLabel("generic")).toBe("Generic");
+  });
+});
+
+describe("symbol legend", () => {
   it("groups resolutions into legend entries by symbol", () => {
     const entries = legendEntries(entitiesFixture);
     expect(entries).toHaveLength(2);
     expect(entries[0]).toMatchObject({
       symbol: "bitcell",
       label: "Bitcell",
-      geometry: "box",
       count: 1,
       entityTypes: ["Memory Cell"],
     });
     expect(entries[1]).toMatchObject({
       symbol: "generic",
       label: "Generic",
-      geometry: "sphere",
       count: 1,
     });
     expect(legendEntries(null)).toEqual([]);

@@ -10,9 +10,18 @@ function useGraphParams(): { projectId: string; graphId: string } {
   return { projectId, graphId };
 }
 
-export type CanvasView = "2d" | "3d" | "process" | "schematic" | "floorplan";
+export type CanvasView = "structure" | "flow" | "3d";
 
-const CANVAS_VIEWS: ReadonlySet<string> = new Set(["2d", "3d", "process", "schematic", "floorplan"]);
+/** Pre-R1 view ids and their three-view equivalents. Schematic and
+ *  floorplan folded into structure as render modes. */
+const LEGACY_VIEWS: Record<string, CanvasView> = {
+  "2d": "structure",
+  process: "flow",
+  schematic: "structure",
+  floorplan: "structure",
+};
+
+const CANVAS_VIEWS: ReadonlySet<string> = new Set(["structure", "flow", "3d"]);
 
 export function WorkspaceRoute() {
   const { projectId, graphId } = useGraphParams();
@@ -20,7 +29,12 @@ export function WorkspaceRoute() {
   const parsed = Number(searchParams.get("v") ?? "1");
   const version = Number.isInteger(parsed) && parsed >= 1 ? parsed : 1;
   const requested = searchParams.get("view");
-  const view: CanvasView = requested && CANVAS_VIEWS.has(requested) ? (requested as CanvasView) : "2d";
+  const view: CanvasView =
+    requested && CANVAS_VIEWS.has(requested)
+      ? (requested as CanvasView)
+      : requested && requested in LEGACY_VIEWS
+        ? LEGACY_VIEWS[requested]
+        : "structure";
 
   function updateParams(next: { version?: number; view?: CanvasView }): void {
     const params = new URLSearchParams(searchParams);
@@ -31,7 +45,7 @@ export function WorkspaceRoute() {
       params.set("v", String(versionValue));
     }
     const viewValue = next.view ?? view;
-    if (viewValue === "2d") {
+    if (viewValue === "structure") {
       params.delete("view");
     } else {
       params.set("view", viewValue);

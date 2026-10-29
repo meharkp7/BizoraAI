@@ -1,13 +1,12 @@
-/* Pure 3D mapping: deterministic world positions and kind colors derived
-   from the same 2D layout source of truth. No three.js imports here so unit
-   tests never need WebGL. */
+/* Pure 3D mapping: deterministic world positions derived from the same
+   2D layout source of truth. No three.js imports here so unit tests never
+   need WebGL. */
 
 import type {
   EntityResolution,
   GraphEntities,
   GraphLayout,
   MethodologyGraph,
-  NodeKind,
 } from "../../lib/types.ts";
 import { layerByNodeId, resolvePositions } from "./layout.ts";
 
@@ -25,20 +24,6 @@ export const LAYER_RISE = 3.2;
 export const HELIX_RADIUS = 6;
 /** Helix turn per depth layer (radians). */
 export const HELIX_STEP = 0.65;
-
-/** Muted earth-tone palette matching the warm studio theme. */
-export const KIND_COLORS: Record<NodeKind, number> = {
-  input: 0x5f6636,
-  dataset: 0x7a6f4f,
-  preprocessing: 0x8b8471,
-  model: 0x8a4d26,
-  operation: 0xa06a35,
-  loss: 0xa83a2a,
-  optimizer: 0x5c6650,
-  evaluation: 0x476063,
-  output: 0x23211b,
-  component: 0xa08c5b,
-};
 
 export const EDGE_COLOR = 0x8b8471;
 export const SELECT_COLOR = 0x8a4d26;
@@ -158,123 +143,6 @@ export function fitDistance(
   return distance * margin;
 }
 
-/** Three.js primitive vocabulary shared by every 3D visual. Pack
- *  `model_3d` keys name one of these directly; unknown keys fall back
- *  to the sphere so new backend values never break the renderer. */
-export type ArchetypeGeometry =
-  | "sphere"
-  | "box"
-  | "slab"
-  | "cylinder"
-  | "cone"
-  | "torus"
-  | "octahedron"
-  | "tetrahedron"
-  | "icosahedron"
-  | "dodecahedron";
-
-const ARCHETYPES: ReadonlySet<string> = new Set([
-  "sphere",
-  "box",
-  "slab",
-  "cylinder",
-  "cone",
-  "torus",
-  "octahedron",
-  "tetrahedron",
-  "icosahedron",
-  "dodecahedron",
-]);
-
-/** Library-catalog glyphs per component category. Shapes repeat across
- *  domains only where the domains never share a graph (power/storage
- *  cylinders, package/compute boxes), so one key stays unambiguous.
- *  Canvas and 3D shapes never derive from this table: they follow the
- *  pack-declared render spec (symbol, model_3d) instead. */
-export const CATEGORY_GEOMETRY: Record<string, ArchetypeGeometry> = {
-  package: "box",
-  discrete: "cone",
-  passive: "torus",
-  power: "cylinder",
-  sensor: "octahedron",
-  compute: "box",
-  network: "torus",
-  format: "icosahedron",
-  signal: "tetrahedron",
-  service: "dodecahedron",
-  storage: "cylinder",
-  layer: "slab",
-  generic: "sphere",
-};
-
-export function archetypeFor(category: string | null | undefined): ArchetypeGeometry {
-  if (!category) return "sphere";
-  return CATEGORY_GEOMETRY[category] ?? "sphere";
-}
-
-/** Representative 3D solid per pack-declared symbol: the interim mapping
- *  until packs pin representative visuals in `model_3d` themselves.
- *  Process symbols map to the same solids only as a safety net — the
- *  structure scene excludes non-physical nodes via splitGraph instead
- *  of rendering them as hardware. */
-export const SYMBOL_GEOMETRY: Record<string, ArchetypeGeometry> = {
-  generic: "sphere",
-  bitcell: "box",
-  transistor: "cone",
-  gate: "box",
-  source: "cylinder",
-  bias: "box",
-  senseamp: "box",
-  meter: "octahedron",
-  passive: "torus",
-  diode: "cone",
-  chip: "box",
-  adc: "box",
-  mcu: "box",
-  sensor: "octahedron",
-  actuator: "box",
-  radio: "torus",
-  cloud: "torus",
-  supply: "cylinder",
-  tensor: "icosahedron",
-  format: "icosahedron",
-  engine: "box",
-  evaluator: "box",
-  sampler: "tetrahedron",
-  encoder: "tetrahedron",
-  modulator: "tetrahedron",
-  channel: "torus",
-  demodulator: "tetrahedron",
-  decoder: "tetrahedron",
-  filter: "tetrahedron",
-  client: "dodecahedron",
-  coordinator: "dodecahedron",
-  worker: "dodecahedron",
-  storage: "cylinder",
-  queue: "torus",
-  "load-balancer": "torus",
-  embedding: "slab",
-  attention: "slab",
-  feedforward: "slab",
-  normalization: "slab",
-  loss: "box",
-  optimizer: "box",
-  dataset: "cylinder",
-};
-
-/** 3D solid for one resolution: an explicit `model_3d` key wins, then the
- *  pack-declared symbol, then the neutral sphere. Unknown symbols and
- *  missing resolutions stay spheres so new backend types never break
- *  the renderer — and the category is never consulted. */
-export function visualFor(resolution: EntityResolution | null | undefined): ArchetypeGeometry {
-  const model = resolution?.model_3d;
-  if (model && ARCHETYPES.has(model)) return model as ArchetypeGeometry;
-  if (model) return "sphere";
-  const symbol = resolution?.symbol;
-  if (!symbol) return "sphere";
-  return SYMBOL_GEOMETRY[symbol] ?? "sphere";
-}
-
 export const CATEGORY_LABELS: Record<string, string> = {
   package: "Package",
   discrete: "Discrete",
@@ -319,7 +187,9 @@ export const DOMAIN_LABELS: Record<string, string> = {
 };
 
 export function domainLabel(domain: string): string {
-  return DOMAIN_LABELS[domain] ?? "Generic";
+  // Unknown domains prettify as-is: model-produced labels for unseen
+  // domains must display, never collapse to "Generic".
+  return DOMAIN_LABELS[domain] ?? prettyEntityType(domain);
 }
 
 /** Prettify a kebab-case entity type id for legend display. */
@@ -333,15 +203,13 @@ export function prettyEntityType(entityType: string): string {
 export interface LegendEntry {
   symbol: string;
   label: string;
-  geometry: ArchetypeGeometry;
   count: number;
   entityTypes: string[];
 }
 
-/** Group resolved entities by pack-declared symbol for the 3D legend, so
- *  each row names what the entity is and shows the solid the scene
- *  renders for it. Truly generic nodes carry the "generic" symbol and
- *  keep their own entry, so placeholders stay visibly generic. */
+/** Group resolved entities by pack-declared symbol for 2D symbol keys.
+ *  Truly generic nodes carry the "generic" symbol and keep their own
+ *  entry, so placeholders stay visibly generic. */
 export function legendEntries(entities: GraphEntities | null): LegendEntry[] {
   if (!entities) return [];
   const groups = new Map<string, { count: number; types: Set<string> }>();
@@ -359,11 +227,9 @@ export function legendEntries(entities: GraphEntities | null): LegendEntry[] {
   }
   return order.map((symbol) => {
     const group = groups.get(symbol) ?? { count: 0, types: new Set<string>() };
-    const geometry = SYMBOL_GEOMETRY[symbol] ?? "sphere";
     return {
       symbol,
       label: symbolLabel(symbol),
-      geometry,
       count: group.count,
       entityTypes: [...group.types].sort().map(prettyEntityType),
     };

@@ -1,11 +1,14 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
+import type { EntityResolution } from "../../lib/types.ts";
+import { entitiesFixture, graphFixture } from "../../test/fixtures.ts";
 import {
   buildProceduralGeometries,
   buildProceduralGroup,
   loadGlbModel,
   loadRequests,
   meshSpecs,
+  partLegendEntries,
   partRole,
   provenanceLabel,
   provenanceOf,
@@ -13,6 +16,7 @@ import {
   summarizeProvenance,
 } from "./assetModels.ts";
 import type { NodeAssetSpec } from "./assetModels.ts";
+import { resolutionsByNodeId } from "./graph3d.ts";
 
 function spec(overrides: Partial<NodeAssetSpec> & { node_id: string }): NodeAssetSpec {
   return {
@@ -182,5 +186,48 @@ describe("procedural fallback geometry", () => {
       mesh.geometry.dispose();
       (mesh.material as THREE.Material).dispose();
     }
+  });
+});
+
+describe("part legend", () => {
+  const resolutions = resolutionsByNodeId(entitiesFixture);
+
+  it("rows one modeled node with part, provenance, and entity type", () => {
+    const rows = partLegendEntries(
+      [spec({ node_id: "input", label: "6T bitcell", illustrative: false })],
+      graphFixture.nodes,
+      resolutions,
+    );
+    expect(rows).toEqual([
+      {
+        nodeId: "input",
+        partLabel: "6T bitcell",
+        nodeLabel: "Image",
+        provenance: "measured",
+        entityType: "Memory Cell",
+      },
+    ]);
+  });
+
+  it("dedupes specs and omits entity types for generic nodes", () => {
+    const generic = new Map<string, EntityResolution>([
+      ["input", { ...resolutions.get("input")!, generic: true }],
+    ]);
+    const rows = partLegendEntries(
+      [
+        spec({ node_id: "input", label: "Part A" }),
+        spec({ node_id: "input", label: "Part B" }),
+      ],
+      graphFixture.nodes,
+      generic,
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ partLabel: "Part A", entityType: null });
+  });
+
+  it("falls back to the node id for unknown labels", () => {
+    const rows = partLegendEntries([spec({ node_id: "ghost" })], graphFixture.nodes, resolutions);
+    expect(rows[0]).toMatchObject({ nodeId: "ghost", nodeLabel: "ghost" });
+    expect(partLegendEntries(null, graphFixture.nodes, resolutions)).toEqual([]);
   });
 });

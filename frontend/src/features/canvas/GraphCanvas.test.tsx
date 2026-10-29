@@ -86,4 +86,42 @@ describe("GraphCanvas", () => {
     // Auto-layout layers input above encoder.
     expect(styles[0]).not.toBe(styles[1]);
   });
+
+  it("shows measured badges when the overlay channel fills", () => {
+    useWorkspaceSelection.setState({ selectedNodeIds: [], selectedEdgeIds: [] });
+    const { container, rerender } = render(
+      <GraphCanvas graph={graphFixture} layout={null} diffStatuses={null} />,
+    );
+    expect(container.querySelector('[data-id="encoder"]')?.textContent).not.toContain(
+      "measured",
+    );
+    rerender(
+      <GraphCanvas
+        graph={graphFixture}
+        layout={null}
+        diffStatuses={null}
+        overlay={{
+          run_id: "run-1",
+          nodes: { encoder: [{ signal: "acc", value: 0.91, unit: null }] },
+          edges: {},
+        }}
+      />,
+    );
+    expect(container.querySelector('[data-id="encoder"]')?.textContent).toContain("measured");
+  });
+
+  it("flags assumed nodes from the correction loop", () => {
+    useWorkspaceSelection.setState({ selectedNodeIds: [], selectedEdgeIds: [] });
+    const graph = {
+      ...graphFixture,
+      nodes: graphFixture.nodes.map((node) =>
+        node.id === "encoder" ? { ...node, config: { assumed: true } } : node,
+      ),
+    };
+    const { container } = render(
+      <GraphCanvas graph={graph} layout={null} diffStatuses={null} />,
+    );
+    expect(container.querySelector('[data-id="encoder"]')?.textContent).toContain("assumed");
+    expect(container.querySelector('[data-id="input"]')?.textContent).not.toContain("assumed");
+  });
 });

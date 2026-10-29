@@ -11,6 +11,7 @@ import type {
   ExperimentConfig,
   ExperimentRun,
   ExtractedTable,
+  FigureIngestResponse,
   GraphEntities,
   GraphLayout,
   GraphPatch,
@@ -20,9 +21,11 @@ import type {
   MetricRecord,
   NodeRenderSpec,
   PaperExtractionResponse,
+  PaperFigure,
   PaperReportedMetric,
   PaperUpload,
   ParsedPaper,
+  RemovalPreflight,
   RunComparison,
   SimulationPreview,
 } from "./types.ts";
@@ -192,6 +195,42 @@ export const api = {
     );
   },
 
+  getGraphFigures(projectId: string, graphId: string): Promise<PaperFigure[]> {
+    return request(`/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/figures`);
+  },
+
+  getGraphReportedMetrics(
+    projectId: string,
+    graphId: string,
+    names?: string[],
+  ): Promise<PaperReportedMetric[]> {
+    const query =
+      names && names.length > 0
+        ? `?${names.map((name) => `names=${encodeURIComponent(name)}`).join("&")}`
+        : "";
+    return request(
+      `/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/reported-metrics${query}`,
+    );
+  },
+
+  figureImageUrl(projectId: string, graphId: string, figureId: string): string {
+    return `/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/figures/${encode(figureId)}/image`;
+  },
+
+  ingestGraphFigures(
+    projectId: string,
+    graphId: string,
+    version: number,
+    file: File,
+  ): Promise<FigureIngestResponse> {
+    const form = new FormData();
+    form.append("file", file, file.name);
+    return request(
+      `/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/revisions/${version}/figures`,
+      { method: "POST", body: form },
+    );
+  },
+
   saveLayout(layout: GraphLayout): Promise<GraphLayout> {
     const { project_id, graph_id, version } = layout;
     return request(
@@ -327,6 +366,18 @@ export const api = {
     return request(
       `/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/revisions/${version}/nodes/${encode(nodeId)}/preflight`,
       { method: "POST", body: JSON.stringify({ component_id: componentId, config }) },
+    );
+  },
+
+  preflightRemoval(
+    projectId: string,
+    graphId: string,
+    version: number,
+    nodeId: string,
+  ): Promise<RemovalPreflight> {
+    return request(
+      `/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/revisions/${version}/nodes/${encode(nodeId)}/removal-preflight`,
+      { method: "POST" },
     );
   },
 

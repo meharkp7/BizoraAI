@@ -7,10 +7,13 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import type {
+  EntityResolution,
+  GraphNode,
   NodeRenderSpec,
   ProceduralMeshData,
   ProceduralPartData,
 } from "../../lib/types.ts";
+import { prettyEntityType } from "./graph3d.ts";
 
 export type AssetProvenance = "measured" | "illustrative";
 
@@ -84,6 +87,41 @@ export function meshSpecs(
     meshes.push(spec);
   }
   return meshes;
+}
+
+export interface PartLegendEntry {
+  nodeId: string;
+  partLabel: string;
+  nodeLabel: string;
+  provenance: AssetProvenance;
+  entityType: string | null;
+}
+
+/** One legend row per modeled node: the part name, the node's label,
+ *  its provenance, and the resolved entity type when known. Nodes
+ *  without a spec never reach the 3D scene, so they get no row. */
+export function partLegendEntries(
+  specs: readonly NodeAssetSpec[] | null | undefined,
+  nodes: readonly GraphNode[],
+  resolutions: ReadonlyMap<string, EntityResolution>,
+): PartLegendEntry[] {
+  const labels = new Map(nodes.map((node) => [node.id, node.label]));
+  const seen = new Set<string>();
+  const rows: PartLegendEntry[] = [];
+  for (const spec of specs ?? []) {
+    if (seen.has(spec.node_id)) continue;
+    seen.add(spec.node_id);
+    const resolution = resolutions.get(spec.node_id);
+    rows.push({
+      nodeId: spec.node_id,
+      partLabel: spec.label,
+      nodeLabel: labels.get(spec.node_id) ?? spec.node_id,
+      provenance: provenanceOf(spec),
+      entityType:
+        resolution && !resolution.generic ? prettyEntityType(resolution.entity_type) : null,
+    });
+  }
+  return rows;
 }
 
 /** Minimal loader surface so tests can stub GLB fetching. */

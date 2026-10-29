@@ -23,6 +23,10 @@ export const graphKeys = {
     ["graph", projectId, graphId, "revisions", version, "simulation-preview"] as const,
   renderSpecs: (projectId: string, graphId: string, version: number) =>
     ["graph", projectId, graphId, "revisions", version, "render-specs"] as const,
+  figures: (projectId: string, graphId: string) =>
+    ["graph", projectId, graphId, "figures"] as const,
+  reportedMetrics: (projectId: string, graphId: string) =>
+    ["graph", projectId, graphId, "reported-metrics"] as const,
 };
 
 export const runKeys = {
@@ -278,6 +282,29 @@ export function usePreflight(
   });
 }
 
+export function useRemovalPreflight(
+  projectId: string,
+  graphId: string,
+  version: number,
+  nodeId: string | null,
+) {
+  return useQuery({
+    queryKey: [
+      "graph",
+      projectId,
+      graphId,
+      "revisions",
+      version,
+      "nodes",
+      nodeId ?? "",
+      "removal-preflight",
+    ] as const,
+    queryFn: () => api.preflightRemoval(projectId, graphId, version, nodeId ?? ""),
+    enabled: nodeId !== null,
+    retry: false,
+  });
+}
+
 export function useCopilot(projectId: string, graphId: string, version: number) {
   return useMutation({
     mutationFn: ({
@@ -310,6 +337,38 @@ export function useAdapters() {
   return useQuery({
     queryKey: ["experiments", "adapters"] as const,
     queryFn: () => api.listAdapters(),
+  });
+}
+
+export function useGraphFigures(projectId: string, graphId: string) {
+  return useQuery({
+    queryKey: graphKeys.figures(projectId, graphId),
+    queryFn: () => api.getGraphFigures(projectId, graphId),
+    // Figures are optional enrichment: a missing set never breaks the
+    // workspace; the overlay offers an ingest instead.
+    retry: false,
+  });
+}
+
+export function useGraphReportedMetrics(projectId: string, graphId: string) {
+  return useQuery({
+    queryKey: graphKeys.reportedMetrics(projectId, graphId),
+    queryFn: () => api.getGraphReportedMetrics(projectId, graphId),
+    // Reported numbers are optional enrichment: tables may be absent.
+    retry: false,
+  });
+}
+
+export function useIngestGraphFigures(projectId: string, graphId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ version, file }: { version: number; file: File }) =>
+      api.ingestGraphFigures(projectId, graphId, version, file),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: graphKeys.figures(projectId, graphId),
+      });
+    },
   });
 }
 

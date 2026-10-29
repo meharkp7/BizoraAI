@@ -5,6 +5,7 @@ import {
   useGraphEntities,
   useGraphLayout,
   useGraphRevision,
+  useRemovalPreflight,
   useRenderSpecs,
   useSaveLayout,
 } from "../../app/queries.ts";
@@ -19,19 +20,22 @@ import type {
   GraphNode,
   GraphPatch,
   GraphRevisionDiff,
+  MeasuredOverlay,
   MethodologyGraph,
   NodeRenderSpec,
   ResearchBrief,
   ViewportState,
 } from "../../lib/types.ts";
+import { EMPTY_OVERLAY } from "../../lib/types.ts";
 import { EmptyState, ErrorState, LoadingState } from "../../components/states.tsx";
-import { GraphCanvas } from "../canvas/GraphCanvas.tsx";
+import { FlowView } from "../canvas/FlowView.tsx";
 import { GraphCanvas3D } from "../canvas/GraphCanvas3D.tsx";
+import { StructureView } from "../canvas/StructureView.tsx";
 import { DomainBadge, EntityLegend } from "../canvas/EntityLegend.tsx";
-import { FloorplanCanvas } from "../canvas/FloorplanCanvas.tsx";
-import { SchematicCanvas } from "../canvas/SchematicCanvas.tsx";
 import { splitGraph } from "../canvas/graph3d.ts";
 import { CopilotPanel } from "../copilot/CopilotPanel.tsx";
+import { FigureOverlay } from "../figures/FigureOverlay.tsx";
+import { ReportedPanel } from "./ReportedPanel.tsx";
 import { ComponentDetailView } from "../library/ComponentDetail.tsx";
 import { LibraryPanel } from "../library/LibraryPanel.tsx";
 import { CanvasToolbar } from "../canvas/CanvasToolbar.tsx";
@@ -444,6 +448,10 @@ function WorkspaceLoaded({
     () => new Set([...graph.nodes.map((node) => node.id), ...graph.edges.map((edge) => edge.id)]),
     [graph],
   );
+  const nodeLabels = useMemo(
+    () => new Map(graph.nodes.map((node) => [node.id, node.label])),
+    [graph],
+  );
   const saveLayout = useSaveLayout(graph.project_id, graph.graph_id, graph.version);
   const [layoutStatus, setLayoutStatus] = useState<LayoutSaveStatus>("idle");
   const [layoutReset, setLayoutReset] = useState<{
@@ -451,13 +459,23 @@ function WorkspaceLoaded({
     positions: Map<string, Point>;
   } | null>(null);
   const [activeDiff, setActiveDiff] = useState<GraphRevisionDiff | null>(null);
+  // Measured-overlay channel: empty until a real run exists. Stage 2
+  // fills this from run telemetry; every view already renders it.
+  const [overlay] = useState<MeasuredOverlay>(EMPTY_OVERLAY);
+  const [removalTarget, setRemovalTarget] = useState<string | null>(null);
+  const removalPreflight = useRemovalPreflight(
+    projectId,
+    graph.graph_id,
+    layoutVersion,
+    removalTarget,
+  );
   const saveTimer = useRef<number | null>(null);
   const canvasSectionRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     // Deep links (?view=3d, ...) land at the top of the page; bring the
     // canvas into view instead of stranding newcomers above the fold.
-    if (view !== "2d") canvasSectionRef.current?.scrollIntoView?.({ block: "nearest" });
+    if (view !== "structure") canvasSectionRef.current?.scrollIntoView?.({ block: "nearest" });
   }, [view]);
 
   useEffect(() => {
@@ -574,7 +592,7 @@ function WorkspaceLoaded({
           {entitiesError ? (
             <p className={styles.entitiesError} role="alert">
               Component identities unavailable ({entitiesError}). Identity-driven views
-              show generic markers until the backend serves them again.
+              are degraded until the backend serves them again.
             </p>
           ) : null}
         </div>
@@ -633,7 +651,7 @@ function WorkspaceLoaded({
             split.structure.nodes.length === 0 ? (
               <EmptyState
                 title="No physical structure in this view."
-                detail="Every node resolved to process or data; the process view shows them."
+                detail="Every node resolved to process or data; the flow view shows them."
               />
             ) : (
               <GraphCanvas3D
@@ -644,9 +662,10 @@ function WorkspaceLoaded({
                 entitiesPending={entitiesPending}
                 entitiesError={entitiesError}
                 assetSpecs={assetSpecs}
+                overlay={overlay}
               />
             )
-          ) : view === "process" ? (
+          ) : view === "flow" ? (
             split.process.nodes.length === 0 ? (
               <EmptyState
                 title="No process or data nodes in this view."
@@ -654,31 +673,25 @@ function WorkspaceLoaded({
               />
             ) : (
               <>
-                <GraphCanvas
-                  key={`process-${graph.version}`}
+                <FlowView
+                  key={`flow-${graph.version}`}
                   graph={split.process}
                   layout={savedLayout}
                   diffStatuses={diffStatuses}
+                  overlay={overlay}
                   mutating={mutating}
                 />
-                <EntityLegend
-                  entities={processEntities}
-                  glyphs="symbols"
-                  title="Process key"
-                />
+                <EntityLegend entities={processEntities} title="Flow key" inline />
               </>
             )
-          ) : view === "schematic" ? (
-            <SchematicCanvas graph={graph} entities={entities} />
-          ) : view === "floorplan" ? (
-            <FloorplanCanvas graph={graph} entities={entities} />
           ) : (
-            <GraphCanvas
-              key={`canvas-${graph.version}`}
+            <StructureView
               graph={graph}
               layout={savedLayout}
               layoutReset={layoutReset}
               diffStatuses={diffStatuses}
+              entities={entities}
+              overlay={overlay}
               mutating={mutating}
               onConnectRequest={handleConnect}
               onDeleteRequest={handleDelete}
@@ -706,8 +719,23 @@ function WorkspaceLoaded({
                     onSubmit([replaceNodePatch(graph, selectedNode, replacement)])
                 : undefined
             }
+            removal={removalPreflight.data ?? null}
+            removalPending={removalPreflight.isFetching}
+            removalError={
+              removalPreflight.error instanceof Error ? removalPreflight.error.message : null
+            }
+            nodeLabels={Object.fromEntries(nodeLabels)}
+            onPreviewRemoval={setRemovalTarget}
+            onClearRemoval={() => setRemovalTarget(null)}
+          />
+          <FigureOverlay
+            projectId={projectId}
+            graphId={graph.graph_id}
+            version={graph.version}
+            nodeLabels={nodeLabels}
           />
           <EvidencePanel node={selectedNode} edge={selectedEdge} />
+          <ReportedPanel projectId={projectId} graphId={graph.graph_id} />
           <SimulationPreview
             projectId={projectId}
             graphId={graph.graph_id}

@@ -1,7 +1,7 @@
 import type { EvidenceRef, GraphEdge, GraphNode } from "../../lib/types.ts";
 import styles from "./EvidencePanel.module.css";
 
-function locatorSummary(ref: EvidenceRef): string {
+export function locatorSummary(ref: EvidenceRef): string {
   const parts: string[] = [];
   if (ref.page !== null) parts.push(`p. ${ref.page}`);
   if (ref.figure_label) parts.push(ref.figure_label);

@@ -5,7 +5,7 @@ import { HttpResponse, http } from "msw";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { useWorkspaceSelection } from "../../lib/store.ts";
-import { entitiesFixture } from "../../test/fixtures.ts";
+import { entitiesFixture, graphFixture } from "../../test/fixtures.ts";
 import { server } from "../../test/server.ts";
 import { WorkspacePage } from "./WorkspacePage.tsx";
 
@@ -22,7 +22,7 @@ describe("WorkspacePage", () => {
         projectId="project-1"
         graphId="graph-1"
         version={2}
-        view="2d" onViewChange={() => {}} onVersionChange={() => {}}
+        view="structure" onViewChange={() => {}} onVersionChange={() => {}}
       />,
       { wrapper },
     );
@@ -48,7 +48,7 @@ describe("WorkspacePage", () => {
         projectId="project-1"
         graphId="graph-1"
         version={2}
-        view="2d" onViewChange={() => {}} onVersionChange={onVersionChange}
+        view="structure" onViewChange={() => {}} onVersionChange={onVersionChange}
       />,
       { wrapper },
     );
@@ -65,7 +65,7 @@ describe("WorkspacePage", () => {
         projectId="project-1"
         graphId="graph-1"
         version={9}
-        view="2d" onViewChange={() => {}} onVersionChange={() => {}}
+        view="structure" onViewChange={() => {}} onVersionChange={() => {}}
       />,
       { wrapper },
     );
@@ -78,7 +78,7 @@ describe("WorkspacePage", () => {
         projectId="project-1"
         graphId="graph-1"
         version={2}
-        view="2d" onViewChange={() => {}} onVersionChange={() => {}}
+        view="structure" onViewChange={() => {}} onVersionChange={() => {}}
       />,
       { wrapper },
     );
@@ -93,7 +93,7 @@ describe("WorkspacePage", () => {
         projectId="project-1"
         graphId="graph-1"
         version={2}
-        view="2d" onViewChange={() => {}} onVersionChange={() => {}}
+        view="structure" onViewChange={() => {}} onVersionChange={() => {}}
       />,
       { wrapper },
     );
@@ -102,33 +102,33 @@ describe("WorkspacePage", () => {
     expect(within(brief).getAllByText("Not stated in the paper.")).toHaveLength(1);
   });
 
-  it("offers all five canvas views through the toolbar", async () => {
+  it("offers the three canvas views through the toolbar", async () => {
     const onViewChange = vi.fn();
     render(
       <WorkspacePage
         projectId="project-1"
         graphId="graph-1"
         version={2}
-        view="2d" onViewChange={onViewChange} onVersionChange={() => {}}
+        view="structure" onViewChange={onViewChange} onVersionChange={() => {}}
       />,
       { wrapper },
     );
     await screen.findByRole("heading", { name: "Vision transformer" });
     const toggle = screen.getByRole("group", { name: "Canvas view" });
-    for (const name of ["2D", "3D", "Process", "Schematic", "Floorplan"]) {
+    for (const name of ["Structure", "Flow", "3D"]) {
       expect(within(toggle).getByRole("button", { name })).toBeInTheDocument();
     }
-    await userEvent.click(within(toggle).getByRole("button", { name: "Process" }));
-    expect(onViewChange).toHaveBeenCalledWith("process");
+    await userEvent.click(within(toggle).getByRole("button", { name: "Flow" }));
+    expect(onViewChange).toHaveBeenCalledWith("flow");
   });
 
-  it("shows an honest empty state when the process side is vacant", async () => {
+  it("shows an honest empty state when the flow side is vacant", async () => {
     render(
       <WorkspacePage
         projectId="project-1"
         graphId="graph-1"
         version={2}
-        view="process" onViewChange={() => {}} onVersionChange={() => {}}
+        view="flow" onViewChange={() => {}} onVersionChange={() => {}}
       />,
       { wrapper },
     );
@@ -136,7 +136,7 @@ describe("WorkspacePage", () => {
     expect(await screen.findByText("No process or data nodes in this view.")).toBeInTheDocument();
   });
 
-  it("renders the process subgraph with a symbol key", async () => {
+  it("renders the flow subgraph with a symbol key", async () => {
     server.use(
       http.get("/api/v1/graphs/:projectId/:graphId/revisions/:version/entities", () =>
         HttpResponse.json({
@@ -160,37 +160,40 @@ describe("WorkspacePage", () => {
         projectId="project-1"
         graphId="graph-1"
         version={2}
-        view="process" onViewChange={() => {}} onVersionChange={() => {}}
+        view="flow" onViewChange={() => {}} onVersionChange={() => {}}
       />,
       { wrapper },
     );
-    expect(await screen.findByRole("complementary", { name: "Process key" })).toBeInTheDocument();
+    expect(await screen.findByRole("complementary", { name: "Flow key" })).toBeInTheDocument();
     // Only the non-physical node reaches the flow canvas.
     expect(document.querySelectorAll(".react-flow__node")).toHaveLength(1);
   });
 
-  it("renders the schematic and floorplan for electronics graphs", async () => {
-    const { unmount } = render(
-      <WorkspacePage
-        projectId="project-1"
-        graphId="graph-1"
-        version={2}
-        view="schematic" onViewChange={() => {}} onVersionChange={() => {}}
-      />,
-      { wrapper },
+  it("renders schematic and floorplan as structure modes", async () => {
+    server.use(
+      http.get("/api/v1/graphs/:projectId/:graphId/revisions/:version", () =>
+        HttpResponse.json({
+          ...graphFixture,
+          nodes: graphFixture.nodes.map((node) =>
+            node.id === "input" ? { ...node, config: { array: "2x2" } } : node,
+          ),
+        }),
+      ),
     );
-    expect(await screen.findByRole("group", { name: "Chip schematic" })).toBeInTheDocument();
-    unmount();
-
     render(
       <WorkspacePage
         projectId="project-1"
         graphId="graph-1"
         version={2}
-        view="floorplan" onViewChange={() => {}} onVersionChange={() => {}}
+        view="structure" onViewChange={() => {}} onVersionChange={() => {}}
       />,
       { wrapper },
     );
-    expect(await screen.findByRole("group", { name: "Array floorplan" })).toBeInTheDocument();
+    await screen.findByRole("heading", { name: "Vision transformer" });
+    const modes = screen.getByRole("group", { name: "Structure mode" });
+    await userEvent.click(within(modes).getByRole("button", { name: "Schematic" }));
+    expect(screen.getByRole("group", { name: "Chip schematic" })).toBeInTheDocument();
+    await userEvent.click(within(modes).getByRole("button", { name: "Floorplan" }));
+    expect(screen.getByRole("group", { name: "Array floorplan" })).toBeInTheDocument();
   });
 });

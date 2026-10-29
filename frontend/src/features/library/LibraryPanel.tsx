@@ -3,7 +3,7 @@ import { useComponentSearch } from "../../app/queries.ts";
 import { useLibrarySelection } from "../../lib/store.ts";
 import type { ComponentSummary } from "../../lib/types.ts";
 import { EmptyState, ErrorState, LoadingState } from "../../components/states.tsx";
-import { CategoryGlyph } from "../canvas/CategoryGlyph.tsx";
+import { SymbolGlyph } from "../canvas/SymbolGlyph.tsx";
 import { categoryLabel, domainLabel } from "../canvas/graph3d.ts";
 import styles from "./LibraryPanel.module.css";
 
@@ -50,7 +50,7 @@ function ResultCard({
         aria-pressed={selected}
       >
         <span className={styles.cardHead}>
-          <CategoryGlyph category={entry.category} />
+          <SymbolGlyph symbol={entry.symbol || "generic"} />
           <span className={styles.cardLabel}>{entry.label}</span>
           <IdentityBadge generic={entry.generic} />
         </span>

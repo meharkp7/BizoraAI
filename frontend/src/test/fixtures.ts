@@ -14,6 +14,7 @@ import type {
   MetricRecord,
   NodeRenderSpec,
   PaperExtractionResponse,
+  PaperFigure,
   PaperReportedMetric,
   ParsedPaper,
   RunComparison,
@@ -247,6 +248,44 @@ export function notFound(code = "RESOURCE_NOT_FOUND", message = "Not found.") {
   return HttpResponse.json({ error: { code, message, details: {} } }, { status: 404 });
 }
 
+export const figuresFixture: PaperFigure[] = [
+  {
+    figure_id: "paper-1-p2-f1-a1b2c3d4",
+    project_id: "project-1",
+    graph_id: "graph-1",
+    source_id: "paper-1",
+    created_by: "researcher-1",
+    page: 2,
+    label: "Figure 1",
+    caption: "Model overview.",
+    kind: "diagram",
+    mime_type: "image/png",
+    sha256: "1".repeat(64),
+    byte_size: 42000,
+    width: 800,
+    height: 600,
+    confidence: 0.9,
+    regions: [
+      {
+        region_id: "paper-1-p2-f1-a1b2c3d4-r1",
+        figure_id: "paper-1-p2-f1-a1b2c3d4",
+        bbox: [0.1, 0.2, 0.3, 0.25],
+        node_id: "encoder",
+        label: "encoder stack",
+        confidence: 0.8,
+      },
+      {
+        region_id: "paper-1-p2-f1-a1b2c3d4-r2",
+        figure_id: "paper-1-p2-f1-a1b2c3d4",
+        bbox: [0.6, 0.6, 0.2, 0.2],
+        node_id: null,
+        label: "legend",
+        confidence: 0.4,
+      },
+    ],
+  },
+];
+
 export const tableFixture: ExtractedTable = {
   table_id: "table-1",
   project_id: "project-1",
@@ -310,6 +349,7 @@ export const componentSummaryFixture: ComponentSummary = {
   manufacturer: "onsemi",
   part_number: "2N3904",
   headline: "NPN general-purpose amplifier, 40 V / 200 mA, TO-92",
+  symbol: "transistor",
 };
 
 export const componentGenericFixture: ComponentSummary = {
@@ -323,6 +363,7 @@ export const componentGenericFixture: ComponentSummary = {
   manufacturer: null,
   part_number: null,
   headline: "Generic resistor with settable resistance and footprint",
+  symbol: "passive",
 };
 
 export const componentDetailFixture: ComponentDetail = {

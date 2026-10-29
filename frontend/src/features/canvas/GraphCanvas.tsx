@@ -17,8 +17,14 @@ import type {
   OnNodeDrag,
 } from "@xyflow/react";
 import { useWorkspaceSelection } from "../../lib/store.ts";
-import type { GraphLayout, MethodologyGraph, ViewportState } from "../../lib/types.ts";
-import { toFlowElements, truncateEdgeLabel } from "./flowElements.ts";
+import type {
+  GraphLayout,
+  MeasuredOverlay,
+  MethodologyGraph,
+  ViewportState,
+} from "../../lib/types.ts";
+import { EMPTY_OVERLAY } from "../../lib/types.ts";
+import { measuredSummary, toFlowElements, truncateEdgeLabel } from "./flowElements.ts";
 import type { CanvasDiffStatuses, FlowEdge } from "./flowElements.ts";
 import type { Point } from "./layout.ts";
 import { MethodNode } from "./MethodNode.tsx";
@@ -35,6 +41,8 @@ export interface GraphCanvasProps {
   layout: GraphLayout | null;
   layoutReset?: LayoutResetRequest | null;
   diffStatuses: CanvasDiffStatuses | null;
+  /** Measured-overlay channel; empty until a real run exists. */
+  overlay?: MeasuredOverlay;
   onNodesMoved?: (positions: Map<string, Point>, viewport: ViewportState) => void;
   onConnectRequest?: (source: string, target: string) => void;
   onDeleteRequest?: (nodeIds: string[], edgeIds: string[]) => void;
@@ -48,6 +56,7 @@ function FlowView({
   layout,
   layoutReset = null,
   diffStatuses,
+  overlay = EMPTY_OVERLAY,
   onNodesMoved,
   onConnectRequest,
   onDeleteRequest,
@@ -59,7 +68,7 @@ function FlowView({
   // Mount-only snapshot: FlowView remounts per revision via key, and
   // selection/data drift syncs through the effects below.
   const [initial] = useState(() =>
-    toFlowElements(graph, layout, diffStatuses, selectedNodeIds, selectedEdgeIds),
+    toFlowElements(graph, layout, diffStatuses, selectedNodeIds, selectedEdgeIds, overlay),
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes);
@@ -137,14 +146,51 @@ function FlowView({
       let changed = false;
       const next = current.map((edge) => {
         const selected = selectedEdgeIds.includes(edge.id);
-        const label = selected ? truncateEdgeLabel(edge.data?.fullLabel) : undefined;
-        if (edge.selected === selected && edge.label === label) return edge;
+        const measured = overlay.edges[edge.id] ?? [];
+        const label =
+          measuredSummary(measured) ??
+          (selected ? truncateEdgeLabel(edge.data?.fullLabel) : undefined);
+        if (
+          edge.selected === selected &&
+          edge.label === label &&
+          edge.data?.measured === measured
+        ) {
+          return edge;
+        }
         changed = true;
-        return { ...edge, selected, label };
+        return {
+          ...edge,
+          selected,
+          label,
+          data: {
+            ...(edge.data ?? {
+              relation: "",
+              diffStatus: null,
+              fullLabel: null,
+              measured: [],
+            }),
+            measured,
+          },
+        };
       });
       return changed ? next : current;
     });
-  }, [selectedEdgeIds, setEdges]);
+  }, [selectedEdgeIds, overlay, setEdges]);
+
+  // Reflect live measured values without disturbing positions or
+  // selection. Overlay updates arrive without a revision change.
+  useEffect(() => {
+    setNodes((current) => {
+      let changed = false;
+      const next = current.map((node) => {
+        const measured = overlay.nodes[node.id] ?? [];
+        if (node.data.measured === measured) return node;
+        changed = true;
+        return { ...node, data: { ...node.data, measured } };
+      });
+      return changed ? next : current;
+    });
+  }, [overlay, setNodes]);
 
   // Reflect compare highlighting without disturbing positions or selection.
   useEffect(() => {
@@ -166,7 +212,14 @@ function FlowView({
         changed = true;
         return {
           ...edge,
-          data: { ...(edge.data ?? { relation: "", fullLabel: null }), diffStatus },
+          data: {
+            ...(edge.data ?? {
+              relation: "",
+              fullLabel: null,
+              measured: [],
+            }),
+            diffStatus,
+          },
         };
       });
       return changed ? next : current;

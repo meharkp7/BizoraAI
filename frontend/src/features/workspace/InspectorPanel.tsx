@@ -1,7 +1,13 @@
 import { useState } from "react";
 import { NODE_KINDS } from "../../lib/constants.ts";
-import type { EntityResolution, GraphEdge, GraphNode, NodeKind } from "../../lib/types.ts";
-import { SymbolGlyph } from "../canvas/CategoryGlyph.tsx";
+import type {
+  EntityResolution,
+  GraphEdge,
+  GraphNode,
+  NodeKind,
+  RemovalPreflight,
+} from "../../lib/types.ts";
+import { SymbolGlyph } from "../canvas/SymbolGlyph.tsx";
 import { categoryLabel, domainLabel, prettyEntityType, symbolLabel } from "../canvas/graph3d.ts";
 import type { NodeReplacement } from "./patchBuilders.ts";
 import styles from "./InspectorPanel.module.css";
@@ -200,6 +206,12 @@ export function InspectorPanel({
   onReplaceNode,
   entity,
   entityError = null,
+  removal = null,
+  removalPending = false,
+  removalError = null,
+  nodeLabels = {},
+  onPreviewRemoval,
+  onClearRemoval,
 }: {
   node: GraphNode | null;
   edge: GraphEdge | null;
@@ -209,6 +221,12 @@ export function InspectorPanel({
   onReplaceNode?: (replacement: NodeReplacement) => void;
   entity?: EntityResolution | null;
   entityError?: string | null;
+  removal?: RemovalPreflight | null;
+  removalPending?: boolean;
+  removalError?: string | null;
+  nodeLabels?: Record<string, string>;
+  onPreviewRemoval?: (nodeId: string) => void;
+  onClearRemoval?: () => void;
 }) {
   if (!node && !edge) {
     return (
@@ -309,8 +327,8 @@ export function InspectorPanel({
               </span>
               {entity.generic ? (
                 <span className={styles.entityNote}>
-                  The paper does not name an exact part here; the 3D view shows a generic
-                  marker rather than guessing.
+                  The paper does not name an exact part here; the 3D view only shows catalog
+                  part models.
                 </span>
               ) : null}
               {entity.interfaces.length > 0 ? (
@@ -368,6 +386,67 @@ export function InspectorPanel({
           disabled={disabled === true}
           onReplace={onReplaceNode}
         />
+      ) : null}
+      {onPreviewRemoval ? (
+        <div className={styles.editor}>
+          <h3 className={styles.title}>What-if: remove this block</h3>
+          <p className={styles.hint}>
+            Graph-level preflight only — nothing is changed. Shows connected blocks,
+            dropped connections, and paper claims tied to this block.
+          </p>
+          <div className={styles.editorRow}>
+            <button
+              type="button"
+              disabled={disabled === true || removalPending}
+              onClick={() => onPreviewRemoval(node.id)}
+            >
+              {removalPending ? "Checking…" : "Preview removal"}
+            </button>
+            {removal || removalError ? (
+              <button type="button" onClick={() => onClearRemoval?.()}>
+                Clear
+              </button>
+            ) : null}
+          </div>
+          {removalError ? (
+            <p className={styles.editorError} role="alert">
+              {removalError}
+            </p>
+          ) : null}
+          {removal && removal.target_node_id === node.id ? (
+            <dl className={styles.facts}>
+              <dt>Connected blocks</dt>
+              <dd>
+                {removal.neighbor_node_ids.length === 0
+                  ? "none — this block is isolated"
+                  : removal.neighbor_node_ids
+                      .map((id) => nodeLabels[id] ?? id)
+                      .join(", ")}
+              </dd>
+              <dt>Dropped connections</dt>
+              <dd>
+                {removal.dropped_edge_ids.length === 0
+                  ? "none"
+                  : removal.dropped_edge_ids.join(", ")}
+              </dd>
+              <dt>Paper claims</dt>
+              <dd>
+                {removal.evidence.length === 0 ? (
+                  "none cited on this block or its connections"
+                ) : (
+                  <ul className={styles.config}>
+                    {removal.evidence.map((ref, index) => (
+                      <li key={`${ref.source_id}-${index}`}>
+                        {ref.quote ?? ref.figure_label ?? ref.locator ?? "reference"}
+                        {ref.page !== null ? ` (p. ${ref.page})` : null}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </dd>
+            </dl>
+          ) : null}
+        </div>
       ) : null}
     </section>
   );
