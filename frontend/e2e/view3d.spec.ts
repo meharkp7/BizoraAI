@@ -137,6 +137,9 @@ test.beforeEach(async ({ page }) => {
             display_label: "Embedding",
             generic: false,
             category: "layer",
+            physical: true,
+            symbol: "embedding",
+            model_3d: null,
             interfaces: [{ name: "tensor", kind: "tensor", params: {} }],
             matched_terms: ["embedding"],
             confidence: 0.75,
@@ -148,6 +151,9 @@ test.beforeEach(async ({ page }) => {
             display_label: "Attention block",
             generic: false,
             category: "layer",
+            physical: true,
+            symbol: "attention",
+            model_3d: null,
             interfaces: [{ name: "tensor", kind: "tensor", params: {} }],
             matched_terms: ["attention"],
             confidence: 0.75,
@@ -201,8 +207,11 @@ test("3D legend shows the domain and shape key", async ({ page }) => {
   const legend = stage.getByRole("complementary", { name: "3D shape key" });
   await expect(legend).toBeVisible();
   await expect(legend.getByText(/Deep learning · 90% confidence/)).toBeVisible();
-  await expect(legend.getByText("Model layer")).toBeVisible();
-  await expect(legend.getByText(/Attention Block/)).toBeVisible();
+  const rows = legend.locator("li");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(0)).toContainText("Embedding");
+  await expect(rows.nth(1)).toContainText("Attention");
+  await expect(rows.nth(1)).toContainText("Attention Block");
 });
 
 test("3D shows a gesture hint and tags for selected connections", async ({ page }) => {

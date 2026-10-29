@@ -158,11 +158,9 @@ export function fitDistance(
   return distance * margin;
 }
 
-/** Three.js primitive per entity category. Shapes repeat across domains
- *  only where the domains never share a graph (power/storage cylinders,
- *  package/compute boxes), so one legend stays unambiguous. Unknown
- *  categories fall back to the sphere so new backend types never break
- *  the renderer. */
+/** Three.js primitive vocabulary shared by every 3D visual. Pack
+ *  `model_3d` keys name one of these directly; unknown keys fall back
+ *  to the sphere so new backend values never break the renderer. */
 export type ArchetypeGeometry =
   | "sphere"
   | "box"
@@ -175,6 +173,24 @@ export type ArchetypeGeometry =
   | "icosahedron"
   | "dodecahedron";
 
+const ARCHETYPES: ReadonlySet<string> = new Set([
+  "sphere",
+  "box",
+  "slab",
+  "cylinder",
+  "cone",
+  "torus",
+  "octahedron",
+  "tetrahedron",
+  "icosahedron",
+  "dodecahedron",
+]);
+
+/** Library-catalog glyphs per component category. Shapes repeat across
+ *  domains only where the domains never share a graph (power/storage
+ *  cylinders, package/compute boxes), so one key stays unambiguous.
+ *  Canvas and 3D shapes never derive from this table: they follow the
+ *  pack-declared render spec (symbol, model_3d) instead. */
 export const CATEGORY_GEOMETRY: Record<string, ArchetypeGeometry> = {
   package: "box",
   discrete: "cone",
@@ -196,6 +212,69 @@ export function archetypeFor(category: string | null | undefined): ArchetypeGeom
   return CATEGORY_GEOMETRY[category] ?? "sphere";
 }
 
+/** Representative 3D solid per pack-declared symbol: the interim mapping
+ *  until packs pin representative visuals in `model_3d` themselves.
+ *  Process symbols map to the same solids only as a safety net — the
+ *  structure scene excludes non-physical nodes via splitGraph instead
+ *  of rendering them as hardware. */
+export const SYMBOL_GEOMETRY: Record<string, ArchetypeGeometry> = {
+  generic: "sphere",
+  bitcell: "box",
+  transistor: "cone",
+  gate: "box",
+  source: "cylinder",
+  bias: "box",
+  senseamp: "box",
+  meter: "octahedron",
+  passive: "torus",
+  diode: "cone",
+  chip: "box",
+  adc: "box",
+  mcu: "box",
+  sensor: "octahedron",
+  actuator: "box",
+  radio: "torus",
+  cloud: "torus",
+  supply: "cylinder",
+  tensor: "icosahedron",
+  format: "icosahedron",
+  engine: "box",
+  evaluator: "box",
+  sampler: "tetrahedron",
+  encoder: "tetrahedron",
+  modulator: "tetrahedron",
+  channel: "torus",
+  demodulator: "tetrahedron",
+  decoder: "tetrahedron",
+  filter: "tetrahedron",
+  client: "dodecahedron",
+  coordinator: "dodecahedron",
+  worker: "dodecahedron",
+  storage: "cylinder",
+  queue: "torus",
+  "load-balancer": "torus",
+  embedding: "slab",
+  attention: "slab",
+  feedforward: "slab",
+  normalization: "slab",
+  loss: "box",
+  optimizer: "box",
+  dataset: "cylinder",
+};
+
+/** 3D solid for one resolution: an explicit `model_3d` key wins, then the
+ *  pack-declared symbol, then the neutral sphere. Unknown symbols and
+ *  missing resolutions stay spheres so new backend types never break
+ *  the renderer — and the category is never consulted. */
+export function visualFor(resolution: EntityResolution | null | undefined): ArchetypeGeometry {
+  const model = resolution?.model_3d;
+  if (model && ARCHETYPES.has(model)) return model as ArchetypeGeometry;
+  if (model) return "sphere";
+  const symbol = resolution?.symbol;
+  if (!symbol) return "sphere";
+  return SYMBOL_GEOMETRY[symbol] ?? "sphere";
+}
+
 export const CATEGORY_LABELS: Record<string, string> = {
   package: "Package",
   discrete: "Discrete",
@@ -209,11 +288,24 @@ export const CATEGORY_LABELS: Record<string, string> = {
   service: "Service",
   storage: "Storage",
   layer: "Model layer",
+  process: "Process",
   generic: "Generic",
 };
 
 export function categoryLabel(category: string): string {
   return CATEGORY_LABELS[category] ?? "Generic";
+}
+
+/** Display names for symbols the kebab-case fallback mangles (acronyms
+ *  and compressions). Every other symbol prettifies as-is. */
+export const SYMBOL_LABELS: Record<string, string> = {
+  senseamp: "Sense amplifier",
+  adc: "Data converter",
+  mcu: "Microcontroller",
+};
+
+export function symbolLabel(symbol: string): string {
+  return SYMBOL_LABELS[symbol] ?? prettyEntityType(symbol);
 }
 
 export const DOMAIN_LABELS: Record<string, string> = {
@@ -239,36 +331,39 @@ export function prettyEntityType(entityType: string): string {
 }
 
 export interface LegendEntry {
-  category: string;
+  symbol: string;
   label: string;
   geometry: ArchetypeGeometry;
   count: number;
   entityTypes: string[];
 }
 
-/** Group resolved entities by visual category for the 3D legend. Generic
- *  nodes keep their own entry so placeholders stay visibly generic. */
+/** Group resolved entities by pack-declared symbol for the 3D legend, so
+ *  each row names what the entity is and shows the solid the scene
+ *  renders for it. Truly generic nodes carry the "generic" symbol and
+ *  keep their own entry, so placeholders stay visibly generic. */
 export function legendEntries(entities: GraphEntities | null): LegendEntry[] {
   if (!entities) return [];
   const groups = new Map<string, { count: number; types: Set<string> }>();
   const order: string[] = [];
   for (const entity of entities.entities) {
-    const category = entity.generic ? "generic" : entity.category;
-    const group = groups.get(category);
+    const symbol = entity.symbol || "generic";
+    const group = groups.get(symbol);
     if (group) {
       group.count += 1;
       group.types.add(entity.entity_type);
     } else {
-      groups.set(category, { count: 1, types: new Set([entity.entity_type]) });
-      order.push(category);
+      groups.set(symbol, { count: 1, types: new Set([entity.entity_type]) });
+      order.push(symbol);
     }
   }
-  return order.map((category) => {
-    const group = groups.get(category) ?? { count: 0, types: new Set<string>() };
+  return order.map((symbol) => {
+    const group = groups.get(symbol) ?? { count: 0, types: new Set<string>() };
+    const geometry = SYMBOL_GEOMETRY[symbol] ?? "sphere";
     return {
-      category,
-      label: categoryLabel(category),
-      geometry: archetypeFor(category),
+      symbol,
+      label: symbolLabel(symbol),
+      geometry,
       count: group.count,
       entityTypes: [...group.types].sort().map(prettyEntityType),
     };
@@ -283,6 +378,37 @@ export function resolutionsByNodeId(
   if (!entities) return index;
   for (const entity of entities.entities) index.set(entity.node_id, entity);
   return index;
+}
+
+/** True unless the resolution explicitly marks the node non-physical.
+ *  Unknown and unflagged nodes stay structural, matching the backend's
+ *  generic default — a node only leaves the structure scene when the
+ *  backend proves it is process or data. */
+export function isStructural(resolution: EntityResolution | null | undefined): boolean {
+  return resolution?.physical !== false;
+}
+
+export interface SplitGraph {
+  structure: MethodologyGraph;
+  process: MethodologyGraph;
+}
+
+/** Split one graph into its physical structure and its process/data side.
+ *  Edges spanning the split belong to neither side; both halves keep the
+ *  graph metadata so either renders as a standalone view. */
+export function splitGraph(graph: MethodologyGraph, entities: GraphEntities | null): SplitGraph {
+  const resolutions = resolutionsByNodeId(entities);
+  const structural = new Set<string>();
+  const procedural = new Set<string>();
+  for (const node of graph.nodes) {
+    (isStructural(resolutions.get(node.id)) ? structural : procedural).add(node.id);
+  }
+  const pick = (ids: Set<string>): MethodologyGraph => ({
+    ...graph,
+    nodes: graph.nodes.filter((node) => ids.has(node.id)),
+    edges: graph.edges.filter((edge) => ids.has(edge.source) && ids.has(edge.target)),
+  });
+  return { structure: pick(structural), process: pick(procedural) };
 }
 
 /** Center and radius of the smallest sphere containing every node. */

@@ -353,6 +353,7 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "signal",
         ("sampl", "adc", "digitiz", "microphone"),
         (InterfaceDef("analog-in", "analog"), InterfaceDef("samples", "signal")),
+        symbol="sampler",
     ),
     EntityTypeDef(
         "source-encoder",
@@ -360,6 +361,7 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "signal",
         ("encod", "codec", "compress"),
         (InterfaceDef("bits", "data"),),
+        symbol="encoder",
     ),
     EntityTypeDef(
         "modulator",
@@ -367,6 +369,7 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "signal",
         ("modulat", "qam", "psk", "fsk", "ofdm", "mapper"),
         (InterfaceDef("symbols", "signal"), InterfaceDef("carrier", "analog")),
+        symbol="modulator",
     ),
     EntityTypeDef(
         "channel-model",
@@ -374,6 +377,8 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "network",
         ("channel", "awgn", "fading", "transmission", "medium"),
         (InterfaceDef("in", "signal"), InterfaceDef("out", "signal")),
+        physical=False,
+        symbol="channel",
     ),
     EntityTypeDef(
         "demodulator",
@@ -381,6 +386,7 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "signal",
         ("demodulat", "demapper", "detector", "equaliz"),
         (InterfaceDef("symbols", "signal"), InterfaceDef("bits", "data")),
+        symbol="demodulator",
     ),
     EntityTypeDef(
         "source-decoder",
@@ -388,6 +394,7 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "signal",
         ("decod", "reconstruct", "synthes", "playback", "speaker"),
         (InterfaceDef("samples", "signal"),),
+        symbol="decoder",
     ),
     EntityTypeDef(
         "filter",
@@ -395,6 +402,7 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "signal",
         ("filter", "equalizer", "mixer", "amplifier"),
         (InterfaceDef("in", "signal"), InterfaceDef("out", "signal")),
+        symbol="filter",
     ),
 )
 

@@ -10,14 +10,17 @@ function useGraphParams(): { projectId: string; graphId: string } {
   return { projectId, graphId };
 }
 
-export type CanvasView = "2d" | "3d";
+export type CanvasView = "2d" | "3d" | "process" | "schematic" | "floorplan";
+
+const CANVAS_VIEWS: ReadonlySet<string> = new Set(["2d", "3d", "process", "schematic", "floorplan"]);
 
 export function WorkspaceRoute() {
   const { projectId, graphId } = useGraphParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const parsed = Number(searchParams.get("v") ?? "1");
   const version = Number.isInteger(parsed) && parsed >= 1 ? parsed : 1;
-  const view: CanvasView = searchParams.get("view") === "3d" ? "3d" : "2d";
+  const requested = searchParams.get("view");
+  const view: CanvasView = requested && CANVAS_VIEWS.has(requested) ? (requested as CanvasView) : "2d";
 
   function updateParams(next: { version?: number; view?: CanvasView }): void {
     const params = new URLSearchParams(searchParams);

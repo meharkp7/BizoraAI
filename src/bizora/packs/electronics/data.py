@@ -1263,6 +1263,7 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "package",
         ("sram", "dram", "memory cell", "bitcell", "6t"),
         (power_iface(), data_iface()),
+        symbol="bitcell",
     ),
     EntityTypeDef(
         "transistor",
@@ -1270,6 +1271,7 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "discrete",
         ("transistor", "mosfet", "nmos", "pmos", "finfet", "bjt"),
         (power_iface(), InterfaceDef("gate", "signal"), InterfaceDef("channel", "signal")),
+        symbol="transistor",
     ),
     EntityTypeDef(
         "logic-gate",
@@ -1277,6 +1279,7 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "package",
         ("inverter", "nand", "nor", "logic gate"),
         (power_iface(), data_iface()),
+        symbol="gate",
     ),
     EntityTypeDef(
         "voltage-source",
@@ -1284,6 +1287,7 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "power",
         ("voltage source", "vdd", "supply", "regulator", "reference"),
         (power_iface(),),
+        symbol="source",
     ),
     EntityTypeDef(
         "bias-controller",
@@ -1291,6 +1295,7 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "package",
         ("bias", "body bias", "compensation", "back bias"),
         (power_iface(), InterfaceDef("bias", "analog")),
+        symbol="bias",
     ),
     EntityTypeDef(
         "sense-amplifier",
@@ -1298,6 +1303,7 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "package",
         ("sense", "sensing", "sense amplifier", "readout", "comparator"),
         (power_iface(), data_iface(), InterfaceDef("sense", "analog")),
+        symbol="senseamp",
     ),
     EntityTypeDef(
         "measurement",
@@ -1305,6 +1311,7 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "sensor",
         ("monitor", "measurement", "meter", "probe", "detector", "current mirror"),
         (power_iface(), InterfaceDef("sense", "analog")),
+        symbol="meter",
     ),
     EntityTypeDef(
         "passive",
@@ -1312,6 +1319,7 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "passive",
         ("resistor", "capacitor", "inductor", "resistance", "capacitance"),
         (power_iface(),),
+        symbol="passive",
     ),
     EntityTypeDef(
         "diode",
@@ -1322,6 +1330,7 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
             InterfaceDef("anode", "signal"),
             InterfaceDef("cathode", "signal"),
         ),
+        symbol="diode",
     ),
     EntityTypeDef(
         "analog-ic",
@@ -1329,6 +1338,7 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "package",
         ("op-amp", "opamp", "operational amplifier", "timer", "ne555", "lm358"),
         (power_iface(), InterfaceDef("in", "analog"), InterfaceDef("out", "analog")),
+        symbol="chip",
     ),
     EntityTypeDef(
         "data-converter",
@@ -1336,5 +1346,6 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "package",
         ("adc", "dac", "data converter", "analog-to-digital", "digital-to-analog"),
         (power_iface(), InterfaceDef("analog", "analog"), data_iface()),
+        symbol="adc",
     ),
 )

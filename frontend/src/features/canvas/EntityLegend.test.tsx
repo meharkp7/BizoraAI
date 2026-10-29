@@ -8,7 +8,7 @@ describe("EntityLegend", () => {
     render(<EntityLegend entities={entitiesFixture} />);
 
     expect(screen.getByText(/Electronics · 83% confidence/)).toBeInTheDocument();
-    expect(screen.getByText("Package")).toBeInTheDocument();
+    expect(screen.getByText("Bitcell")).toBeInTheDocument();
     expect(screen.getByText("Memory Cell")).toBeInTheDocument();
     expect(screen.getByText("Generic")).toBeInTheDocument();
     expect(screen.getByRole("complementary", { name: "3D shape key" })).toBeInTheDocument();

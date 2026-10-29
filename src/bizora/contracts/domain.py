@@ -37,7 +37,18 @@ class EntityResolution(BaseModel):
     category: str = Field(
         min_length=1,
         max_length=64,
-        description="Visual archetype key (sphere, box, transistor, ...).",
+        description="Coarse grouping key for display. Shapes never derive from it.",
+    )
+    physical: bool = Field(description="False for process/data entities, which never map to parts.")
+    symbol: str = Field(
+        min_length=1,
+        max_length=64,
+        description="Pack-declared 2D symbol id for legends, process views, and schematics.",
+    )
+    model_3d: str | None = Field(
+        default=None,
+        max_length=128,
+        description="Representative 3D visual key, or None when only catalog parts render.",
     )
     interfaces: tuple[InterfaceSpec, ...] = ()
     matched_terms: tuple[str, ...] = Field(

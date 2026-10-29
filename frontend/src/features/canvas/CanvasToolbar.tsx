@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
+import type { CanvasView } from "../../app/routeElements.tsx";
 import { NODE_KINDS } from "../../lib/constants.ts";
 import type { NodeKind } from "../../lib/types.ts";
 import { isValidNodeId, suggestNodeId } from "./ids.ts";
@@ -44,8 +45,8 @@ export function CanvasToolbar({
   disabled: boolean;
   layoutStatus: LayoutSaveStatus;
   onResetLayout: () => void;
-  view: "2d" | "3d";
-  onViewChange: (view: "2d" | "3d") => void;
+  view: CanvasView;
+  onViewChange: (view: CanvasView) => void;
 }) {
   const [id, setId] = useState("");
   const [kind, setKind] = useState<NodeKind>("model");
@@ -148,7 +149,7 @@ export function CanvasToolbar({
           onClick={() => onViewChange("2d")}
           disabled={disabled}
           aria-pressed={view === "2d"}
-          title="Flat canvas"
+          title="Flat canvas: every node, editable"
         >
           2D
         </button>
@@ -157,9 +158,36 @@ export function CanvasToolbar({
           onClick={() => onViewChange("3d")}
           disabled={disabled}
           aria-pressed={view === "3d"}
-          title="3D explorer"
+          title="3D structure: physical parts only"
         >
           3D
+        </button>
+        <button
+          type="button"
+          onClick={() => onViewChange("process")}
+          disabled={disabled}
+          aria-pressed={view === "process"}
+          title="Process flow: data and computation steps"
+        >
+          Process
+        </button>
+        <button
+          type="button"
+          onClick={() => onViewChange("schematic")}
+          disabled={disabled}
+          aria-pressed={view === "schematic"}
+          title="Chip schematic: electronics symbols"
+        >
+          Schematic
+        </button>
+        <button
+          type="button"
+          onClick={() => onViewChange("floorplan")}
+          disabled={disabled}
+          aria-pressed={view === "floorplan"}
+          title="Array floorplan: memory layout"
+        >
+          Floorplan
         </button>
       </div>
     </div>

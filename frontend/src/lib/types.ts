@@ -114,6 +114,12 @@ export interface EntityResolution {
   display_label: string;
   generic: boolean;
   category: string;
+  /** False for process/data entities, which never render as hardware. */
+  physical: boolean;
+  /** Pack-declared 2D symbol id for legends, process views, and schematics. */
+  symbol: string;
+  /** Representative 3D visual key, or null when only catalog parts render. */
+  model_3d: string | null;
   interfaces: InterfaceSpec[];
   matched_terms: string[];
   confidence: number;

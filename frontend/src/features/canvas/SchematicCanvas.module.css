@@ -1,0 +1,93 @@
+/* Schematic sheet: ink-on-paper symbols, no nested card. */
+
+.stage {
+  width: 100%;
+  overflow: auto;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+.sheet {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 16rem;
+}
+
+.note {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  font-size: 0.75rem;
+  color: var(--color-ink-faint);
+  border-bottom: 1px solid var(--color-line);
+}
+
+.empty {
+  padding: var(--space-5);
+  text-align: center;
+  color: var(--color-ink-soft);
+}
+
+.empty p {
+  margin: 0;
+}
+
+.emptyDetail {
+  margin-top: var(--space-2);
+  font-size: 0.8125rem;
+  color: var(--color-ink-faint);
+}
+
+.wire {
+  stroke: var(--color-line-strong);
+  stroke-width: 1.5;
+}
+
+.node {
+  cursor: pointer;
+}
+
+.selection {
+  fill: none;
+  stroke: var(--color-accent-strong);
+  stroke-width: 2;
+}
+
+.circuit line {
+  stroke: var(--color-ink);
+  stroke-width: 1.6;
+}
+
+.dot {
+  fill: var(--color-ink);
+}
+
+.bubble {
+  fill: var(--color-surface);
+  stroke: var(--color-ink);
+  stroke-width: 1.6;
+}
+
+.label {
+  fill: var(--color-ink);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.caption {
+  fill: var(--color-ink-faint);
+  font-size: 9px;
+}
+
+.rail {
+  fill: var(--color-ink-soft);
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.genericBox {
+  fill: none;
+  stroke: var(--color-line-strong);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 3;
+}

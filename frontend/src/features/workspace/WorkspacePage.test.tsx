@@ -1,9 +1,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { HttpResponse, http } from "msw";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { useWorkspaceSelection } from "../../lib/store.ts";
+import { entitiesFixture } from "../../test/fixtures.ts";
+import { server } from "../../test/server.ts";
 import { WorkspacePage } from "./WorkspacePage.tsx";
 
 function wrapper({ children }: { children: ReactNode }) {
@@ -97,5 +100,97 @@ describe("WorkspacePage", () => {
     const brief = await screen.findByRole("region", { name: "Research brief" });
     expect(within(brief).getByText("Transformers need huge labeled datasets.")).toBeInTheDocument();
     expect(within(brief).getAllByText("Not stated in the paper.")).toHaveLength(1);
+  });
+
+  it("offers all five canvas views through the toolbar", async () => {
+    const onViewChange = vi.fn();
+    render(
+      <WorkspacePage
+        projectId="project-1"
+        graphId="graph-1"
+        version={2}
+        view="2d" onViewChange={onViewChange} onVersionChange={() => {}}
+      />,
+      { wrapper },
+    );
+    await screen.findByRole("heading", { name: "Vision transformer" });
+    const toggle = screen.getByRole("group", { name: "Canvas view" });
+    for (const name of ["2D", "3D", "Process", "Schematic", "Floorplan"]) {
+      expect(within(toggle).getByRole("button", { name })).toBeInTheDocument();
+    }
+    await userEvent.click(within(toggle).getByRole("button", { name: "Process" }));
+    expect(onViewChange).toHaveBeenCalledWith("process");
+  });
+
+  it("shows an honest empty state when the process side is vacant", async () => {
+    render(
+      <WorkspacePage
+        projectId="project-1"
+        graphId="graph-1"
+        version={2}
+        view="process" onViewChange={() => {}} onVersionChange={() => {}}
+      />,
+      { wrapper },
+    );
+    // Fixture entities are all structural, so the process view is empty.
+    expect(await screen.findByText("No process or data nodes in this view.")).toBeInTheDocument();
+  });
+
+  it("renders the process subgraph with a symbol key", async () => {
+    server.use(
+      http.get("/api/v1/graphs/:projectId/:graphId/revisions/:version/entities", () =>
+        HttpResponse.json({
+          ...entitiesFixture,
+          entities: entitiesFixture.entities.map((entity) =>
+            entity.node_id === "encoder"
+              ? {
+                  ...entity,
+                  entity_type: "dataloader",
+                  category: "process",
+                  physical: false,
+                  symbol: "dataset",
+                }
+              : entity,
+          ),
+        }),
+      ),
+    );
+    render(
+      <WorkspacePage
+        projectId="project-1"
+        graphId="graph-1"
+        version={2}
+        view="process" onViewChange={() => {}} onVersionChange={() => {}}
+      />,
+      { wrapper },
+    );
+    expect(await screen.findByRole("complementary", { name: "Process key" })).toBeInTheDocument();
+    // Only the non-physical node reaches the flow canvas.
+    expect(document.querySelectorAll(".react-flow__node")).toHaveLength(1);
+  });
+
+  it("renders the schematic and floorplan for electronics graphs", async () => {
+    const { unmount } = render(
+      <WorkspacePage
+        projectId="project-1"
+        graphId="graph-1"
+        version={2}
+        view="schematic" onViewChange={() => {}} onVersionChange={() => {}}
+      />,
+      { wrapper },
+    );
+    expect(await screen.findByRole("group", { name: "Chip schematic" })).toBeInTheDocument();
+    unmount();
+
+    render(
+      <WorkspacePage
+        projectId="project-1"
+        graphId="graph-1"
+        version={2}
+        view="floorplan" onViewChange={() => {}} onVersionChange={() => {}}
+      />,
+      { wrapper },
+    );
+    expect(await screen.findByRole("group", { name: "Array floorplan" })).toBeInTheDocument();
   });
 });

@@ -328,6 +328,7 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "service",
         ("client", "frontend", "cli", "sdk"),
         (InterfaceDef("requests", "protocol"),),
+        symbol="client",
     ),
     EntityTypeDef(
         "coordinator",
@@ -335,6 +336,7 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "service",
         ("coordinator", "leader", "master", "scheduler", "controller", "gateway"),
         (InterfaceDef("control", "protocol"), data_iface()),
+        symbol="coordinator",
     ),
     EntityTypeDef(
         "worker",
@@ -342,6 +344,7 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "service",
         ("worker", "executor", "task", "follower", "agent"),
         (InterfaceDef("control", "protocol"), data_iface()),
+        symbol="worker",
     ),
     EntityTypeDef(
         "storage-node",
@@ -349,6 +352,7 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "storage",
         ("storage", "database", "shard", "disk", "sst", "wal", "log", "cache"),
         (InterfaceDef("store", "storage"), InterfaceDef("replication", "replication")),
+        symbol="storage",
     ),
     EntityTypeDef(
         "message-queue",
@@ -356,6 +360,7 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "network",
         ("queue", "broker", "kafka", "stream", "pubsub", "topic"),
         (InterfaceDef("publish", "protocol"), InterfaceDef("subscribe", "protocol")),
+        symbol="queue",
     ),
     EntityTypeDef(
         "load-balancer",
@@ -363,6 +368,7 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "network",
         ("load balanc", "proxy", "router", "ingress"),
         (InterfaceDef("frontend", "protocol"), InterfaceDef("backend", "protocol")),
+        symbol="load-balancer",
     ),
 )
 

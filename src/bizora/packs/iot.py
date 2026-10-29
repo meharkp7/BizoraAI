@@ -1061,6 +1061,7 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         ("microcontroller", "mcu", "esp32", "arduino", "raspberry", "stm32"),
         (power_iface(), InterfaceDef("gpio", "gpio"), data_iface()),
         identity_keys=("model", "part"),
+        symbol="mcu",
     ),
     EntityTypeDef(
         "sensor-module",
@@ -1069,6 +1070,7 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         ("sensor", "temperature", "humidity", "pressure", "accelerometer", "dht", "bme"),
         (power_iface(), data_iface()),
         identity_keys=("model", "part"),
+        symbol="sensor",
     ),
     EntityTypeDef(
         "actuator",
@@ -1076,6 +1078,7 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "compute",
         ("actuator", "relay", "motor", "servo", "valve"),
         (power_iface(), InterfaceDef("control", "signal")),
+        symbol="actuator",
     ),
     EntityTypeDef(
         "radio",
@@ -1092,6 +1095,7 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
             "antenna",
         ),
         (power_iface(), InterfaceDef("air", "rf"), data_iface()),
+        symbol="radio",
     ),
     EntityTypeDef(
         "cloud-service",
@@ -1099,6 +1103,8 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "network",
         ("cloud", "dashboard", "server", "mqtt broker", "backend", "api"),
         (InterfaceDef("api", "protocol"),),
+        physical=False,
+        symbol="cloud",
     ),
     EntityTypeDef(
         "power-supply",
@@ -1106,6 +1112,7 @@ ENTITY_TYPES: tuple[EntityTypeDef, ...] = (
         "power",
         ("battery", "power supply", "solar", "charger", "regulator"),
         (power_iface(),),
+        symbol="supply",
     ),
 )
 
