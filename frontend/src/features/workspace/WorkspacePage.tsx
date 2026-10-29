@@ -9,6 +9,7 @@ import {
   useSaveLayout,
 } from "../../app/queries.ts";
 import { BizoraApiError } from "../../lib/api.ts";
+import type { CanvasView } from "../../app/routeElements.tsx";
 import { WORKSPACE_ACTOR } from "../../lib/constants.ts";
 import { useLibrarySelection, useWorkspaceSelection } from "../../lib/store.ts";
 import type {
@@ -26,7 +27,10 @@ import type {
 import { EmptyState, ErrorState, LoadingState } from "../../components/states.tsx";
 import { GraphCanvas } from "../canvas/GraphCanvas.tsx";
 import { GraphCanvas3D } from "../canvas/GraphCanvas3D.tsx";
-import { DomainBadge } from "../canvas/EntityLegend.tsx";
+import { DomainBadge, EntityLegend } from "../canvas/EntityLegend.tsx";
+import { FloorplanCanvas } from "../canvas/FloorplanCanvas.tsx";
+import { SchematicCanvas } from "../canvas/SchematicCanvas.tsx";
+import { splitGraph } from "../canvas/graph3d.ts";
 import { CopilotPanel } from "../copilot/CopilotPanel.tsx";
 import { ComponentDetailView } from "../library/ComponentDetail.tsx";
 import { LibraryPanel } from "../library/LibraryPanel.tsx";
@@ -246,9 +250,9 @@ export function WorkspacePage({
   projectId: string;
   graphId: string;
   version: number;
-  view: "2d" | "3d";
+  view: CanvasView;
   onVersionChange: (version: number) => void;
-  onViewChange: (view: "2d" | "3d") => void;
+  onViewChange: (view: CanvasView) => void;
 }) {
   const revision = useGraphRevision(projectId, graphId, version);
   const savedLayout = useGraphLayout(projectId, graphId, version);
@@ -405,8 +409,8 @@ function WorkspaceLoaded({
   projectId: string;
   graph: MethodologyGraph;
   layoutVersion: number;
-  view: "2d" | "3d";
-  onViewChange: (view: "2d" | "3d") => void;
+  view: CanvasView;
+  onViewChange: (view: CanvasView) => void;
   savedLayout: GraphLayout | null;
   entities: GraphEntities | null;
   entitiesPending: boolean;
@@ -451,9 +455,9 @@ function WorkspaceLoaded({
   const canvasSectionRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    // Deep links (?view=3d) land at the top of the page; bring the canvas
-    // into view instead of stranding newcomers above the fold.
-    if (view === "3d") canvasSectionRef.current?.scrollIntoView?.({ block: "nearest" });
+    // Deep links (?view=3d, ...) land at the top of the page; bring the
+    // canvas into view instead of stranding newcomers above the fold.
+    if (view !== "2d") canvasSectionRef.current?.scrollIntoView?.({ block: "nearest" });
   }, [view]);
 
   useEffect(() => {
@@ -467,6 +471,23 @@ function WorkspaceLoaded({
     () => (activeDiff ? diffStatusMaps(activeDiff) : null),
     [activeDiff],
   );
+  const split = useMemo(() => splitGraph(graph, entities), [graph, entities]);
+  const structureEntities = useMemo(() => {
+    if (!entities) return null;
+    const ids = new Set(split.structure.nodes.map((node) => node.id));
+    return {
+      ...entities,
+      entities: entities.entities.filter((entity) => ids.has(entity.node_id)),
+    };
+  }, [entities, split]);
+  const processEntities = useMemo(() => {
+    if (!entities) return null;
+    const ids = new Set(split.process.nodes.map((node) => node.id));
+    return {
+      ...entities,
+      entities: entities.entities.filter((entity) => ids.has(entity.node_id)),
+    };
+  }, [entities, split]);
 
   function handleNodesMoved(positions: Map<string, Point>, viewport: ViewportState): void {
     if (savedLayout && matchesSavedPositions(savedLayout.positions, positions)) {
@@ -552,8 +573,8 @@ function WorkspaceLoaded({
           <DomainBadge entities={entities} />
           {entitiesError ? (
             <p className={styles.entitiesError} role="alert">
-              Component identities unavailable ({entitiesError}). The 3D view shows
-              generic markers until the backend serves them again.
+              Component identities unavailable ({entitiesError}). Identity-driven views
+              show generic markers until the backend serves them again.
             </p>
           ) : null}
         </div>
@@ -609,17 +630,51 @@ function WorkspaceLoaded({
             onViewChange={onViewChange}
           />
           {view === "3d" ? (
-            <GraphCanvas3D
-              key={`3d-${graph.version}`}
-              graph={graph}
-              layout={savedLayout}
-              entities={entities}
-              entitiesPending={entitiesPending}
-              entitiesError={entitiesError}
-              assetSpecs={assetSpecs}
-            />
+            split.structure.nodes.length === 0 ? (
+              <EmptyState
+                title="No physical structure in this view."
+                detail="Every node resolved to process or data; the process view shows them."
+              />
+            ) : (
+              <GraphCanvas3D
+                key={`3d-${graph.version}`}
+                graph={split.structure}
+                layout={savedLayout}
+                entities={structureEntities}
+                entitiesPending={entitiesPending}
+                entitiesError={entitiesError}
+                assetSpecs={assetSpecs}
+              />
+            )
+          ) : view === "process" ? (
+            split.process.nodes.length === 0 ? (
+              <EmptyState
+                title="No process or data nodes in this view."
+                detail="Every node resolved to physical structure; the 3D view shows it."
+              />
+            ) : (
+              <>
+                <GraphCanvas
+                  key={`process-${graph.version}`}
+                  graph={split.process}
+                  layout={savedLayout}
+                  diffStatuses={diffStatuses}
+                  mutating={mutating}
+                />
+                <EntityLegend
+                  entities={processEntities}
+                  glyphs="symbols"
+                  title="Process key"
+                />
+              </>
+            )
+          ) : view === "schematic" ? (
+            <SchematicCanvas graph={graph} entities={entities} />
+          ) : view === "floorplan" ? (
+            <FloorplanCanvas graph={graph} entities={entities} />
           ) : (
             <GraphCanvas
+              key={`canvas-${graph.version}`}
               graph={graph}
               layout={savedLayout}
               layoutReset={layoutReset}

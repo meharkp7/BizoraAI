@@ -1,6 +1,6 @@
 import type { GraphEntities } from "../../lib/types.ts";
 import type { AssetSummary } from "./assetModels.ts";
-import { CategoryGlyph } from "./CategoryGlyph.tsx";
+import { GeometryGlyph, SymbolGlyph } from "./CategoryGlyph.tsx";
 import { domainLabel, legendEntries } from "./graph3d.ts";
 import styles from "./EntityLegend.module.css";
 
@@ -40,20 +40,29 @@ export function AssetProvenanceBadge({ summary }: { summary: AssetSummary | null
 export function EntityLegend({
   entities,
   assetSummary = null,
+  glyphs = "solids",
+  title = "3D shape key",
 }: {
   entities: GraphEntities | null;
   assetSummary?: AssetSummary | null;
+  /** Solids match the 3D scene; symbols serve 2D views without solids. */
+  glyphs?: "solids" | "symbols";
+  title?: string;
 }) {
   const entries = legendEntries(entities);
   if (entries.length === 0) return null;
   return (
-    <aside className={styles.legend} aria-label="3D shape key">
+    <aside className={styles.legend} aria-label={title}>
       <DomainBadge entities={entities} />
       <AssetProvenanceBadge summary={assetSummary} />
       <ul className={styles.list}>
         {entries.map((entry) => (
-          <li key={entry.category} className={styles.row}>
-            <CategoryGlyph category={entry.category} />
+          <li key={entry.symbol} className={styles.row}>
+            {glyphs === "symbols" ? (
+              <SymbolGlyph symbol={entry.symbol} />
+            ) : (
+              <GeometryGlyph geometry={entry.geometry} />
+            )}
             <span className={styles.name}>
               {entry.label}
               <span className={styles.count} aria-label={`${entry.count} components`}>

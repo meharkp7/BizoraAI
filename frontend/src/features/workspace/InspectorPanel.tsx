@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { NODE_KINDS } from "../../lib/constants.ts";
 import type { EntityResolution, GraphEdge, GraphNode, NodeKind } from "../../lib/types.ts";
-import { categoryLabel, domainLabel, prettyEntityType } from "../canvas/graph3d.ts";
+import { SymbolGlyph } from "../canvas/CategoryGlyph.tsx";
+import { categoryLabel, domainLabel, prettyEntityType, symbolLabel } from "../canvas/graph3d.ts";
 import type { NodeReplacement } from "./patchBuilders.ts";
 import styles from "./InspectorPanel.module.css";
 
@@ -300,7 +301,10 @@ export function InspectorPanel({
                 </span>
               )}{" "}
               <span className={styles.entityMeta}>
+                <SymbolGlyph symbol={entity.symbol || "generic"} />{" "}
                 {domainLabel(entity.domain)} · {categoryLabel(entity.category)} ·{" "}
+                {symbolLabel(entity.symbol || "generic")} ·{" "}
+                {entity.physical === false ? "Process" : "Structure"} ·{" "}
                 {Math.round(entity.confidence * 100)}%
               </span>
               {entity.generic ? (

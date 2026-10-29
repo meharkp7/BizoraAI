@@ -63,7 +63,7 @@ describe("InspectorPanel system entity", () => {
 
     expect(screen.getByText("System entity")).toBeInTheDocument();
     expect(screen.getByText(/Memory cell · Memory Cell/)).toBeInTheDocument();
-    expect(screen.getByText(/Electronics · Package · 75%/)).toBeInTheDocument();
+    expect(screen.getByText(/Electronics · Package · Bitcell · Structure · 75%/)).toBeInTheDocument();
     expect(screen.getByText(/Interfaces: power · data/)).toBeInTheDocument();
     expect(screen.getByText(/Grounded by: sram/)).toBeInTheDocument();
   });

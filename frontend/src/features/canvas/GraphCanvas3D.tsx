@@ -21,11 +21,11 @@ import {
   EDGE_COLOR,
   KIND_COLORS,
   SELECT_COLOR,
-  archetypeFor,
   boundingSphere,
   fitDistance,
   resolutionsByNodeId,
   toWorldPositions,
+  visualFor,
 } from "./graph3d.ts";
 import type { ArchetypeGeometry } from "./graph3d.ts";
 import styles from "./GraphCanvas3D.module.css";
@@ -203,10 +203,7 @@ export function GraphCanvas3D({
       for (const node of graph.nodes) {
         const point = positions.get(node.id) ?? { x: 0, y: 0, z: 0 };
         const resolution = resolutions.get(node.id);
-        const archetype = archetypeFor(
-          resolution && !resolution.generic ? resolution.category : "generic",
-        );
-        const mesh = new THREE.Mesh(geometryFor(archetype), materialFor(node.kind));
+        const mesh = new THREE.Mesh(geometryFor(visualFor(resolution)), materialFor(node.kind));
         mesh.position.set(point.x, point.y, point.z);
         mesh.userData.nodeId = node.id;
         mesh.userData.kind = node.kind;
