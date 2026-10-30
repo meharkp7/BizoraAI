@@ -1,0 +1,67 @@
+{
+ "paper_id": "sram-puf-tilting",
+ "figure_id": "sram-bitcell-fig1",
+ "page": 2,
+ "crop": [
+  50.0,
+  6.0,
+  99.0,
+  34.0
+ ],
+ "crop_size": [
+  783,
+  608
+ ],
+ "paper_hash": "4c14415639e751aa469131efeecd80b0dede27e44708a69d702d57ca8595d43d",
+ "classification": {
+  "kind": "circuit",
+  "confidence": 0.99
+ },
+ "repaired": false,
+ "from_cache": false,
+ "figure_validation": {
+  "errors": [],
+  "warnings": [],
+  "stats": {
+   "components": 10,
+   "nets": 8,
+   "ports": 3,
+   "connections": 29,
+   "subcircuits": 0
+  }
+ },
+ "text": {
+  "methodology": {
+   "errors": [],
+   "warnings": [
+    "node 'cell_design' is orphaned (no edges)"
+   ],
+   "stats": {
+    "groups": 2,
+    "nodes": 10,
+    "edges": 7,
+    "orphans": 1
+   }
+  },
+  "structure": {
+   "errors": [],
+   "warnings": [],
+   "stats": {
+    "blocks": 8,
+    "max_depth": 3,
+    "arrays": 2
+   }
+  }
+ },
+ "validator_pass_rate": 1.0,
+ "usage": {
+  "input_tokens": 37603,
+  "output_tokens": 15160,
+  "calls": 4
+ },
+ "gold": {
+  "path": "tests/gold/diagrams/sram-puf-tilting.circuit.json",
+  "present": false,
+  "comparison": null
+ }
+}

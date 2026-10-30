@@ -1,0 +1,202 @@
+{
+ "version": 1,
+ "title": "A 2 Bit/Cell Tilting SRAM-Based PUF With a BER of 3.1E-10 and an Energy of 21 FJ/Bit in 65nm",
+ "groups": [
+  {
+   "id": "tilt_preselection",
+   "label": "Tilt Preselection Test",
+   "parent": null
+  },
+  {
+   "id": "measurement_evaluation",
+   "label": "Measurement and Evaluation",
+   "parent": null
+  }
+ ],
+ "nodes": [
+  {
+   "id": "cell_design",
+   "label": "Implement two-bit cell with two NMOS pairs and HVT devices for high decision voltage",
+   "kind": "process",
+   "group": null,
+   "detail": "Two NMOS pairs with select switches S2-S3, HVT PMOS P1-P2, HVT S1 with 1 um length, and 14fF MOM coupling capacitor.",
+   "params": {},
+   "confidence": 0.88,
+   "evidence": {
+    "page": 4,
+    "figure_id": null,
+    "quote": "Two pairs of cross-coupled NMOS devices were instantiated, where the mismatch between them resulted in two substantially independent responses."
+   }
+  },
+  {
+   "id": "puff_array_input",
+   "label": "2000-cell 2-bit SRAM PUF array in TSMC 65nm",
+   "kind": "input",
+   "group": null,
+   "detail": "Array of 2000 cells with 5 rows and 400 columns; each two-bit cell occupied 12 um2 (2840F2).",
+   "params": {},
+   "confidence": 0.95,
+   "evidence": {
+    "page": 5,
+    "figure_id": null,
+    "quote": "had an array of 2000 cells, with 5 rows and 400 columns"
+   }
+  },
+  {
+   "id": "tilt_step1",
+   "label": "Tilt node O towards '1' and enable cell to resolve",
+   "kind": "process",
+   "group": "tilt_preselection",
+   "detail": null,
+   "params": {},
+   "confidence": 0.96,
+   "evidence": {
+    "page": 3,
+    "figure_id": null,
+    "quote": "The first step is to set ΔVdd so that node O is tilted towards ‘1’, and the cell is enabled and resolves."
+   }
+  },
+  {
+   "id": "tilt_step2",
+   "label": "Tilt node OB towards '1' and enable cell to resolve again",
+   "kind": "process",
+   "group": "tilt_preselection",
+   "detail": null,
+   "params": {},
+   "confidence": 0.96,
+   "evidence": {
+    "page": 3,
+    "figure_id": null,
+    "quote": "In the second step, ΔVdd tilts node OB towards ‘1’, and the cell resolves again."
+   }
+  },
+  {
+   "id": "compare_resolutions",
+   "label": "Compare both tilt resolutions to decide if mismatch exceeds ΔVdd",
+   "kind": "decision",
+   "group": "tilt_preselection",
+   "detail": "If resolutions identical, mismatch larger than ΔVdd and qualified; if different, mismatch smaller than ΔVdd and masked as unstable.",
+   "params": {},
+   "confidence": 0.95,
+   "evidence": {
+    "page": 3,
+    "figure_id": null,
+    "quote": "In the third step, both resolutions are compared. If they are identical, the cell has sufficient mismatch to overcome ΔVdd"
+   }
+  },
+  {
+   "id": "mask_store",
+   "label": "Mask unstable bits and store mask as public helper data",
+   "kind": "store",
+   "group": null,
+   "detail": "Mask treated as public helper data and retrieved prior to PUF evaluation.",
+   "params": {},
+   "confidence": 0.9,
+   "evidence": {
+    "page": 4,
+    "figure_id": null,
+    "quote": "could be stored either in a Non-Volatile Memory (NVM) or in the authentication server, and be retrieved prior to any PUF evaluation."
+   }
+  },
+  {
+   "id": "stability_dataset",
+   "label": "Collect 180,000 evaluations per bit across nine V/T conditions",
+   "kind": "dataset",
+   "group": "measurement_evaluation",
+   "detail": "Supplies 0.8V, 1.0V, 1.2V and temperatures -10C, 50C, 85C from eleven arrays for 22,000 cells; instability defined as BERcell !=0 over 180K evaluations.",
+   "params": {},
+   "confidence": 0.95,
+   "evidence": {
+    "page": 5,
+    "figure_id": null,
+    "quote": "20,000 evaluations were collected for each PUF cell and for the nine V/T pairs, which yielded 180,000 measurements per bit."
+   }
+  },
+  {
+   "id": "ber_evaluation",
+   "label": "Calculate pre-ECC BER with max of average and pessimistic bound",
+   "kind": "evaluation",
+   "group": "measurement_evaluation",
+   "detail": "N=17952 qualified bits for tilt=90mV with #evaluations=180,000; BER defined as larger of average BERcell and 1/(N*#evaluations+1).",
+   "params": {},
+   "confidence": 0.9,
+   "evidence": {
+    "page": 7,
+    "figure_id": null,
+    "quote": "a BER of 3.1E-10 was obtained by the second term of (5)."
+   }
+  },
+  {
+   "id": "uniqueness_evaluation",
+   "label": "Evaluate uniqueness and randomness via inter-chip HD, bit-aliasing, NIST",
+   "kind": "evaluation",
+   "group": "measurement_evaluation",
+   "detail": "Inter-chip HD, bit-aliasing, ACF, KL divergence and NIST tests on qualified bits.",
+   "params": {},
+   "confidence": 0.86,
+   "evidence": {
+    "page": 8,
+    "figure_id": null,
+    "quote": "average inter-chip HD was 49.9% and 49.8% before and after preselection, respectively."
+   }
+  },
+  {
+   "id": "two_bit_cell_output",
+   "label": "Output two independent bits per cell with tilt masking",
+   "kind": "output",
+   "group": null,
+   "detail": "Energy 21fJ/bit, area 1420F2/bit, BER 3.1E-10, near-ideal HD and fraction of ones.",
+   "params": {},
+   "confidence": 0.9,
+   "evidence": {
+    "page": 1,
+    "figure_id": null,
+    "quote": "After preselection, the 2 bit/cell PUF exhibited a near-ideal inter-chip Hamming distance (49.5%) and percentage of ones (50.6%)."
+   }
+  }
+ ],
+ "edges": [
+  {
+   "from": "tilt_step1",
+   "to": "tilt_step2",
+   "label": null,
+   "kind": "control"
+  },
+  {
+   "from": "tilt_step2",
+   "to": "compare_resolutions",
+   "label": null,
+   "kind": "control"
+  },
+  {
+   "from": "compare_resolutions",
+   "to": "mask_store",
+   "label": null,
+   "kind": "control"
+  },
+  {
+   "from": "puff_array_input",
+   "to": "tilt_step1",
+   "label": null,
+   "kind": "data"
+  },
+  {
+   "from": "stability_dataset",
+   "to": "ber_evaluation",
+   "label": null,
+   "kind": "data"
+  },
+  {
+   "from": "stability_dataset",
+   "to": "uniqueness_evaluation",
+   "label": null,
+   "kind": "data"
+  },
+  {
+   "from": "mask_store",
+   "to": "two_bit_cell_output",
+   "label": null,
+   "kind": "data"
+  }
+ ]
+}

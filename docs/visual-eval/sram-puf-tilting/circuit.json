@@ -1,0 +1,343 @@
+{
+ "version": 1,
+ "title": "Typical metastability SRAM-based PUF cell",
+ "source": {
+  "figure_id": "sram-bitcell-fig1",
+  "page": 2
+ },
+ "components": [
+  {
+   "id": "K1",
+   "type": "pmos",
+   "label": "K1",
+   "value": null,
+   "pins": {
+    "d": "O",
+    "g": "EN",
+    "s": "VDD"
+   },
+   "pin_sides": null,
+   "placement": {
+    "x": 24.0,
+    "y": 25.0,
+    "rot": 0,
+    "mirror": false,
+    "flip": false
+   },
+   "confidence": 0.95,
+   "evidence": {
+    "figure_id": "sram-bitcell-fig1",
+    "bbox": null,
+    "quote": "K1"
+   }
+  },
+  {
+   "id": "K2",
+   "type": "pmos",
+   "label": "K2",
+   "value": null,
+   "pins": {
+    "d": "OB",
+    "g": "EN",
+    "s": "VDD"
+   },
+   "pin_sides": null,
+   "placement": {
+    "x": 76.0,
+    "y": 25.0,
+    "rot": 0,
+    "mirror": false,
+    "flip": false
+   },
+   "confidence": 0.95,
+   "evidence": {
+    "figure_id": "sram-bitcell-fig1",
+    "bbox": null,
+    "quote": "K2"
+   }
+  },
+  {
+   "id": "P1",
+   "type": "pmos",
+   "label": "P1",
+   "value": null,
+   "pins": {
+    "d": "O",
+    "g": "OB",
+    "s": "VDD"
+   },
+   "pin_sides": null,
+   "placement": {
+    "x": 37.0,
+    "y": 36.0,
+    "rot": 0,
+    "mirror": false,
+    "flip": false
+   },
+   "confidence": 0.95,
+   "evidence": {
+    "figure_id": "sram-bitcell-fig1",
+    "bbox": null,
+    "quote": "P1"
+   }
+  },
+  {
+   "id": "P2",
+   "type": "pmos",
+   "label": "P2",
+   "value": null,
+   "pins": {
+    "d": "OB",
+    "g": "O",
+    "s": "VDD"
+   },
+   "pin_sides": null,
+   "placement": {
+    "x": 63.0,
+    "y": 36.0,
+    "rot": 0,
+    "mirror": false,
+    "flip": false
+   },
+   "confidence": 0.95,
+   "evidence": {
+    "figure_id": "sram-bitcell-fig1",
+    "bbox": null,
+    "quote": "P2"
+   }
+  },
+  {
+   "id": "N1",
+   "type": "nmos",
+   "label": "N1",
+   "value": null,
+   "pins": {
+    "d": "O",
+    "g": "OB",
+    "s": "TAIL"
+   },
+   "pin_sides": null,
+   "placement": {
+    "x": 37.0,
+    "y": 64.0,
+    "rot": 0,
+    "mirror": false,
+    "flip": false
+   },
+   "confidence": 0.95,
+   "evidence": {
+    "figure_id": "sram-bitcell-fig1",
+    "bbox": null,
+    "quote": "N1"
+   }
+  },
+  {
+   "id": "N2",
+   "type": "nmos",
+   "label": "N2",
+   "value": null,
+   "pins": {
+    "d": "OB",
+    "g": "O",
+    "s": "TAIL"
+   },
+   "pin_sides": null,
+   "placement": {
+    "x": 63.0,
+    "y": 64.0,
+    "rot": 0,
+    "mirror": false,
+    "flip": false
+   },
+   "confidence": 0.95,
+   "evidence": {
+    "figure_id": "sram-bitcell-fig1",
+    "bbox": null,
+    "quote": "N2"
+   }
+  },
+  {
+   "id": "S1",
+   "type": "nmos",
+   "label": "S1",
+   "value": null,
+   "pins": {
+    "d": "TAIL",
+    "g": "EN",
+    "s": "GND"
+   },
+   "pin_sides": null,
+   "placement": {
+    "x": 50.0,
+    "y": 80.0,
+    "rot": 0,
+    "mirror": false,
+    "flip": false
+   },
+   "confidence": 0.96,
+   "evidence": {
+    "figure_id": "sram-bitcell-fig1",
+    "bbox": null,
+    "quote": "S1"
+   }
+  },
+  {
+   "id": "INV_L",
+   "type": "inverter",
+   "label": "left inverter",
+   "value": null,
+   "pins": {
+    "in": "O",
+    "out": "OUT_L"
+   },
+   "pin_sides": null,
+   "placement": {
+    "x": 19.0,
+    "y": 51.0,
+    "rot": 180,
+    "mirror": false,
+    "flip": false
+   },
+   "confidence": 0.9,
+   "evidence": {
+    "figure_id": "sram-bitcell-fig1",
+    "bbox": null,
+    "quote": null
+   }
+  },
+  {
+   "id": "INV_R",
+   "type": "inverter",
+   "label": "right inverter",
+   "value": null,
+   "pins": {
+    "in": "OB",
+    "out": "OUT_R"
+   },
+   "pin_sides": null,
+   "placement": {
+    "x": 81.0,
+    "y": 54.0,
+    "rot": 0,
+    "mirror": false,
+    "flip": false
+   },
+   "confidence": 0.9,
+   "evidence": {
+    "figure_id": "sram-bitcell-fig1",
+    "bbox": null,
+    "quote": null
+   }
+  },
+  {
+   "id": "GND1",
+   "type": "ground",
+   "label": "GND",
+   "value": null,
+   "pins": {
+    "g": "GND"
+   },
+   "pin_sides": null,
+   "placement": {
+    "x": 50.0,
+    "y": 92.0,
+    "rot": 0,
+    "mirror": false,
+    "flip": false
+   },
+   "confidence": 0.98,
+   "evidence": {
+    "figure_id": "sram-bitcell-fig1",
+    "bbox": null,
+    "quote": null
+   }
+  }
+ ],
+ "nets": [
+  {
+   "id": "VDD",
+   "label": "Vdd",
+   "role": "supply",
+   "global": true
+  },
+  {
+   "id": "GND",
+   "label": "GND",
+   "role": "ground",
+   "global": true
+  },
+  {
+   "id": "EN",
+   "label": "En",
+   "role": "input",
+   "global": false
+  },
+  {
+   "id": "O",
+   "label": "O",
+   "role": "signal",
+   "global": false
+  },
+  {
+   "id": "OB",
+   "label": "OB",
+   "role": "signal",
+   "global": false
+  },
+  {
+   "id": "TAIL",
+   "label": "TAIL",
+   "role": "signal",
+   "global": false
+  },
+  {
+   "id": "OUT_L",
+   "label": "OUT_L",
+   "role": "output",
+   "global": false
+  },
+  {
+   "id": "OUT_R",
+   "label": "OUT_R",
+   "role": "output",
+   "global": false
+  }
+ ],
+ "ports": [
+  {
+   "id": "PORT_EN",
+   "net": "EN",
+   "label": "En",
+   "dir": "in",
+   "side": "left",
+   "placement": {
+    "x": 8.0,
+    "y": 82.0
+   }
+  },
+  {
+   "id": "PORT_LEFT",
+   "net": "OUT_L",
+   "label": "OUT_L",
+   "dir": "out",
+   "side": "left",
+   "placement": {
+    "x": 8.0,
+    "y": 50.0
+   }
+  },
+  {
+   "id": "PORT_RIGHT",
+   "net": "OUT_R",
+   "label": "OUT_R",
+   "dir": "out",
+   "side": "right",
+   "placement": {
+    "x": 92.0,
+    "y": 54.0
+   }
+  }
+ ],
+ "subcircuits": [],
+ "layout": null
+}

@@ -1,0 +1,30 @@
+{
+ "input_tokens": 37603,
+ "output_tokens": 15160,
+ "calls": [
+  {
+   "input_tokens": 2392,
+   "output_tokens": 339,
+   "response_id": "resp_6ae44c84ba595cad5ead4f06",
+   "model": "muse-spark-1.3"
+  },
+  {
+   "input_tokens": 3782,
+   "output_tokens": 5878,
+   "response_id": "resp_6ae44ca93913c74c55ff4574",
+   "model": "muse-spark-1.3"
+  },
+  {
+   "input_tokens": 16044,
+   "output_tokens": 4731,
+   "response_id": "resp_6ae44cc632b473d0f1164812",
+   "model": "muse-spark-1.3"
+  },
+  {
+   "input_tokens": 15385,
+   "output_tokens": 4212,
+   "response_id": "resp_6ae44ce6a80f1285c06a4b97",
+   "model": "muse-spark-1.3"
+  }
+ ]
+}

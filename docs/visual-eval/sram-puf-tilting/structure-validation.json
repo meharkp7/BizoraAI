@@ -1,0 +1,9 @@
+{
+ "errors": [],
+ "warnings": [],
+ "stats": {
+  "blocks": 8,
+  "max_depth": 3,
+  "arrays": 2
+ }
+}

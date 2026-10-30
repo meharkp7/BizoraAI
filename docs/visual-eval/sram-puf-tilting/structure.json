@@ -1,0 +1,147 @@
+{
+ "version": 1,
+ "title": "A 2 Bit/Cell Tilting SRAM-Based PUF With a BER of 3.1E-10 and an Energy of 21 FJ/Bit in 65nm",
+ "root": {
+  "id": "test_chip",
+  "label": "test chip",
+  "kind": "chip",
+  "count": null,
+  "dims": null,
+  "pos": null,
+  "part": null,
+  "tensor_shape": null,
+  "children": [
+   {
+    "id": "puf_2bit_array",
+    "label": "2-bit PUF array",
+    "kind": "array",
+    "count": {
+     "rows": 5,
+     "cols": 400
+    },
+    "dims": null,
+    "pos": null,
+    "part": null,
+    "tensor_shape": null,
+    "children": [
+     {
+      "id": "puf_2bit_cell",
+      "label": "2-bit PUF cell",
+      "kind": "cell",
+      "count": null,
+      "dims": null,
+      "pos": null,
+      "part": null,
+      "tensor_shape": null,
+      "children": [
+       {
+        "id": "mom_capacitor",
+        "label": "MOM coupling capacitor",
+        "kind": "part",
+        "count": null,
+        "dims": null,
+        "pos": null,
+        "part": null,
+        "tensor_shape": null,
+        "children": [],
+        "confidence": 0.95,
+        "evidence": {
+         "page": 4,
+         "figure_id": null,
+         "quote": "The coupling capacitor, depicted in green in Fig. 4"
+        }
+       }
+      ],
+      "confidence": 1.0,
+      "evidence": {
+       "page": 5,
+       "figure_id": null,
+       "quote": "Each two-bit cell occupied 12 µm2"
+      }
+     },
+     {
+      "id": "or_gate_shared",
+      "label": "shared OR gate for EN",
+      "kind": "module",
+      "count": null,
+      "dims": null,
+      "pos": null,
+      "part": null,
+      "tensor_shape": null,
+      "children": [],
+      "confidence": 0.9,
+      "evidence": {
+       "page": 4,
+       "figure_id": null,
+       "quote": "this gate can be shared between multiple cells"
+      }
+     }
+    ],
+    "confidence": 1.0,
+    "evidence": {
+     "page": 5,
+     "figure_id": null,
+     "quote": "had an array of 2000 cells, with 5 rows and 400 columns"
+    }
+   },
+   {
+    "id": "puf_singlebit_array",
+    "label": "single-bit PUF array",
+    "kind": "array",
+    "count": null,
+    "dims": null,
+    "pos": null,
+    "part": null,
+    "tensor_shape": null,
+    "children": [
+     {
+      "id": "puf_singlebit_cell",
+      "label": "typical metastability SRAM-based PUF cell",
+      "kind": "cell",
+      "count": null,
+      "dims": null,
+      "pos": null,
+      "part": null,
+      "tensor_shape": null,
+      "children": [],
+      "confidence": 0.9,
+      "evidence": {
+       "page": 2,
+       "figure_id": null,
+       "quote": "Figure 1 depicts a typical SRAM-based metastability PUF"
+      }
+     }
+    ],
+    "confidence": 0.9,
+    "evidence": {
+     "page": 5,
+     "figure_id": null,
+     "quote": "Another PUF array, with the structure depicted in Fig. 1, was placed on the same die"
+    }
+   },
+   {
+    "id": "serial_readout",
+    "label": "serial readout circuitry",
+    "kind": "periphery",
+    "count": null,
+    "dims": null,
+    "pos": null,
+    "part": null,
+    "tensor_shape": null,
+    "children": [],
+    "confidence": 0.95,
+    "evidence": {
+     "page": 5,
+     "figure_id": null,
+     "quote": "serial readout circuitry was implemented"
+    }
+   }
+  ],
+  "confidence": 0.95,
+  "evidence": {
+   "page": 1,
+   "figure_id": null,
+   "quote": "Because the test chip was pin limited"
+  }
+ }
+}

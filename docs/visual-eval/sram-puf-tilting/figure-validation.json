@@ -1,0 +1,11 @@
+{
+ "errors": [],
+ "warnings": [],
+ "stats": {
+  "components": 10,
+  "nets": 8,
+  "ports": 3,
+  "connections": 29,
+  "subcircuits": 0
+ }
+}

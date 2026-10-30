@@ -1,0 +1,12 @@
+{
+ "errors": [],
+ "warnings": [
+  "node 'cell_design' is orphaned (no edges)"
+ ],
+ "stats": {
+  "groups": 2,
+  "nodes": 10,
+  "edges": 7,
+  "orphans": 1
+ }
+}
