@@ -1,5 +1,6 @@
 """HTTP routes for the Bizora API."""
 
+import hashlib
 import logging
 from typing import Annotated, Any
 
@@ -15,7 +16,8 @@ from fastapi import (
     status,
 )
 from fastapi.responses import JSONResponse, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from bizora.adapters.registry import create_default_registry
@@ -30,10 +32,16 @@ from bizora.contracts.components import (
     PreflightRequest,
     RemovalPreflight,
 )
+from bizora.contracts.diagram_ir import CircuitIR, MethodologyIR, StructureIR
 from bizora.contracts.diff import GraphRevisionDiff
 from bizora.contracts.domain import GraphEntities
 from bizora.contracts.execution import AdapterSummary
-from bizora.contracts.figures import PaperFigure, ResponseUsage
+from bizora.contracts.figures import (
+    MAX_FIGURE_IMAGE_BYTES,
+    FigureAttachment,
+    PaperFigure,
+    ResponseUsage,
+)
 from bizora.contracts.graph import MethodologyGraph
 from bizora.contracts.layout import GraphLayout
 from bizora.contracts.packs import SimulationPreview
@@ -58,6 +66,10 @@ from bizora.core.component_catalog import get_component, search_components
 from bizora.core.component_service import preflight_removal, preflight_replacement
 from bizora.core.config import get_settings
 from bizora.core.copilot_service import answer_copilot_async
+from bizora.core.diagram_extraction import (
+    MuseDiagramProvider,
+    extract_paper_diagrams,
+)
 from bizora.core.diff_service import RevisionDiffService
 from bizora.core.entity_service import preview_graph, render_specs_for_graph, resolve_graph
 from bizora.core.errors import BizoraError, ErrorCode
@@ -81,6 +93,7 @@ from bizora.core.pdf import PdfText, extract_page_texts, extract_text_from_pdf
 from bizora.core.reported_service import discover_reported_metrics, reported_metrics_for_tables
 from bizora.core.run_service import ExperimentRunService
 from bizora.core.table_persistence_service import TablePersistenceService
+from bizora.db.models import PaperFigureRecord
 from bizora.db.repository import (
     artifact_record_from_row,
     experiment_run_from_record,
@@ -128,6 +141,20 @@ def get_muse_provider() -> MuseMethodologyProvider:
 
 
 MUSE_PROVIDER_DEPENDENCY = Depends(get_muse_provider)
+
+
+def get_diagram_provider() -> MuseDiagramProvider:
+    """Create the Muse diagram provider or fail clearly when unconfigured."""
+    try:
+        return MuseDiagramProvider()
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Muse credentials are missing.",
+        ) from exc
+
+
+DIAGRAM_PROVIDER_DEPENDENCY = Depends(get_diagram_provider)
 
 
 def get_fireworks_provider() -> FireworksMethodologyProvider:
@@ -1052,6 +1079,132 @@ def get_figure_image(
             detail="Figure not found.",
         )
     return Response(content=record.image_bytes, media_type=record.mime_type or "image/png")
+
+
+class DiagramValidationReport(BaseModel):
+    """Validator outcome for one diagram IR, served to the UI."""
+
+    errors: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    stats: dict[str, int] = Field(default_factory=dict)
+
+
+class PaperDiagramsResponse(BaseModel):
+    """Diagram IRs derived from one paper's persisted figures."""
+
+    methodology: MethodologyIR | None = None
+    circuits: list[CircuitIR] = Field(default_factory=list)
+    structure: StructureIR | None = None
+    validation: dict[str, DiagramValidationReport] = Field(default_factory=dict)
+    sources: dict[str, str] = Field(default_factory=dict)
+
+
+def _paper_figures_hash(records: list[PaperFigureRecord]) -> str:
+    """Hash one paper's figure bytes deterministically for the diagram cache."""
+    digest = hashlib.sha256()
+    for record in sorted(records, key=lambda item: item.figure_id):
+        digest.update(record.figure_id.encode("utf-8"))
+        digest.update(b"\x00")
+        digest.update(hashlib.sha256(record.image_bytes).digest())
+    return digest.hexdigest()
+
+
+def _diagram_attachment(record: PaperFigureRecord) -> FigureAttachment | None:
+    """Build a provider attachment, skipping figures with unusable bytes."""
+    if (
+        not record.image_bytes
+        or len(record.image_bytes) > MAX_FIGURE_IMAGE_BYTES
+        or not record.mime_type
+        or not record.mime_type.startswith("image/")
+    ):
+        return None
+    try:
+        return FigureAttachment(
+            figure_id=record.figure_id,
+            page=record.page,
+            image_bytes=record.image_bytes,
+            mime_type=record.mime_type,
+            surrounding_text=record.context[:4000] if record.context else None,
+            label_hint=record.label[:512] if record.label else None,
+            caption_hint=record.caption[:4000] if record.caption else None,
+        )
+    except ValidationError:
+        return None
+
+
+@router.get(
+    "/api/v1/papers/{paper_id}/diagrams",
+    response_model=PaperDiagramsResponse,
+    tags=["papers"],
+)
+@router.get(
+    "/papers/{paper_id}/diagrams",
+    response_model=PaperDiagramsResponse,
+    tags=["papers"],
+    include_in_schema=False,
+)
+async def get_paper_diagrams(
+    paper_id: str,
+    session: Session = DB_SESSION_DEPENDENCY,
+    provider: MuseDiagramProvider = DIAGRAM_PROVIDER_DEPENDENCY,
+) -> PaperDiagramsResponse:
+    """Derive diagram IRs from one paper's persisted figures.
+
+    paper_id is the source id assigned when the paper's figures were
+    ingested. Paper text is not persisted, so methodology and structure
+    come only from flow/structure figures here (no text fallback).
+    """
+    if not is_valid_source_id(paper_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Paper not found.",
+        )
+    statement = (
+        select(PaperFigureRecord)
+        .where(PaperFigureRecord.source_id == paper_id)
+        .order_by(
+            PaperFigureRecord.page.asc().nulls_last(),
+            PaperFigureRecord.figure_id.asc(),
+        )
+    )
+    records = list(session.scalars(statement))
+    if not records:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Paper not found.",
+        )
+    attachments = [
+        attachment
+        for record in records
+        if (attachment := _diagram_attachment(record)) is not None
+    ]
+    try:
+        diagrams = await extract_paper_diagrams(
+            provider,
+            tuple(attachments),
+            "",
+            paper_hash=_paper_figures_hash(records),
+        )
+    except MethodologyProviderError as exc:
+        logger.warning("Diagram provider failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Diagram provider failed.",
+        ) from exc
+    return PaperDiagramsResponse(
+        methodology=diagrams.methodology,
+        circuits=list(diagrams.circuits),
+        structure=diagrams.structure,
+        validation={
+            key: DiagramValidationReport(
+                errors=list(report.errors),
+                warnings=list(report.warnings),
+                stats=dict(report.stats),
+            )
+            for key, report in diagrams.validation.items()
+        },
+        sources=dict(diagrams.sources),
+    )
 
 
 @router.get(
