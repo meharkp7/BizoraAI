@@ -23,5 +23,7 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/diagram-engine"],
+  "references": [{ "path": "./tsconfig.engine.json" }]
 }

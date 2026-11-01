@@ -5,6 +5,12 @@ import { defineConfig } from "vite";
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  // The vendored diagram engine has a node-only debug probe
+  // (`process.env.DEBUG_ROUTE`); stub it so browser bundles never
+  // touch the `process` global. The engine copy stays byte-identical.
+  define: {
+    "process.env.DEBUG_ROUTE": "false",
+  },
   server: {
     port: 5173,
     proxy: {

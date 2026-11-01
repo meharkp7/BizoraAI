@@ -1,0 +1,30 @@
+{
+  // Vendored diagram engine (bizora-diagram-engine.zip -> src/diagram-engine):
+  // checked under its own project so the copy stays byte-identical to the zip.
+  // Only noUnusedParameters is relaxed (the engine ships one unused param);
+  // everything else matches the app config.
+  "compilerOptions": {
+    "composite": true,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "outDir": "./node_modules/.tmp/diagram-engine",
+    "rootDir": "./src/diagram-engine",
+    "tsBuildInfoFile": "./node_modules/.tmp/diagram-engine.tsbuildinfo",
+    "target": "es2023",
+    "lib": ["ES2023", "DOM"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "jsx": "react-jsx",
+    "strict": true,
+    "skipLibCheck": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": false,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true,
+    "types": ["node"]
+  },
+  "include": ["src/diagram-engine"]
+}
