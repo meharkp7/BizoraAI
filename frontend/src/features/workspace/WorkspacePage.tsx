@@ -638,7 +638,7 @@ function DiagramCanvas({
       return (
         <EmptyState
           title="No diagrams for this paper yet."
-          detail="Diagrams appear once the paper's figures are ingested. Open “Paper figures” below to ingest the PDF."
+          detail="Upload ingests figures and text automatically — this paper has neither, so there is nothing to derive diagrams from."
         />
       );
     }
