@@ -698,6 +698,52 @@ def test_derived_fallbacks_when_figures_yield_no_structure(tmp_path: Any) -> Non
         del os.environ["BIZORA_CACHE_DIR"]
 
 
+def test_degenerate_figure_structure_falls_back_to_derivation(tmp_path: Any) -> None:
+    import os
+
+    os.environ["BIZORA_CACHE_DIR"] = str(tmp_path)
+    try:
+        provider = ScriptedDiagramProvider()
+        provider.classifications["fig1"] = DiagramKind.FLOW
+        provider.classifications["fig2"] = DiagramKind.STRUCTURE
+        provider.figure_payloads[("fig1", "flow")] = make_methodology_payload()
+        provider.figure_payloads[("fig2", "structure")] = {
+            "version": 1,
+            "title": "blocks",
+            "root": {
+                "id": "root", "label": "blocks", "kind": "array",
+                "count": {"rows": 8, "cols": 2},
+                "confidence": 0.9,
+                "children": [
+                    {"id": "cell", "label": "cell", "kind": "cell",
+                     "confidence": 0.7, "children": []}
+                ],
+            },
+        }
+
+        async def run_test() -> None:
+            result = await extract_paper_diagrams(
+                provider,
+                [make_figure("fig1"), make_figure("fig2")],
+                "",
+                paper_hash="d" * 64,
+            )
+
+            # One drawable box: the engine would refuse it, so the
+            # methodology derivation takes over with an honest warning.
+            assert result.structure is not None
+            assert result.structure.title == "flow (system structure)"
+            assert result.sources["structure"] == "derived:methodology"
+            assert any(
+                "below the engine minimum" in note
+                for note in result.validation["structure"].warnings
+            )
+
+        asyncio.run(run_test())
+    finally:
+        del os.environ["BIZORA_CACHE_DIR"]
+
+
 def test_figure_circuits_skip_derivation(tmp_path: Any) -> None:
     import os
 

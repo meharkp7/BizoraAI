@@ -251,3 +251,37 @@ def methodology_to_structure(methodology: MethodologyIR) -> StructureIR | None:
         title=_truncate(f"{methodology.title} (system structure)", 512),
         root=root,
     )
+
+
+#: Engine minimum: buildStructureSafe refuses scenes with fewer than two
+#: boxes ("no physical structure could be built from this IR").
+ENGINE_MIN_BOXES = 2
+
+
+def structure_drawable_boxes(structure: StructureIR) -> int:
+    """Count the boxes the engine would draw for a structure IR.
+
+    Mirrors buildStructureScene's three paths (array / layer-row / grid)
+    so the pipeline can tell a drawable transcription from a degenerate
+    one before serving it. Pure shape math over the IR: no domain
+    knowledge, no paper-specific constants.
+    """
+    root = structure.root
+    kids = root.children
+    array = next((kid for kid in kids if kid.kind == BlockKind.ARRAY), None)
+    if array is not None:
+        rows, cols = (1, 1)
+        if isinstance(array.count, int):
+            rows, cols = (1, array.count)
+        elif array.count is not None:
+            rows, cols = (array.count.rows, array.count.cols)
+        return 1 + rows * cols + (len(kids) - 1)
+    if kids and all(kid.tensor_shape or kid.kind == BlockKind.LAYER for kid in kids):
+        return 1 + len(kids)
+    plate = 1 if root.kind in (
+        BlockKind.CHIP,
+        BlockKind.BOARD,
+        BlockKind.MODULE,
+        BlockKind.REGION,
+    ) else 0
+    return plate + len(kids)

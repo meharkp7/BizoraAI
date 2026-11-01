@@ -3,6 +3,8 @@
 import pytest
 
 from bizora.contracts.diagram_ir import (
+    ArrayCount,
+    BlockKind,
     ComponentType,
     MethodologyEdge,
     MethodologyEvidence,
@@ -10,11 +12,15 @@ from bizora.contracts.diagram_ir import (
     MethodologyIR,
     MethodologyNode,
     MethodologyNodeKind,
+    StructureBlock,
+    StructureIR,
 )
 from bizora.core.diagram_derivation import (
     DERIVED_CONFIDENCE,
+    ENGINE_MIN_BOXES,
     methodology_to_circuit,
     methodology_to_structure,
+    structure_drawable_boxes,
 )
 from bizora.core.diagram_validation import validate_diagram
 
@@ -195,3 +201,77 @@ def test_derived_labels_survive_long_text(derived: str) -> None:
         assert result is not None
         assert len(result.title) <= 512
         assert validate_diagram(result).errors == ()
+
+
+def make_block(kind: BlockKind, **overrides: object) -> StructureBlock:
+    base: dict[str, object] = {
+        "id": f"{kind.value}-1",
+        "label": kind.value,
+        "kind": kind,
+        "confidence": 0.8,
+        "children": (),
+    }
+    base.update(overrides)
+    return StructureBlock.model_validate(base)
+
+
+def test_drawable_boxes_mirrors_engine_paths() -> None:
+    cell = make_block(BlockKind.CELL, id="cell")
+    # Array-rooted transcription with a lone cell: grid path, no plate.
+    lone = StructureIR(
+        version=1,
+        title="lone",
+        root=make_block(BlockKind.ARRAY, id="root", children=(cell,)),
+    )
+    assert structure_drawable_boxes(lone) == 1
+    assert structure_drawable_boxes(lone) < ENGINE_MIN_BOXES
+    # Module frame with one part: plate plus the part.
+    framed = StructureIR(
+        version=1,
+        title="framed",
+        root=make_block(
+            BlockKind.MODULE,
+            id="root",
+            children=(make_block(BlockKind.PART, id="p1"),),
+        ),
+    )
+    assert structure_drawable_boxes(framed) == 2
+    # Array child expands by rows x cols, plus plate and peripherals.
+    arrayed = StructureIR(
+        version=1,
+        title="arrayed",
+        root=make_block(
+            BlockKind.CHIP,
+            id="root",
+            children=(
+                make_block(
+                    BlockKind.ARRAY,
+                    id="arr",
+                    count=ArrayCount(rows=8, cols=2),
+                    children=(cell,),
+                ),
+                make_block(BlockKind.PERIPHERY, id="per"),
+            ),
+        ),
+    )
+    assert structure_drawable_boxes(arrayed) == 1 + 16 + 1
+    # Layer rows draw a region plate plus every layer.
+    layered = StructureIR(
+        version=1,
+        title="layered",
+        root=make_block(
+            BlockKind.REGION,
+            id="root",
+            children=tuple(
+                make_block(BlockKind.LAYER, id=f"l{i}") for i in range(3)
+            ),
+        ),
+    )
+    assert structure_drawable_boxes(layered) == 4
+
+
+def test_derived_structure_always_meets_engine_minimum() -> None:
+    derived = methodology_to_structure(make_methodology())
+
+    assert derived is not None
+    assert structure_drawable_boxes(derived) >= ENGINE_MIN_BOXES

@@ -42,8 +42,10 @@ from bizora.contracts.diagram_ir import (
 )
 from bizora.contracts.figures import FigureAttachment, ResponseUsage
 from bizora.core.diagram_derivation import (
+    ENGINE_MIN_BOXES,
     methodology_to_circuit,
     methodology_to_structure,
+    structure_drawable_boxes,
 )
 from bizora.core.diagram_validation import (
     DiagramValidationResult,
@@ -728,14 +730,36 @@ async def extract_paper_diagrams(
             )
             sources["circuit:derived"] = "derived:methodology"
 
+    if (
+        structure is not None
+        and methodology is not None
+        and structure_drawable_boxes(structure) < ENGINE_MIN_BOXES
+    ):
+        # A lone cell or an empty frame draws nothing: the engine would
+        # refuse it, so the methodology derivation below takes over and
+        # the warning says so honestly.
+        report = validation.get("structure", DiagramValidationResult())
+        validation["structure"] = DiagramValidationResult(
+            errors=report.errors,
+            warnings=report.warnings
+            + (
+                "Transcribed structure below the engine minimum "
+                "(fewer than two boxes); derived from the methodology flow instead.",
+            ),
+            stats=report.stats,
+        )
+        structure = None
+
     if structure is None and methodology is not None:
         derived_structure = methodology_to_structure(methodology)
         if derived_structure is not None:
             structure = derived_structure
             report = validate_diagram(derived_structure)
+            prior = validation.get("structure", DiagramValidationResult())
             validation["structure"] = DiagramValidationResult(
                 errors=report.errors,
-                warnings=report.warnings
+                warnings=prior.warnings
+                + report.warnings
                 + (
                     "Structure derived from the methodology flow "
                     "(no physical structure in the paper).",
