@@ -117,6 +117,35 @@ describe("wireRoute", () => {
     );
   });
 
+  it("reaches pin copper at a large block's edge", () => {
+    // Block centers sit 90+ units from their edge copper: beyond the
+    // pin-scale window, reachable only through the span window. The
+    // wire doglegs so the route must bend instead of cutting across.
+    const d = "M 180,50 L 250,50 L 250,120 L 320,120";
+    const spans = [
+      { x: 0, y: 0, w: 180, h: 100 },
+      { x: 320, y: 0, w: 180, h: 100 },
+    ];
+    const from = { x: 90, y: 50 };
+    const to = { x: 410, y: 50 };
+    expect(routeAlongWires(d, from, to)).toBeNull();
+    const route = routeAlongWires(d, from, to, spans);
+    expect(route).not.toBeNull();
+    expect(route![0]).toEqual(from);
+    expect(route![route!.length - 1]).toEqual(to);
+    expect(route).toContainEqual({ x: 250, y: 50 });
+    expect(route).toContainEqual({ x: 250, y: 120 });
+  });
+
+  it("keeps far-apart blocks unroutable despite span windows", () => {
+    const d = "M 0,0 L 10,0 M 1000,1000 L 1010,1000";
+    const spans = [
+      { x: -80, y: -80, w: 180, h: 180 },
+      { x: 920, y: 920, w: 180, h: 180 },
+    ];
+    expect(routeAlongWires(d, { x: 10, y: 10 }, { x: 990, y: 990 }, spans)).toBeNull();
+  });
+
   it("walks polylines at constant distance", () => {
     const line = [
       { x: 0, y: 0 },

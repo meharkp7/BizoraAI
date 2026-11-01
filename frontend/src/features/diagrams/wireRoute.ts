@@ -132,13 +132,33 @@ function stitchDevices(graph: WireGraph, spans: DeviceSpan[]): void {
 }
 
 /** A snap is the glide from a component center to its own pin
- *  copper: pin-scale, tens of SVG units. Densified nodes sit along
- *  every run, so honest snaps stay small; anything beyond this is
- *  another part of the circuit, not a snap candidate. This bound is
- *  also what keeps disconnected endpoints unroutable: a wide window
- *  would let the route ride one island and air-jump the gap inside
- *  the goal snap, connected-looking but a lie. */
+ *  copper. For small symbols that is pin-scale, tens of SVG units;
+ *  for a large block it reaches the block's own edge. Each endpoint
+ *  gets the window of the device span it sits in, so big blocks
+ *  route along their wires instead of fading across. The window
+ *  only admits candidates — lexicographic pick still prefers the
+ *  nearest connected copper — and copper beyond your own body plus
+ *  margin stays out, which keeps disconnected endpoints
+ *  unroutable: a wide window would let the route ride one island
+ *  and air-jump the gap inside the goal snap, connected-looking
+ *  but a lie. */
 const MAX_SNAP = 40;
+
+function windowFor(spans: DeviceSpan[], point: WirePoint): number {
+  const pad = 3;
+  let window = MAX_SNAP;
+  for (const span of spans) {
+    if (
+      point.x >= span.x - pad &&
+      point.x <= span.x + span.w + pad &&
+      point.y >= span.y - pad &&
+      point.y <= span.y + span.h + pad
+    ) {
+      window = Math.max(window, MAX_SNAP + Math.max(span.w, span.h) / 2);
+    }
+  }
+  return window;
+}
 
 /** K nearest graph nodes within snap range: the closest copper to a
  *  component center is often a dead stub (supply rails, open pins),
@@ -147,11 +167,12 @@ function nearestNodes(
   graph: WireGraph,
   point: WirePoint,
   count: number,
+  maxSnap: number,
 ): { key: string; snap: number }[] {
   const ranked: { key: string; snap: number }[] = [];
   for (const [key, node] of graph.points) {
     const snap = dist(node, point);
-    if (snap <= MAX_SNAP) ranked.push({ key, snap });
+    if (snap <= maxSnap) ranked.push({ key, snap });
   }
   ranked.sort((a, b) => a.snap - b.snap);
   return ranked.slice(0, count);
@@ -202,21 +223,22 @@ export function routeAlongWires(
 ): WirePoint[] | null {
   const graph = buildWireGraph(d);
   if (graph.points.size === 0) return null;
-  const copper = tryRoute(graph, from, to);
+  const copper = tryRoute(graph, from, to, spans);
   if (copper || spans.length === 0) return copper;
   stitchDevices(graph, spans);
-  return tryRoute(graph, from, to);
+  return tryRoute(graph, from, to, spans);
 }
 
 function tryRoute(
   graph: WireGraph,
   from: WirePoint,
   to: WirePoint,
+  spans: DeviceSpan[],
 ): WirePoint[] | null {
   // Sixteen candidates comfortably cover every pin stub around a
   // component, so the live net wins over closer dead copper.
-  const starts = nearestNodes(graph, from, 16);
-  const goals = nearestNodes(graph, to, 16);
+  const starts = nearestNodes(graph, from, 16, windowFor(spans, from));
+  const goals = nearestNodes(graph, to, 16, windowFor(spans, to));
   // Lexicographic pick: nearest connected copper first, shortest
   // wire second. Densified nodes sit everywhere, so a flat
   // snap+wire total would let a far node plus a short wire beat
