@@ -30,17 +30,29 @@ from bizora.contracts.diagram_ir import (
     STRUCTURE_IR_JSON_SCHEMA,
     CircuitIR,
     MethodologyIR,
+    MethodologyNode,
     StructureIR,
 )
 from bizora.contracts.figures import FigureAttachment, ResponseUsage
 from bizora.core.diagram_validation import (
     DiagramValidationResult,
+    normalize_structure_layout,
     validate_diagram,
+)
+from bizora.core.diagram_whatif import (
+    WHATIF_INSTRUCTIONS,
+    WHATIF_RESULT_JSON_SCHEMA,
+    WhatIfResult,
+    whatif_prompt,
 )
 from bizora.providers.base import MethodologyProviderError
 from bizora.providers.muse import MuseMethodologyProvider, MuseProviderError
 
-PROMPT_VERSION = 1
+# Bumped when prompt wording changes render-critical output: v2 pins the
+# renderer orientation convention (MOSFET rot-0, inverter apex rule);
+# v3 captures stated per-step settings into methodology params so the
+# what-if editor has knobs to turn.
+PROMPT_VERSION = 3
 
 FigureIRKind = Literal["circuit", "flow", "structure"]
 TextIRKind = Literal["methodology", "structure"]
@@ -161,6 +173,15 @@ class DiagramVisionProvider(Protocol):
         errors: tuple[str, ...],
     ) -> DiagramIRDraft:
         """Fix one text-derived IR given validator errors."""
+        ...
+
+    async def evaluate_what_if(
+        self,
+        node: MethodologyNode,
+        new_params: dict[str, str],
+        paper_text: str,
+    ) -> WhatIfResult:
+        """Estimate the outcome of a step under modified settings."""
         ...
 
 
@@ -596,9 +617,19 @@ async def extract_paper_diagrams(
             validation[f"circuit:{result.figure_id}"] = result.validation
             sources[f"circuit:{result.figure_id}"] = f"figure:{result.figure_id}"
 
+    # Figure methodology/structure IRs that still carry validation
+    # errors are set aside (report kept under a suffixed key) so the
+    # text fallback below can serve a renderable IR instead. Circuits
+    # have no fallback and are always served with their report.
     methodology: MethodologyIR | None = None
     for result in figure_results:
         if result.kind is DiagramKind.FLOW and isinstance(result.ir, MethodologyIR):
+            if result.validation.errors:
+                validation[f"methodology:figure:{result.figure_id}"] = result.validation
+                sources[f"methodology:figure:{result.figure_id}"] = (
+                    f"figure:{result.figure_id}"
+                )
+                continue
             methodology = result.ir
             validation["methodology"] = result.validation
             sources["methodology"] = f"figure:{result.figure_id}"
@@ -607,6 +638,12 @@ async def extract_paper_diagrams(
     structure: StructureIR | None = None
     for result in figure_results:
         if result.kind is DiagramKind.STRUCTURE and isinstance(result.ir, StructureIR):
+            if result.validation.errors:
+                validation[f"structure:figure:{result.figure_id}"] = result.validation
+                sources[f"structure:figure:{result.figure_id}"] = (
+                    f"figure:{result.figure_id}"
+                )
+                continue
             structure = result.ir
             validation["structure"] = result.validation
             sources["structure"] = f"figure:{result.figure_id}"
@@ -629,6 +666,16 @@ async def extract_paper_diagrams(
             structure = text_result.structure
             validation["structure"] = text_result.structure_validation
             sources["structure"] = "text"
+
+    if structure is not None:
+        structure, layout_notes = normalize_structure_layout(structure)
+        if layout_notes:
+            report = validation.get("structure", DiagramValidationResult())
+            validation["structure"] = DiagramValidationResult(
+                errors=report.errors,
+                warnings=report.warnings + layout_notes,
+                stats=report.stats,
+            )
 
     return PaperDiagrams(
         methodology=methodology,
@@ -701,10 +748,26 @@ _CIRCUIT_INSTRUCTIONS = (
     "exactly 'global'). External terminals become ports with dir "
     "(in, out, inout) and side (left, right, up, down). Coordinates are "
     "normalized 0-100 over the figure (x right, y down): set placement "
-    "from where each element actually appears, and rot to 0, 90, 180, "
-    "or 270 as drawn. Give low confidence for uncertain readings and "
-    "quote printed labels in evidence. Set version to 1. Output ONLY "
-    "the JSON object: no markdown, no commentary, no extra keys."
+    "from where each element actually appears. Orientation convention, "
+    "matching the renderer exactly: at rot 0 with no mirror or flip, a "
+    "MOSFET's gate exits left, drain up, source down; an inverter or "
+    "buffer points right (in left, out right); two-terminal parts "
+    "stand vertical with the first pin up. For an inverter or buffer, "
+    "locate the triangle's apex: the apex, usually carrying the output "
+    "bubble, points toward the out-net wire, and the flat side faces "
+    "the in-net wire. Trace both wires explicitly: the wire touching "
+    "the flat side is in, the wire touching the bubble is out; never "
+    "assign in/out from left/right position alone. Record the observed "
+    "bubble side (for example 'bubble on the left of the triangle') in "
+    "the evidence quote. Set rot (0, 90, 180, 270), mirror, and flip so "
+    "every pin exits toward its drawn wire: a PMOS whose source wire "
+    "leaves upward needs flip true at rot 0, and a left-pointing "
+    "inverter needs rot 180. When a symbol's drawn "
+    "orientation is ambiguous, choose the orientation whose pins best "
+    "meet the drawn wires and lower the confidence. Give low "
+    "confidence for uncertain readings and quote printed labels in "
+    "evidence. Set version to 1. Output ONLY the JSON object: no "
+    "markdown, no commentary, no extra keys."
 )
 
 _FLOW_INSTRUCTIONS = (
@@ -713,7 +776,9 @@ _FLOW_INSTRUCTIONS = (
     "ONLY what is drawn: every box becomes one node with id, label "
     "copied from the printed text, kind (input, process, decision, "
     "store, model, evaluation, dataset, output), optional group, detail, "
-    "params, and confidence between 0 and 1; every arrow becomes one "
+    "params, and confidence between 0 and 1; copy printed settings into "
+    "params as string key/value pairs with snake_case keys, leaving it "
+    "empty when the box prints none; every arrow becomes one "
     "edge with from/to node ids, optional label, and kind (data, "
     "control, feedback; the JSON key for the source node is exactly "
     "'from'). Grouped or swimlane regions become groups with id, label, "
@@ -746,7 +811,12 @@ _METHODOLOGY_TEXT_INSTRUCTIONS = (
     "node with id, label, kind (input, process, decision, store, model, "
     "evaluation, dataset, output), optional group, detail, params, "
     "confidence between 0 and 1, and evidence with the page number "
-    "from [Page N] markers and a short supporting quote. Connect steps "
+    "from [Page N] markers and a short supporting quote. For each "
+    "step, copy every numeric setting and named configuration the text "
+    "states for that step into params as string key/value pairs, keys "
+    "in snake_case (for example cell_count '2000', technology 'TSMC "
+    "65nm', supply_vdd '0.9V', tilt_step_mv '10'); leave params empty "
+    "only when the text states no settings for the step. Connect steps "
     "with edges carrying from/to node ids, optional label, and kind "
     "(data, control, feedback; the JSON key for the source node is "
     "exactly 'from'). Never invent steps, parameters, or connections; "
@@ -943,6 +1013,34 @@ class MuseDiagramProvider(MuseMethodologyProvider):
             ) from exc
         return DiagramIRDraft(ir=ir, usage=self.last_usage)
 
+    async def evaluate_what_if(
+        self,
+        node: MethodologyNode,
+        new_params: dict[str, str],
+        paper_text: str,
+    ) -> WhatIfResult:
+        """Estimate the outcome of a step under modified settings."""
+        content = [
+            {
+                "type": "input_text",
+                "text": whatif_prompt(node, new_params, paper_text),
+            }
+        ]
+        try:
+            data = await self._create_response(
+                instructions=WHATIF_INSTRUCTIONS,
+                content=content,
+                schema_name="WhatIfResult",
+                schema=WHATIF_RESULT_JSON_SCHEMA,
+            )
+            raw = self._response_json_object(data, what="what-if evaluation")
+            result = WhatIfResult.model_validate(raw)
+        except (MuseProviderError, ValidationError) as exc:
+            raise DiagramProviderError(
+                f"Muse what-if evaluation failed ({exc})."
+            ) from exc
+        return result
+
 
 def _figure_extraction_params(kind: FigureIRKind) -> tuple[str, str, dict[str, Any]]:
     if kind == "circuit":
@@ -970,11 +1068,33 @@ def _text_extraction_params(kind: TextIRKind) -> tuple[str, str, dict[str, Any]]
     )
 
 
+def _normalize_evidence_lists(node: Any) -> Any:
+    """Coerce unambiguous evidence shapes the model sometimes emits.
+
+    Single-item evidence lists carry exactly one reading, so they fold
+    to that object; empty lists mean no evidence. Anything else passes
+    through untouched and still fails validation loudly.
+    """
+    if isinstance(node, dict):
+        normalized = {key: _normalize_evidence_lists(value) for key, value in node.items()}
+        evidence = normalized.get("evidence")
+        if isinstance(evidence, list):
+            if len(evidence) == 0:
+                normalized["evidence"] = None
+            elif len(evidence) == 1:
+                normalized["evidence"] = evidence[0]
+        return normalized
+    if isinstance(node, list):
+        return [_normalize_evidence_lists(item) for item in node]
+    return node
+
+
 def _parse_figure_ir(
     kind: FigureIRKind, raw: Any, figure: FigureAttachment
 ) -> CircuitIR | MethodologyIR | StructureIR:
     if not isinstance(raw, dict):
         raise DiagramProviderError("Muse output must be a JSON object.")
+    raw = _normalize_evidence_lists(raw)
     if kind == "circuit":
         source = raw.get("source")
         if not isinstance(source, dict):
@@ -994,6 +1114,7 @@ def _parse_text_ir(
 ) -> MethodologyIR | StructureIR:
     if not isinstance(raw, dict):
         raise DiagramProviderError("Muse output must be a JSON object.")
+    raw = _normalize_evidence_lists(raw)
     if kind == "methodology":
         return MethodologyIR.model_validate(raw)
     return StructureIR.model_validate(raw)

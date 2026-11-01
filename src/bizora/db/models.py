@@ -265,3 +265,40 @@ class PaperFigureRecord(Base):
         server_default=func.now(),
         nullable=False,
     )
+
+
+class PaperTextRecord(Base):
+    """One paper's extracted page text, keyed by source.
+
+    Figure ingest stores this alongside the figures so text-derived
+    diagrams (methodology, structure) keep working for papers whose
+    figures hold no flow or structure drawing. Text carries [Page N]
+    markers so extracted IRs can cite evidence pages.
+    """
+
+    __tablename__ = "paper_texts"
+    __table_args__ = (
+        UniqueConstraint(
+            "project_id",
+            "graph_id",
+            "source_id",
+            name="uq_paper_text_project_graph_source",
+        ),
+        Index("ix_paper_text_source", "source_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    graph_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    source_id: Mapped[str] = mapped_column(Text, nullable=False)
+    created_by: Mapped[str] = mapped_column(String(128), nullable=False)
+
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    page_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )

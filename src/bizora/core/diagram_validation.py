@@ -11,6 +11,8 @@ from dataclasses import dataclass, field
 
 from bizora.contracts.diagram_ir import (
     ArrayCount,
+    BlockKind,
+    BlockPosition,
     CircuitIR,
     ComponentType,
     MethodologyIR,
@@ -286,6 +288,23 @@ def validate_structure(ir: StructureIR) -> DiagramValidationResult:
                         f"block '{block.id}' dims.{name} must be > 0, got {value}"
                     )
 
+    root = ir.root
+    if root.kind == "array" and not isinstance(root.count, ArrayCount):
+        others = [
+            child
+            for child in root.children
+            if child.kind not in ("cell", "part")
+        ]
+        if not others:
+            count_note = (
+                f"count {root.count}" if root.count is not None else "no count"
+            )
+            errors.append(
+                f"block '{root.id}' is an array root without a rows/cols "
+                f"grid and no other blocks: {count_note} alone "
+                "cannot render"
+            )
+
     stats = {
         "blocks": len(walked),
         "max_depth": max((depth for _, depth in walked), default=0),
@@ -294,6 +313,81 @@ def validate_structure(ir: StructureIR) -> DiagramValidationResult:
     return DiagramValidationResult(
         errors=tuple(errors), warnings=tuple(warnings), stats=stats
     )
+
+
+_ARRANGE_SIDES: tuple[BlockPosition, ...] = (
+    BlockPosition.BOTTOM,
+    BlockPosition.RIGHT,
+    BlockPosition.LEFT,
+    BlockPosition.TOP,
+)
+
+
+def normalize_structure_layout(
+    ir: StructureIR,
+) -> tuple[StructureIR, tuple[str, ...]]:
+    """Arrange one structure tree for the renderer without changing content.
+
+    The scene builder draws the first root-level array as the main field
+    and every other root block as a side strip: non-cell children nested
+    under an array never render, and side strips without a position all
+    collapse onto the same edge. So shared blocks nested under an array
+    move to the root (nothing else about them changes) and unplaced root
+    blocks take distinct illustrative sides. Every adjustment is reported
+    in the returned notes, which the endpoint surfaces as warnings.
+    """
+    notes: list[str] = []
+    hoisted: list[StructureBlock] = []
+
+    def arrange(block: StructureBlock, *, is_root: bool) -> StructureBlock:
+        kids = tuple(arrange(child, is_root=False) for child in block.children)
+        if (
+            not is_root
+            and block.kind == BlockKind.ARRAY
+            and any(child.kind == BlockKind.CELL for child in kids)
+        ):
+            kept = tuple(c for c in kids if c.kind == BlockKind.CELL)
+            rest = [c for c in kids if c.kind != BlockKind.CELL]
+            for extra in rest:
+                notes.append(
+                    f"block '{extra.id}' nested under array '{block.id}' "
+                    "cannot render there; shown at chip level."
+                )
+            hoisted.extend(rest)
+            kids = kept
+        if kids != block.children:
+            return block.model_copy(update={"children": kids})
+        return block
+
+    root = arrange(ir.root, is_root=True)
+    kids = tuple(root.children) + tuple(hoisted)
+    main = next((c for c in kids if c.kind == BlockKind.ARRAY), None)
+    taken = {c.pos for c in kids if c.pos is not None}
+    cycle = [side for side in _ARRANGE_SIDES if side not in taken]
+    need = [
+        index
+        for index, child in enumerate(kids)
+        if child is not main
+        and child.kind != BlockKind.CELL
+        and child.pos is None
+    ]
+    if need:
+        updated = list(kids)
+        names: list[str] = []
+        for order, index in enumerate(need):
+            pool = cycle or list(_ARRANGE_SIDES)
+            side = pool[order % len(pool)]
+            updated[index] = kids[index].model_copy(update={"pos": side})
+            names.append(f"'{kids[index].id}'")
+        kids = tuple(updated)
+        notes.append(
+            f"arrangement of {', '.join(names)} not stated; "
+            "placed illustratively."
+        )
+    if kids != root.children or hoisted:
+        root = root.model_copy(update={"children": kids})
+    arranged = ir.model_copy(update={"root": root})
+    return arranged, tuple(notes)
 
 
 def validate_diagram(

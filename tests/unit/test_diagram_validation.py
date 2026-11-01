@@ -8,6 +8,7 @@ from bizora.contracts.diagram_ir import (
     StructureIR,
 )
 from bizora.core.diagram_validation import (
+    normalize_structure_layout,
     validate_circuit,
     validate_diagram,
     validate_methodology,
@@ -342,7 +343,185 @@ def test_structure_non_positive_dims_are_errors() -> None:
     assert any("dims.h" in e for e in result.errors)
 
 
+def test_structure_array_root_without_grid_is_error() -> None:
+    parsed = StructureIR.model_validate(
+        {
+            "version": 1,
+            "title": "array only",
+            "root": {
+                "id": "arr",
+                "label": "array",
+                "kind": "array",
+                "count": 2000,
+                "confidence": 0.8,
+                "children": [
+                    {
+                        "id": "cell",
+                        "label": "cell",
+                        "kind": "cell",
+                        "confidence": 0.7,
+                        "children": [],
+                    }
+                ],
+            },
+        }
+    )
+
+    result = validate_structure(parsed)
+
+    assert any("without a rows/cols grid" in e for e in result.errors)
+
+
+def test_structure_array_root_with_grid_or_blocks_is_clean() -> None:
+    grid = StructureIR.model_validate(
+        {
+            "version": 1,
+            "title": "array grid",
+            "root": {
+                "id": "arr",
+                "label": "array",
+                "kind": "array",
+                "count": {"rows": 5, "cols": 400},
+                "confidence": 0.8,
+                "children": [
+                    {
+                        "id": "cell",
+                        "label": "cell",
+                        "kind": "cell",
+                        "confidence": 0.7,
+                        "children": [],
+                    }
+                ],
+            },
+        }
+    )
+    assert validate_structure(grid).errors == ()
+
+    slab = StructureIR.model_validate(
+        {
+            "version": 1,
+            "title": "array slab",
+            "root": {
+                "id": "arr",
+                "label": "array",
+                "kind": "array",
+                "count": 2000,
+                "confidence": 0.8,
+                "children": [
+                    {
+                        "id": "cell",
+                        "label": "cell",
+                        "kind": "cell",
+                        "confidence": 0.7,
+                        "children": [],
+                    },
+                    {
+                        "id": "peri",
+                        "label": "periphery",
+                        "kind": "periphery",
+                        "confidence": 0.6,
+                        "children": [],
+                    },
+                ],
+            },
+        }
+    )
+    assert validate_structure(slab).errors == ()
+
+
 def test_validate_diagram_dispatches() -> None:
     assert validate_diagram(make_circuit()).stats["components"] == 3
     assert validate_diagram(make_methodology()).stats["nodes"] == 2
     assert validate_diagram(make_block()).stats["blocks"] == 3
+
+
+def make_nested_structure() -> StructureIR:
+    return StructureIR.model_validate(
+        {
+            "version": 1,
+            "title": "chip",
+            "root": {
+                "id": "chip",
+                "label": "chip",
+                "kind": "chip",
+                "confidence": 0.9,
+                "children": [
+                    {
+                        "id": "arr",
+                        "label": "array",
+                        "kind": "array",
+                        "count": {"rows": 4, "cols": 4},
+                        "confidence": 0.8,
+                        "children": [
+                            {
+                                "id": "cell",
+                                "label": "cell",
+                                "kind": "cell",
+                                "confidence": 0.7,
+                                "children": [],
+                            },
+                            {
+                                "id": "gate",
+                                "label": "OR gate",
+                                "kind": "periphery",
+                                "confidence": 0.8,
+                                "children": [],
+                            },
+                        ],
+                    },
+                    {
+                        "id": "ro",
+                        "label": "readout",
+                        "kind": "periphery",
+                        "confidence": 0.8,
+                        "children": [],
+                    },
+                ],
+            },
+        }
+    )
+
+
+def test_layout_hoists_shared_logic_from_arrays_to_root() -> None:
+    arranged, notes = normalize_structure_layout(make_nested_structure())
+
+    array = next(c for c in arranged.root.children if c.id == "arr")
+    assert [c.id for c in array.children] == ["cell"]
+    assert [c.id for c in arranged.root.children] == ["arr", "ro", "gate"]
+    assert any("'gate'" in note for note in notes)
+
+
+def test_layout_assigns_distinct_sides_to_unplaced_blocks() -> None:
+    arranged, notes = normalize_structure_layout(make_nested_structure())
+
+    by_id = {c.id: c for c in arranged.root.children}
+    assert by_id["arr"].pos is None
+    assert by_id["ro"].pos == "bottom"
+    assert by_id["gate"].pos == "right"
+    assert any("illustratively" in note for note in notes)
+
+
+def test_layout_keeps_explicit_pos_and_skips_taken_sides() -> None:
+    ir = make_nested_structure()
+    kids = tuple(
+        c.model_copy(update={"pos": "bottom"}) if c.id == "ro" else c
+        for c in ir.root.children
+    )
+    ir = ir.model_copy(
+        update={"root": ir.root.model_copy(update={"children": kids})}
+    )
+
+    arranged, _ = normalize_structure_layout(ir)
+
+    by_id = {c.id: c for c in arranged.root.children}
+    assert by_id["ro"].pos == "bottom"
+    assert by_id["gate"].pos == "right"
+
+
+def test_layout_leaves_placed_trees_untouched() -> None:
+    ir = make_block()
+
+    arranged, notes = normalize_structure_layout(ir)
+
+    assert arranged == ir
+    assert notes == ()

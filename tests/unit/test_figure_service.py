@@ -22,10 +22,14 @@ from bizora.contracts.figures import (
     build_region_set,
 )
 from bizora.contracts.graph import GraphNode, MethodologyGraph, NodeKind
-from bizora.core.figure_service import ingest_paper_figures, list_graph_figures
+from bizora.core.figure_service import (
+    ingest_paper_figures,
+    list_graph_figures,
+    marked_paper_text,
+)
 from bizora.core.pdf import extract_page_texts
 from bizora.db.base import Base
-from bizora.db.repository import get_paper_figure
+from bizora.db.repository import get_paper_figure, get_paper_text
 
 
 @pytest.fixture
@@ -197,5 +201,73 @@ def test_ingest_without_images_yields_empty_report(db_session: Session) -> None:
         assert report.figures == ()
         assert provider.describe_calls == 0
         assert provider.localize_calls == 0
+
+    asyncio.run(run_test())
+
+
+def test_marked_paper_text_carries_page_markers() -> None:
+    pdf = make_fake_pdf_with_images(1, text="Load data.")
+    marked = marked_paper_text(extract_page_texts(pdf))
+    assert marked.startswith("[Page 1]\n")
+    assert "Load data." in marked
+
+
+def test_ingest_persists_paper_text(db_session: Session) -> None:
+    async def run_test() -> None:
+        pdf = make_fake_pdf_with_images(2, text="See Figure 1 and Figure 2.")
+        await ingest_paper_figures(
+            db_session,
+            graph=make_graph(),
+            pdf_bytes=pdf,
+            page_texts=extract_page_texts(pdf),
+            source_id="paper-1",
+            created_by="researcher-1",
+            provider=StubVisionProvider(),
+        )
+        stored = get_paper_text(db_session, source_id="paper-1")
+        assert stored is not None
+        assert stored.startswith("[Page 1]\n")
+        assert "See Figure 1 and Figure 2." in stored
+
+    asyncio.run(run_test())
+
+
+def test_ingest_without_images_still_persists_paper_text(db_session: Session) -> None:
+    async def run_test() -> None:
+        pdf = make_fake_pdf_with_images(0, text="No figures here.")
+        await ingest_paper_figures(
+            db_session,
+            graph=make_graph(),
+            pdf_bytes=pdf,
+            page_texts=extract_page_texts(pdf),
+            source_id="paper-1",
+            created_by="researcher-1",
+            provider=StubVisionProvider(),
+        )
+        assert get_paper_text(db_session, source_id="paper-1") is not None
+
+    asyncio.run(run_test())
+
+
+def test_reingest_replaces_paper_text(db_session: Session) -> None:
+    async def run_test() -> None:
+        provider = StubVisionProvider()
+        for text in ("First version.", "Second version."):
+            pdf = make_fake_pdf_with_images(0, text=text)
+            await ingest_paper_figures(
+                db_session,
+                graph=make_graph(),
+                pdf_bytes=pdf,
+                page_texts=extract_page_texts(pdf),
+                source_id="paper-1",
+                created_by="researcher-1",
+                provider=provider,
+            )
+        stored = get_paper_text(db_session, source_id="paper-1")
+        assert stored is not None
+        assert "Second version." in stored
+        assert "First version." not in stored
+
+    asyncio.run(run_test())
 
     asyncio.run(run_test())

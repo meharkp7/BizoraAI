@@ -31,6 +31,7 @@ from bizora.db.models import (
     GraphRevisionRecord,
     MetricRecordRow,
     PaperFigureRecord,
+    PaperTextRecord,
 )
 
 
@@ -764,3 +765,57 @@ def delete_paper_figures(session: Session, *, project_id: str, graph_id: str) ->
         session.delete(row)
     session.flush()
     return len(rows)
+
+
+def save_paper_text(
+    session: Session,
+    *,
+    project_id: str,
+    graph_id: str,
+    source_id: str,
+    created_by: str,
+    text: str,
+    page_count: int | None,
+) -> PaperTextRecord:
+    """Upsert one paper's extracted page text without committing.
+
+    Re-ingest replaces the text so diagrams always read the current
+    PDF. Empty text is stored as-is: callers treat blank text as
+    absent rather than inventing a fallback.
+    """
+    statement = select(PaperTextRecord).where(
+        PaperTextRecord.project_id == project_id,
+        PaperTextRecord.graph_id == graph_id,
+        PaperTextRecord.source_id == source_id,
+    )
+    record = session.scalars(statement).first()
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    if record is None:
+        record = PaperTextRecord(
+            project_id=project_id,
+            graph_id=graph_id,
+            source_id=source_id,
+            created_by=created_by,
+            text=text,
+            page_count=page_count,
+            sha256=digest,
+        )
+        session.add(record)
+    else:
+        record.text = text
+        record.page_count = page_count
+        record.sha256 = digest
+        record.created_by = created_by
+    session.flush()
+    return record
+
+
+def get_paper_text(session: Session, *, source_id: str) -> str | None:
+    """Fetch one paper's extracted page text, or None when absent."""
+    statement = (
+        select(PaperTextRecord)
+        .where(PaperTextRecord.source_id == source_id)
+        .order_by(PaperTextRecord.id.desc())
+    )
+    record = session.scalars(statement).first()
+    return record.text if record is not None else None

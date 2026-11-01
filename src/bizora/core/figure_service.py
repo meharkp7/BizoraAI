@@ -39,6 +39,7 @@ from bizora.db.repository import (
     list_paper_figures,
     paper_figure_from_record,
     save_paper_figure,
+    save_paper_text,
 )
 
 SURROUNDING_TEXT_CHARS = 4000
@@ -78,6 +79,17 @@ def figure_id_for(source_stem: str, page: int, index: int, short_hash: str) -> s
     if is_valid_figure_id(candidate):
         return candidate
     return f"fig-p{page}-i{index}-{short_hash}"
+
+
+def marked_paper_text(page_texts: tuple[PdfPageText, ...]) -> str:
+    """Join page texts with [Page N] markers for evidence citations.
+
+    Text-derived diagram extraction reads these markers to cite the
+    page behind every node, edge, and block.
+    """
+    return "\n\n".join(
+        f"[Page {page.page_number}]\n{page.text}" for page in page_texts
+    ).strip()
 
 
 def _node_hints(graph: MethodologyGraph) -> tuple[NodeHint, ...]:
@@ -137,7 +149,19 @@ async def ingest_paper_figures(
     invented figures.
     """
     ingest = extract_figures_from_pdf(pdf_bytes)
+    marked_text = marked_paper_text(page_texts)
     if not ingest.figures:
+        # No figures, but the text still feeds text-derived diagrams.
+        save_paper_text(
+            session,
+            project_id=graph.project_id,
+            graph_id=graph.graph_id,
+            source_id=source_id,
+            created_by=created_by,
+            text=marked_text,
+            page_count=len(page_texts) or None,
+        )
+        session.commit()
         return FigureIngestReport(
             figures=(), warnings=(), truncated=ingest.truncated, skipped=ingest.skipped,
             usage=(),
@@ -188,8 +212,18 @@ async def ingest_paper_figures(
 
     # Re-ingest replaces the graph's figures: regions always reflect
     # the current graph. Old rows go only after every provider call
-    # succeeded, so a failure keeps the previous overlay intact.
+    # succeeded, so a failure keeps the previous overlay intact. The
+    # paper text refreshes in the same commit.
     delete_paper_figures(session, project_id=graph.project_id, graph_id=graph.graph_id)
+    save_paper_text(
+        session,
+        project_id=graph.project_id,
+        graph_id=graph.graph_id,
+        source_id=source_id,
+        created_by=created_by,
+        text=marked_text,
+        page_count=len(page_texts) or None,
+    )
     figures: list[PaperFigure] = []
     for record_meta in records:
         stored = save_paper_figure(

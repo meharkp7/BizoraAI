@@ -10,6 +10,7 @@ import pytest
 from bizora.contracts.diagram_ir import (
     CircuitIR,
     MethodologyIR,
+    MethodologyNode,
     StructureIR,
 )
 from bizora.contracts.figures import FigureAttachment, ResponseUsage
@@ -26,6 +27,7 @@ from bizora.core.diagram_extraction import (
     extract_text_diagrams,
     text_cache_key,
 )
+from bizora.core.diagram_whatif import WhatIfBasis, WhatIfResult
 
 
 def make_figure(figure_id: str = "fig1") -> FigureAttachment:
@@ -118,6 +120,7 @@ class ScriptedDiagramProvider:
         self.text_repair_payloads: dict[str, dict[str, Any]] = {}
         self.calls: dict[str, int] = {}
         self.fail_extract: bool = False
+        self.fail_whatif: bool = False
 
     def _count(self, name: str) -> None:
         self.calls[name] = self.calls.get(name, 0) + 1
@@ -168,6 +171,27 @@ class ScriptedDiagramProvider:
         self._count(f"text_repair:{kind}")
         assert paper_text.strip() and broken and errors
         return parse_draft(kind, self.text_repair_payloads[kind])
+
+    async def evaluate_what_if(
+        self,
+        node: MethodologyNode,
+        new_params: dict[str, str],
+        paper_text: str,
+    ) -> WhatIfResult:
+        self._count("whatif")
+        assert paper_text.strip()
+        if self.fail_whatif:
+            raise DiagramProviderError("stub what-if failure")
+        return WhatIfResult(
+            node_id=node.id,
+            node_label=node.label,
+            params_previous={key: str(value) for key, value in node.params.items()},
+            params_applied=dict(new_params),
+            outcome="Estimated stub outcome.",
+            basis=(WhatIfBasis(quote="stub quote", page=2),),
+            assumptions=("stub assumption",),
+            confidence=0.5,
+        )
 
 
 def test_extract_figure_circuit_success_without_repair(tmp_path: Any) -> None:
@@ -293,6 +317,79 @@ def test_text_fallback_when_no_figures(tmp_path: Any) -> None:
             assert result.sources["methodology"] == "text"
             assert result.sources["structure"] == "text"
             assert result.usage
+
+        asyncio.run(run_test())
+    finally:
+        del os.environ["BIZORA_CACHE_DIR"]
+
+
+def test_served_structure_is_arranged_for_render(tmp_path: Any) -> None:
+    import os
+
+    os.environ["BIZORA_CACHE_DIR"] = str(tmp_path)
+    try:
+        provider = ScriptedDiagramProvider()
+        provider.text_payloads["methodology"] = make_methodology_payload()
+        provider.text_payloads["structure"] = {
+            "version": 1,
+            "title": "chip",
+            "root": {
+                "id": "chip",
+                "label": "chip",
+                "kind": "chip",
+                "confidence": 0.9,
+                "children": [
+                    {
+                        "id": "arr",
+                        "label": "array",
+                        "kind": "array",
+                        "count": {"rows": 4, "cols": 4},
+                        "confidence": 0.8,
+                        "children": [
+                            {
+                                "id": "cell",
+                                "label": "cell",
+                                "kind": "cell",
+                                "confidence": 0.7,
+                                "children": [],
+                            },
+                            {
+                                "id": "gate",
+                                "label": "OR gate",
+                                "kind": "periphery",
+                                "confidence": 0.8,
+                                "children": [],
+                            },
+                        ],
+                    },
+                    {
+                        "id": "ro",
+                        "label": "readout",
+                        "kind": "periphery",
+                        "confidence": 0.8,
+                        "children": [],
+                    },
+                ],
+            },
+        }
+
+        async def run_test() -> None:
+            result = await extract_paper_diagrams(
+                provider, (), "An array with shared logic.", paper_hash="d" * 64
+            )
+
+            assert isinstance(result.structure, StructureIR)
+            assert [c.id for c in result.structure.root.children] == [
+                "arr",
+                "ro",
+                "gate",
+            ]
+            by_id = {c.id: c for c in result.structure.root.children}
+            assert by_id["ro"].pos == "bottom"
+            assert by_id["gate"].pos == "right"
+            warnings = result.validation["structure"].warnings
+            assert any("'gate'" in note for note in warnings)
+            assert any("illustratively" in note for note in warnings)
 
         asyncio.run(run_test())
     finally:
@@ -450,3 +547,117 @@ def test_sequence_figures_accepted(tmp_path: Any) -> None:
         asyncio.run(run_test())
     finally:
         del os.environ["BIZORA_CACHE_DIR"]
+
+
+def test_circuit_instructions_define_renderer_orientation() -> None:
+    """The circuit prompt must pin the rot-0 convention, or MOSFETs
+    transcribe upside-down (PMOS sources rendered below the device)."""
+    from bizora.core.diagram_extraction import _CIRCUIT_INSTRUCTIONS
+
+    assert "gate exits left, drain up, source down" in _CIRCUIT_INSTRUCTIONS
+    assert "flip true at rot 0" in _CIRCUIT_INSTRUCTIONS
+    assert "triangle's apex" in _CIRCUIT_INSTRUCTIONS
+
+
+def make_unrenderable_structure_payload() -> dict[str, Any]:
+    """Array root with a bare total and no grid: contract-valid but
+    the engine cannot draw it."""
+    return {
+        "version": 1,
+        "title": "cells",
+        "root": {
+            "id": "arr", "label": "array", "kind": "array",
+            "count": 2000, "confidence": 0.8,
+            "children": [
+                {"id": "cell", "label": "cell", "kind": "cell",
+                 "confidence": 0.7, "children": []},
+            ],
+        },
+    }
+
+
+def test_errored_figure_structure_falls_back_to_text(tmp_path: Any) -> None:
+    import os
+
+    os.environ["BIZORA_CACHE_DIR"] = str(tmp_path)
+    try:
+        provider = ScriptedDiagramProvider()
+        provider.classifications["fig1"] = DiagramKind.STRUCTURE
+        broken = make_unrenderable_structure_payload()
+        provider.figure_payloads[("fig1", "structure")] = broken
+        provider.repair_payloads[("fig1", "structure")] = broken
+        provider.text_payloads["methodology"] = make_methodology_payload()
+        provider.text_payloads["structure"] = make_structure_payload()
+
+        async def run_test() -> None:
+            result = await extract_paper_diagrams(
+                provider,
+                [make_figure("fig1")],
+                "A 16x16 array of bitcells.",
+                paper_hash="a" * 64,
+            )
+
+            assert isinstance(result.structure, StructureIR)
+            assert result.structure.title == "macro"
+            assert result.sources["structure"] == "text"
+            report = result.validation["structure:figure:fig1"]
+            assert any("rows/cols grid" in e for e in report.errors)
+
+        asyncio.run(run_test())
+    finally:
+        del os.environ["BIZORA_CACHE_DIR"]
+
+
+def test_parse_text_ir_tolerates_single_item_evidence_lists() -> None:
+    from bizora.core.diagram_extraction import _parse_text_ir
+
+    raw = {
+        "version": 1,
+        "title": "macro",
+        "root": {
+            "id": "chip",
+            "label": "chip",
+            "kind": "chip",
+            "confidence": 0.9,
+            "evidence": [{"page": 5, "quote": "chip quote"}],
+            "children": [
+                {
+                    "id": "arr",
+                    "label": "array",
+                    "kind": "array",
+                    "confidence": 0.8,
+                    "evidence": [],
+                    "children": [],
+                }
+            ],
+        },
+    }
+
+    ir = _parse_text_ir("structure", raw)
+
+    assert ir.root.evidence is not None
+    assert ir.root.evidence.page == 5
+    assert ir.root.children[0].evidence is None
+
+
+def test_parse_text_ir_rejects_ambiguous_evidence_lists() -> None:
+    from bizora.core.diagram_extraction import DiagramProviderError, _parse_text_ir
+
+    raw = {
+        "version": 1,
+        "title": "macro",
+        "root": {
+            "id": "chip",
+            "label": "chip",
+            "kind": "chip",
+            "confidence": 0.9,
+            "evidence": [
+                {"page": 5, "quote": "first"},
+                {"page": 6, "quote": "second"},
+            ],
+            "children": [],
+        },
+    }
+
+    with pytest.raises((DiagramProviderError, ValueError)):
+        _parse_text_ir("structure", raw)
