@@ -12,6 +12,8 @@ from sqlalchemy.pool import StaticPool
 from tests.unit.test_diagram_extraction import (
     ScriptedDiagramProvider,
     make_circuit_payload,
+    make_methodology_payload,
+    make_structure_payload,
 )
 from tests.unit.test_figure_ingest import make_fake_pdf_with_images
 from tests.unit.test_figure_service import StubVisionProvider
@@ -89,27 +91,37 @@ def test_diagrams_response_contract(
     assert len(figure_ids) == 2
     for figure_id in figure_ids:
         stub_diagrams.figure_payloads[(figure_id, "circuit")] = make_circuit_payload()
+    stub_diagrams.text_payloads["methodology"] = make_methodology_payload()
+    stub_diagrams.text_payloads["structure"] = make_structure_payload()
 
     response = client.get("/api/v1/papers/paper-1/diagrams")
 
     assert response.status_code == 200
     body = response.json()
     assert set(body) == {"methodology", "circuits", "structure", "validation", "sources"}
-    assert body["methodology"] is None
-    assert body["structure"] is None
     assert len(body["circuits"]) == 2
     circuit = body["circuits"][0]
     assert circuit["version"] == 1
     assert circuit["components"][0]["type"] == "nmos"
+    # No flow/structure figure exists, so methodology and structure
+    # fall back to the persisted paper text.
+    assert body["methodology"]["title"] == "flow"
+    assert body["structure"]["title"] == "macro"
     # Aliased JSON keys must serialize with their spec names.
     assert body["circuits"][0]["nets"][0]["global"] is True
-    assert set(body["validation"]) == {f"circuit:{fid}" for fid in figure_ids}
+    assert set(body["validation"]) == {
+        *(f"circuit:{fid}" for fid in figure_ids),
+        "methodology",
+        "structure",
+    }
     report = body["validation"][f"circuit:{figure_ids[0]}"]
     assert set(report) == {"errors", "warnings", "stats"}
     assert report["errors"] == []
     assert report["stats"]["components"] == 2
     assert body["sources"] == {
-        f"circuit:{fid}": f"figure:{fid}" for fid in figure_ids
+        **{f"circuit:{fid}": f"figure:{fid}" for fid in figure_ids},
+        "methodology": "text",
+        "structure": "text",
     }
 
 
@@ -119,6 +131,8 @@ def test_diagrams_bare_path_alias(
     figure_ids = seed_paper_with_figures(client, "paper-1")
     for figure_id in figure_ids:
         stub_diagrams.figure_payloads[(figure_id, "circuit")] = make_circuit_payload()
+    stub_diagrams.text_payloads["methodology"] = make_methodology_payload()
+    stub_diagrams.text_payloads["structure"] = make_structure_payload()
 
     response = client.get("/papers/paper-1/diagrams")
 
@@ -140,3 +154,43 @@ def test_diagrams_provider_failure_is_502(
     response = client.get("/api/v1/papers/paper-1/diagrams")
 
     assert response.status_code == 502
+
+
+def seed_text_only_paper(client: TestClient, source_id: str) -> None:
+    payload = json.loads((FIXTURES / "sram.json").read_text(encoding="utf-8"))
+    assert isinstance(payload, dict)
+    create = client.post("/api/v1/graphs", json=payload)
+    assert create.status_code == 201
+
+    ingest = client.post(
+        "/api/v1/graphs/fixture-sram/main/revisions/1/figures",
+        files={
+            "file": (
+                "paper.pdf",
+                make_fake_pdf_with_images(0, text="Load data. Train model."),
+                "application/pdf",
+            )
+        },
+        data={"source_id": source_id},
+    )
+    assert ingest.status_code == 201
+
+
+def test_diagrams_text_only_paper_serves_text_fallback(
+    client: TestClient, stub_diagrams: ScriptedDiagramProvider
+) -> None:
+    seed_text_only_paper(client, "paper-text")
+    stub_diagrams.text_payloads["methodology"] = make_methodology_payload()
+    stub_diagrams.text_payloads["structure"] = make_structure_payload()
+
+    response = client.get("/api/v1/papers/paper-text/diagrams")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["circuits"] == []
+    assert body["methodology"]["title"] == "flow"
+    assert body["structure"]["title"] == "macro"
+    assert body["sources"] == {"methodology": "text", "structure": "text"}
+    # The stub saw the persisted paper text, not an empty string.
+    assert stub_diagrams.calls.get("text:methodology") == 1
+    assert stub_diagrams.calls.get("text:structure") == 1

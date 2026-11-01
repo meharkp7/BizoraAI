@@ -312,6 +312,8 @@ async def answer_with_llm(
         raise CopilotProviderError("max_rounds must be at least 1.")
 
     question = message.strip()[:8000] or "(empty question)"
+    if context.diagram_context:
+        question += f"\n\n[Viewer context: {context.diagram_context.strip()[:280]}]"
     history: list[CopilotMessage] = [
         CopilotMessage(role="system", content=SYSTEM_PROMPT),
         CopilotMessage(role="user", content=question),

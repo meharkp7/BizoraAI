@@ -2,6 +2,8 @@
 
 import asyncio
 import json
+from dataclasses import replace
+from typing import Any
 
 from bizora.copilot.service import (
     CopilotRunReport,
@@ -15,8 +17,10 @@ from bizora.core.copilot_service import (
 )
 from bizora.providers.copilot import (
     CopilotAssistantTurn,
+    CopilotMessage,
     CopilotProviderError,
     CopilotToolCall,
+    CopilotToolSpec,
     CopilotUsage,
 )
 from bizora.providers.fixture_copilot import (
@@ -332,3 +336,43 @@ def test_flat_output_schema_matches_answer_contract() -> None:
     item = COPILOT_ANSWER_OUTPUT_SCHEMA["properties"]["citations"]["items"]
     assert set(item["properties"]["kind"]["enum"]) == {"evidence", "run", "component"}
     assert "$defs" not in COPILOT_ANSWER_OUTPUT_SCHEMA
+
+
+def test_orchestrator_sends_viewer_context_to_provider() -> None:
+    """The viewer tab/selection reaches the provider as a context line."""
+
+    class RecordingProvider:
+        provider_name = "recording"
+
+        def __init__(self) -> None:
+            self.seen: list[list[CopilotMessage]] = []
+
+        async def chat(
+            self,
+            messages: list[CopilotMessage],
+            tools: list[CopilotToolSpec],  # noqa: ARG002 - recorded, not read
+            *,
+            response_schema: dict[str, Any] | None = None,
+        ) -> CopilotAssistantTurn:
+            self.seen.append(list(messages))
+            if response_schema is not None:
+                return CopilotAssistantTurn(content=_final_answer_json())
+            return CopilotAssistantTurn(content="No tools needed.")
+
+    async def run_test() -> None:
+        provider = RecordingProvider()
+        context = replace(
+            make_eval_context(),
+            diagram_context="viewing schematic tab; selected N1 (inverter stage)",
+        )
+
+        response = await answer_with_llm("What does this do?", context, provider)
+
+        assert "4 kHz" in response.reply
+        first_user = next(m for m in provider.seen[0] if m.role == "user")
+        assert (
+            "[Viewer context: viewing schematic tab; selected N1 (inverter stage)]"
+            in first_user.content
+        )
+
+    asyncio.run(run_test())

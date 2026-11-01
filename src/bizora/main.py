@@ -7,6 +7,10 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 
 from bizora.api import register_error_handlers, router
+from bizora.auth.dependencies import configure_auth
+from bizora.auth.membership import SqlAlchemyMembershipStore
+from bizora.auth.router import router as auth_router
+from bizora.auth.tokens import Hs256TokenVerifier
 from bizora.contracts.run import ExperimentRun
 from bizora.db.repository import experiment_run_from_record, get_experiment_run
 from bizora.db.session import get_session_factory
@@ -38,6 +42,12 @@ app = FastAPI(
     ),
 )
 
+configure_auth(
+    Hs256TokenVerifier(),
+    SqlAlchemyMembershipStore(lambda: get_session_factory()()),
+)
+
 app.include_router(router)
+app.include_router(auth_router)
 app.include_router(create_streaming_router(get_shared_bus(), get_run=load_experiment_run))
 register_error_handlers(app)

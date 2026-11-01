@@ -21,7 +21,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from bizora.adapters.registry import create_default_registry
+from bizora.auth.dependencies import OPTIONAL_PRINCIPAL_DEPENDENCY
+from bizora.auth.router import record_user_paper
 from bizora.contracts.assets import NodeRenderSpec
+from bizora.contracts.auth import Principal
 from bizora.contracts.comparison import RunComparison
 from bizora.contracts.components import (
     CompatibilityPreflight,
@@ -70,6 +73,7 @@ from bizora.core.diagram_extraction import (
     MuseDiagramProvider,
     extract_paper_diagrams,
 )
+from bizora.core.diagram_whatif import WhatIfBasis, run_what_if
 from bizora.core.diff_service import RevisionDiffService
 from bizora.core.entity_service import preview_graph, render_specs_for_graph, resolve_graph
 from bizora.core.errors import BizoraError, ErrorCode
@@ -101,6 +105,7 @@ from bizora.db.repository import (
     get_graph_revision,
     get_latest_graph_revision,
     get_paper_figure,
+    get_paper_text,
     list_artifacts_for_run,
     list_experiment_runs,
     list_extracted_tables,
@@ -329,11 +334,14 @@ async def extract_paper(
     max_tables: int = Form(default=10, ge=1, le=20),
     session: Session = DB_SESSION_DEPENDENCY,
     provider: BasetenMethodologyProvider = BASETEN_PROVIDER_DEPENDENCY,
+    principal: Principal | None = OPTIONAL_PRINCIPAL_DEPENDENCY,
 ) -> PaperExtractionResponse:
     """Extract a methodology graph and results tables from an uploaded PDF.
 
     Identifier fields are optional: blanks fall back to stable suggestions
-    derived from the upload, so any paper works with just the file.
+    derived from the upload, so any paper works with just the file. A
+    valid Bearer [REDACTED] the paper to the caller's library;
+    anonymous uploads work exactly as before.
     """
     _, pdf = await _read_upload(file)
     filename = file.filename or "paper.pdf"
@@ -396,6 +404,17 @@ async def extract_paper(
         warnings.extend(table_warnings)
     except MethodologyProviderError:
         warnings.append("Results tables could not be extracted: the provider request failed.")
+
+    if principal is not None:
+        stem = filename.rsplit(".", 1)[0] if "." in filename else filename
+        record_user_paper(
+            session,
+            principal.user_id,
+            project_id=resolved_project,
+            graph_id=resolved_graph,
+            source_id=resolved_source,
+            title=(title or pdf.doc_title or stem)[:300],
+        )
 
     return PaperExtractionResponse(
         graph=graph,
@@ -898,6 +917,7 @@ async def ask_copilot(
     context = CopilotContext(
         graph=graph,
         selected_node_id=request.selected_node_id,
+        diagram_context=request.diagram_context,
         load_revision=load_revision,
         list_runs=list_runs,
         get_run=get_run,
@@ -1099,6 +1119,27 @@ class PaperDiagramsResponse(BaseModel):
     sources: dict[str, str] = Field(default_factory=dict)
 
 
+class PaperWhatIfRequest(BaseModel):
+    """Modified settings for one methodology step."""
+
+    node_id: str = Field(min_length=1, max_length=128)
+    params: dict[str, str] = Field(min_length=1, max_length=32)
+
+
+class PaperWhatIfResponse(BaseModel):
+    """Estimated outcome; an estimate, never a paper measurement."""
+
+    node_id: str
+    node_label: str
+    params_previous: dict[str, str] = Field(default_factory=dict)
+    params_applied: dict[str, str] = Field(default_factory=dict)
+    outcome: str
+    basis: list[WhatIfBasis] = Field(default_factory=list)
+    assumptions: list[str] = Field(default_factory=list)
+    confidence: float
+    from_cache: bool = False
+
+
 def _paper_figures_hash(records: list[PaperFigureRecord]) -> str:
     """Hash one paper's figure bytes deterministically for the diagram cache."""
     digest = hashlib.sha256()
@@ -1148,11 +1189,11 @@ async def get_paper_diagrams(
     session: Session = DB_SESSION_DEPENDENCY,
     provider: MuseDiagramProvider = DIAGRAM_PROVIDER_DEPENDENCY,
 ) -> PaperDiagramsResponse:
-    """Derive diagram IRs from one paper's persisted figures.
+    """Derive diagram IRs from one paper's persisted figures and text.
 
-    paper_id is the source id assigned when the paper's figures were
-    ingested. Paper text is not persisted, so methodology and structure
-    come only from flow/structure figures here (no text fallback).
+    paper_id is the source id assigned when the paper was ingested.
+    Methodology and structure fall back to the persisted paper text
+    when no flow/structure figure exists.
     """
     if not is_valid_source_id(paper_id):
         raise HTTPException(
@@ -1168,7 +1209,8 @@ async def get_paper_diagrams(
         )
     )
     records = list(session.scalars(statement))
-    if not records:
+    paper_text = get_paper_text(session, source_id=paper_id) or ""
+    if not records and not paper_text.strip():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Paper not found.",
@@ -1182,7 +1224,7 @@ async def get_paper_diagrams(
         diagrams = await extract_paper_diagrams(
             provider,
             tuple(attachments),
-            "",
+            paper_text,
             paper_hash=_paper_figures_hash(records),
         )
     except MethodologyProviderError as exc:
@@ -1204,6 +1246,114 @@ async def get_paper_diagrams(
             for key, report in diagrams.validation.items()
         },
         sources=dict(diagrams.sources),
+    )
+
+
+@router.post(
+    "/api/v1/papers/{paper_id}/whatif",
+    response_model=PaperWhatIfResponse,
+    tags=["papers"],
+)
+@router.post(
+    "/papers/{paper_id}/whatif",
+    response_model=PaperWhatIfResponse,
+    tags=["papers"],
+    include_in_schema=False,
+)
+async def run_paper_whatif(
+    paper_id: str,
+    request: PaperWhatIfRequest,
+    session: Session = DB_SESSION_DEPENDENCY,
+    provider: MuseDiagramProvider = DIAGRAM_PROVIDER_DEPENDENCY,
+) -> PaperWhatIfResponse:
+    """Estimate what changes when one methodology step runs with modified settings.
+
+    paper_id is the source id assigned when the paper was ingested.
+    The outcome is estimated from the paper's own text and numbers and
+    is always labeled an estimate, never a measurement.
+    """
+    if not is_valid_source_id(paper_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Paper not found.",
+        )
+    statement = (
+        select(PaperFigureRecord)
+        .where(PaperFigureRecord.source_id == paper_id)
+        .order_by(
+            PaperFigureRecord.page.asc().nulls_last(),
+            PaperFigureRecord.figure_id.asc(),
+        )
+    )
+    records = list(session.scalars(statement))
+    paper_text = get_paper_text(session, source_id=paper_id) or ""
+    if not records and not paper_text.strip():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Paper not found.",
+        )
+    attachments = [
+        attachment
+        for record in records
+        if (attachment := _diagram_attachment(record)) is not None
+    ]
+    try:
+        diagrams = await extract_paper_diagrams(
+            provider,
+            tuple(attachments),
+            paper_text,
+            paper_hash=_paper_figures_hash(records),
+        )
+    except MethodologyProviderError as exc:
+        logger.warning("Diagram provider failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Diagram provider failed.",
+        ) from exc
+    methodology = diagrams.methodology
+    if methodology is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No methodology extracted for this paper.",
+        )
+    node = next(
+        (entry for entry in methodology.nodes if entry.id == request.node_id),
+        None,
+    )
+    if node is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Unknown methodology node.",
+        )
+    try:
+        result, from_cache = await run_what_if(
+            provider,
+            _paper_figures_hash(records),
+            node,
+            dict(request.params),
+            paper_text,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except MethodologyProviderError as exc:
+        logger.warning("What-if provider failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Diagram provider failed.",
+        ) from exc
+    return PaperWhatIfResponse(
+        node_id=result.node_id,
+        node_label=result.node_label,
+        params_previous=dict(result.params_previous),
+        params_applied=dict(result.params_applied),
+        outcome=result.outcome,
+        basis=list(result.basis),
+        assumptions=list(result.assumptions),
+        confidence=result.confidence,
+        from_cache=from_cache,
     )
 
 

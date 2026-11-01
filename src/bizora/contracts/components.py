@@ -210,6 +210,7 @@ class CopilotRequest(BaseModel):
 
     message: str = Field(min_length=1, max_length=2000)
     selected_node_id: str | None = Field(default=None, max_length=128)
+    diagram_context: str | None = Field(default=None, max_length=280)
 
 
 class CopilotResponse(BaseModel):

@@ -40,6 +40,7 @@ class CopilotContext:
 
     graph: MethodologyGraph
     selected_node_id: str | None = None
+    diagram_context: str | None = None
     load_revision: Callable[[int], MethodologyGraph | None] | None = None
     list_runs: Callable[[], list[ExperimentRun]] | None = None
     get_run: Callable[[str], ExperimentRun | None] | None = None

@@ -132,6 +132,21 @@ def test_copilot_endpoint_answers_from_graph_state(client: TestClient) -> None:
     assert any(card["kind"] == "proposal" for card in body["cards"])
 
 
+def test_copilot_endpoint_accepts_diagram_context(client: TestClient) -> None:
+    """The viewer tab/selection rides along without breaking the fast path."""
+    _seed(client, "quant")
+    response = client.post(
+        "/api/v1/graphs/fixture-quant/main/revisions/1/copilot",
+        json={
+            "message": "replace nf4-quantizer with FP16",
+            "diagram_context": "viewing schematic tab; selected N1 (inverter stage)",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["proposal"]["component_id"] == "format-fp16"
+
+
 def test_list_adapters_reports_registered_adapters(client: TestClient) -> None:
     """The adapters endpoint exposes exactly the registered execution adapters."""
     response = client.get("/api/v1/experiments/adapters")
