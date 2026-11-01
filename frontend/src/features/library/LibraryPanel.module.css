@@ -24,9 +24,11 @@
   border-radius: var(--radius-sm);
 }
 
+/* The index rail is 14rem wide: three selects side by side squeeze
+   past the rail edge, so the filters stack vertically. */
 .filterRow {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: 1fr;
   gap: var(--space-2);
 }
 
@@ -86,6 +88,7 @@
 
 .cardLabel {
   flex: 1;
+  min-width: 0;
   font-weight: 650;
   font-size: 0.875rem;
   overflow-wrap: anywhere;

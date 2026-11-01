@@ -1,59 +1,41 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   useApplyPatch,
   useApplyPatchBatch,
   useGraphEntities,
-  useGraphLayout,
   useGraphRevision,
+  usePaperDiagrams,
   useRemovalPreflight,
-  useRenderSpecs,
-  useSaveLayout,
 } from "../../app/queries.ts";
 import { BizoraApiError } from "../../lib/api.ts";
 import type { CanvasView } from "../../app/routeElements.tsx";
-import { WORKSPACE_ACTOR } from "../../lib/constants.ts";
 import { useLibrarySelection, useWorkspaceSelection } from "../../lib/store.ts";
 import type {
   GraphEdge,
   GraphEntities,
-  GraphLayout,
   GraphNode,
   GraphPatch,
-  GraphRevisionDiff,
-  MeasuredOverlay,
   MethodologyGraph,
-  NodeRenderSpec,
   ResearchBrief,
-  ViewportState,
 } from "../../lib/types.ts";
-import { EMPTY_OVERLAY } from "../../lib/types.ts";
 import { EmptyState, ErrorState, LoadingState } from "../../components/states.tsx";
-import { FlowView } from "../canvas/FlowView.tsx";
-import { GraphCanvas3D } from "../canvas/GraphCanvas3D.tsx";
-import { StructureView } from "../canvas/StructureView.tsx";
-import { DomainBadge, EntityLegend } from "../canvas/EntityLegend.tsx";
-import { splitGraph } from "../canvas/graph3d.ts";
-import { CopilotPanel } from "../copilot/CopilotPanel.tsx";
+import { DomainBadge } from "../canvas/EntityLegend.tsx";
+import { CopilotBot } from "../copilot/CopilotBot.tsx";
 import { FigureOverlay } from "../figures/FigureOverlay.tsx";
 import { ReportedPanel } from "./ReportedPanel.tsx";
 import { ComponentDetailView } from "../library/ComponentDetail.tsx";
 import { LibraryPanel } from "../library/LibraryPanel.tsx";
 import { CanvasToolbar } from "../canvas/CanvasToolbar.tsx";
-import type { LayoutSaveStatus, NewNodeSpec } from "../canvas/CanvasToolbar.tsx";
-import { diffStatusMaps } from "../canvas/flowElements.ts";
-import { suggestEdgeId } from "../canvas/ids.ts";
-import type { Point } from "../canvas/layout.ts";
-import { autoLayout, matchesSavedPositions, toNodePositions } from "../canvas/layout.ts";
 import { PatchStatus } from "../canvas/PatchStatus.tsx";
+import { MethodologyDiagramView } from "../diagrams/MethodologyDiagramView.tsx";
+import { SchematicDiagramView } from "../diagrams/SchematicDiagramView.tsx";
+import { StructureDiagramView } from "../diagrams/StructureDiagramView.tsx";
+import { figureIdFromSource } from "../diagrams/provenance.ts";
+import type { DiagramSelection } from "../diagrams/selection.ts";
 import { useRevisionHistory } from "./history.ts";
 import { InspectorPanel } from "./InspectorPanel.tsx";
-import {
-  addEdgePatch,
-  addNodePatch,
-  removalBatch,
-  replaceNodePatch,
-  updateConfigPatch,
-} from "./patchBuilders.ts";
+import { NotesPanel } from "../notes/NotesPanel.tsx";
+import { replaceNodePatch, updateConfigPatch } from "./patchBuilders.ts";
 import { EvidencePanel } from "./EvidencePanel.tsx";
 import { RunPanel } from "../runs/RunPanel.tsx";
 import { SimulationPreview } from "../runs/SimulationPreview.tsx";
@@ -259,9 +241,7 @@ export function WorkspacePage({
   onViewChange: (view: CanvasView) => void;
 }) {
   const revision = useGraphRevision(projectId, graphId, version);
-  const savedLayout = useGraphLayout(projectId, graphId, version);
   const entities = useGraphEntities(projectId, graphId, version);
-  const renderSpecs = useRenderSpecs(projectId, graphId, version, view === "3d");
   const patch = useApplyPatch(projectId, graphId);
   const batch = useApplyPatchBatch(projectId, graphId);
   const history = useRevisionHistory(version, onVersionChange);
@@ -335,11 +315,8 @@ export function WorkspacePage({
       layoutVersion={version}
       view={view}
       onViewChange={onViewChange}
-      savedLayout={savedLayout.data ?? null}
       entities={entities.data ?? null}
-      entitiesPending={entities.isPending}
       entitiesError={entities.error instanceof Error ? entities.error.message : null}
-      assetSpecs={renderSpecs.data ?? null}
       selectedNodeIds={selectedNodeIds}
       selectedEdgeIds={selectedEdgeIds}
       mutating={mutating}
@@ -373,7 +350,6 @@ export function WorkspacePage({
         if (patches.length === 1) patch.mutate(patches[0], callbacks);
         else batch.mutate({ patches }, callbacks);
       }}
-      onLocalError={setPatchError}
       onDismissStatus={() => {
         setPatchError(null);
         setSavedVersion(null);
@@ -388,11 +364,8 @@ function WorkspaceLoaded({
   layoutVersion,
   view,
   onViewChange,
-  savedLayout,
   entities,
-  entitiesPending,
   entitiesError,
-  assetSpecs,
   selectedNodeIds,
   selectedEdgeIds,
   mutating,
@@ -407,7 +380,6 @@ function WorkspaceLoaded({
   onSelectNodes,
   onSelectEdges,
   onSubmit,
-  onLocalError,
   onDismissStatus,
 }: {
   projectId: string;
@@ -415,11 +387,8 @@ function WorkspaceLoaded({
   layoutVersion: number;
   view: CanvasView;
   onViewChange: (view: CanvasView) => void;
-  savedLayout: GraphLayout | null;
   entities: GraphEntities | null;
-  entitiesPending: boolean;
   entitiesError: string | null;
-  assetSpecs: NodeRenderSpec[] | null;
   selectedNodeIds: string[];
   selectedEdgeIds: string[];
   mutating: boolean;
@@ -434,7 +403,6 @@ function WorkspaceLoaded({
   onSelectNodes: (nodeIds: string[]) => void;
   onSelectEdges: (edgeIds: string[]) => void;
   onSubmit: (patches: GraphPatch[]) => void;
-  onLocalError: (error: BizoraApiError) => void;
   onDismissStatus: () => void;
 }) {
   const selectedNode: GraphNode | null =
@@ -444,24 +412,18 @@ function WorkspaceLoaded({
   const selectedEntity = selectedNode
     ? (entities?.entities.find((entity) => entity.node_id === selectedNode.id) ?? null)
     : null;
-  const takenIds = useMemo(
-    () => new Set([...graph.nodes.map((node) => node.id), ...graph.edges.map((edge) => edge.id)]),
-    [graph],
-  );
   const nodeLabels = useMemo(
     () => new Map(graph.nodes.map((node) => [node.id, node.label])),
     [graph],
   );
-  const saveLayout = useSaveLayout(graph.project_id, graph.graph_id, graph.version);
-  const [layoutStatus, setLayoutStatus] = useState<LayoutSaveStatus>("idle");
-  const [layoutReset, setLayoutReset] = useState<{
-    id: number;
-    positions: Map<string, Point>;
-  } | null>(null);
-  const [activeDiff, setActiveDiff] = useState<GraphRevisionDiff | null>(null);
-  // Measured-overlay channel: empty until a real run exists. Stage 2
-  // fills this from run telemetry; every view already renders it.
-  const [overlay] = useState<MeasuredOverlay>(EMPTY_OVERLAY);
+  // The canvas feeds solely from the paper's diagram IRs. The paper is
+  // the graph's first source: figure ingest stores figures under it.
+  const paperId = graph.source_ids[0] ?? null;
+  const [diagramSelection, setDiagramSelection] = useState<DiagramSelection | null>(null);
+  // Any graph selection (index, figure overlay, ...) suppresses the
+  // diagram selection, so the two can never disagree or go stale.
+  const effectiveDiagram =
+    selectedNodeIds.length === 0 && selectedEdgeIds.length === 0 ? diagramSelection : null;
   const [removalTarget, setRemovalTarget] = useState<string | null>(null);
   const removalPreflight = useRemovalPreflight(
     projectId,
@@ -469,110 +431,33 @@ function WorkspaceLoaded({
     layoutVersion,
     removalTarget,
   );
-  const saveTimer = useRef<number | null>(null);
   const canvasSectionRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     // Deep links (?view=3d, ...) land at the top of the page; bring the
     // canvas into view instead of stranding newcomers above the fold.
-    if (view !== "structure") canvasSectionRef.current?.scrollIntoView?.({ block: "nearest" });
+    if (view !== "methodology") canvasSectionRef.current?.scrollIntoView?.({ block: "nearest" });
   }, [view]);
 
-  useEffect(() => {
-    const timer = saveTimer;
-    return () => {
-      if (timer.current !== null) window.clearTimeout(timer.current);
-    };
-  }, []);
+  function handleSelectNodes(nodeIds: string[]): void {
+    setDiagramSelection(null);
+    onSelectNodes(nodeIds);
+  }
 
-  const diffStatuses = useMemo(
-    () => (activeDiff ? diffStatusMaps(activeDiff) : null),
-    [activeDiff],
+  function handleSelectEdges(edgeIds: string[]): void {
+    setDiagramSelection(null);
+    onSelectEdges(edgeIds);
+  }
+
+  // Stable across renders (store setters are stable) so the 3D
+  // canvas effect below never rebuilds for a mere re-render.
+  const handleDiagramSelect = useCallback(
+    (selection: DiagramSelection): void => {
+      onSelectNodes([]);
+      setDiagramSelection(selection);
+    },
+    [onSelectNodes],
   );
-  const split = useMemo(() => splitGraph(graph, entities), [graph, entities]);
-  const structureEntities = useMemo(() => {
-    if (!entities) return null;
-    const ids = new Set(split.structure.nodes.map((node) => node.id));
-    return {
-      ...entities,
-      entities: entities.entities.filter((entity) => ids.has(entity.node_id)),
-    };
-  }, [entities, split]);
-  const processEntities = useMemo(() => {
-    if (!entities) return null;
-    const ids = new Set(split.process.nodes.map((node) => node.id));
-    return {
-      ...entities,
-      entities: entities.entities.filter((entity) => ids.has(entity.node_id)),
-    };
-  }, [entities, split]);
-
-  function handleNodesMoved(positions: Map<string, Point>, viewport: ViewportState): void {
-    if (savedLayout && matchesSavedPositions(savedLayout.positions, positions)) {
-      return;
-    }
-    if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
-    setLayoutStatus("saving");
-    saveTimer.current = window.setTimeout(() => {
-      saveLayout.mutate(
-        {
-          project_id: graph.project_id,
-          graph_id: graph.graph_id,
-          version: graph.version,
-          positions: toNodePositions(graph, positions),
-          viewport,
-          camera: savedLayout?.camera ?? null,
-          updated_by: WORKSPACE_ACTOR,
-        },
-        {
-          onSuccess: () => setLayoutStatus("saved"),
-          onError: () => setLayoutStatus("error"),
-        },
-      );
-    }, 800);
-  }
-
-  function handleResetLayout(): void {
-    if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
-    const positions = autoLayout(graph);
-    setLayoutStatus("saving");
-    saveLayout.mutate(
-      {
-        project_id: graph.project_id,
-        graph_id: graph.graph_id,
-        version: graph.version,
-        positions: toNodePositions(graph, positions),
-        viewport: null,
-        camera: savedLayout?.camera ?? null,
-        updated_by: WORKSPACE_ACTOR,
-      },
-      {
-        onSuccess: () => {
-          setLayoutStatus("saved");
-          setLayoutReset({ id: Date.now(), positions });
-        },
-        onError: () => setLayoutStatus("error"),
-      },
-    );
-  }
-
-  function handleConnect(source: string, target: string): void {
-    if (source === target) {
-      onLocalError(new BizoraApiError(422, "INVALID_GRAPH_PATCH", "A connection cannot start and end on the same component.", {}));
-      return;
-    }
-    const takenEdges = new Set(graph.edges.map((edge) => edge.id));
-    onSubmit([addEdgePatch(graph, suggestEdgeId(source, target, takenEdges), source, target)]);
-  }
-
-  function handleDelete(nodeIds: string[], edgeIds: string[]): void {
-    if (nodeIds.length === 0 && edgeIds.length === 0) return;
-    onSubmit(removalBatch(graph, nodeIds, edgeIds));
-  }
-
-  function handleAddNode(spec: NewNodeSpec): void {
-    onSubmit([addNodePatch(graph, spec)]);
-  }
 
   return (
     <div className={styles.page}>
@@ -597,6 +482,17 @@ function WorkspaceLoaded({
           ) : null}
         </div>
         <div className={styles.stepper} role="group" aria-label="Revision">
+          <button type="button" onClick={onUndo} disabled={!canUndo || mutating} title="Undo (Ctrl+Z)">
+            Undo
+          </button>
+          <button
+            type="button"
+            onClick={onRedo}
+            disabled={!canRedo || mutating}
+            title="Redo (Ctrl+Shift+Z)"
+          >
+            Redo
+          </button>
           <button type="button" disabled={layoutVersion <= 1 || mutating} onClick={onOlder}>
             ← Older
           </button>
@@ -624,8 +520,8 @@ function WorkspaceLoaded({
           selectedNode={selectedNode}
           selectedEdge={selectedEdge}
           mutating={mutating}
-          onSelectNodes={onSelectNodes}
-          onSelectEdges={onSelectEdges}
+          onSelectNodes={handleSelectNodes}
+          onSelectEdges={handleSelectEdges}
           onSubmit={onSubmit}
         />
 
@@ -634,76 +530,23 @@ function WorkspaceLoaded({
           className={`${styles.panel} ${styles.canvasPanel}`}
           aria-label="Canvas"
         >
-          <CanvasToolbar
-            takenIds={takenIds}
-            canUndo={canUndo}
-            canRedo={canRedo}
-            onUndo={onUndo}
-            onRedo={onRedo}
-            onAddNode={handleAddNode}
-            disabled={mutating}
-            layoutStatus={layoutStatus}
-            onResetLayout={handleResetLayout}
+          <CanvasToolbar view={view} onViewChange={onViewChange} disabled={mutating} />
+          <DiagramCanvas
+            paperId={paperId}
+            projectId={projectId}
+            graphId={graph.graph_id}
             view={view}
-            onViewChange={onViewChange}
+            nodeLabels={nodeLabels}
+            onSelect={handleDiagramSelect}
           />
-          {view === "3d" ? (
-            split.structure.nodes.length === 0 ? (
-              <EmptyState
-                title="No physical structure in this view."
-                detail="Every node resolved to process or data; the flow view shows them."
-              />
-            ) : (
-              <GraphCanvas3D
-                key={`3d-${graph.version}`}
-                graph={split.structure}
-                layout={savedLayout}
-                entities={structureEntities}
-                entitiesPending={entitiesPending}
-                entitiesError={entitiesError}
-                assetSpecs={assetSpecs}
-                overlay={overlay}
-              />
-            )
-          ) : view === "flow" ? (
-            split.process.nodes.length === 0 ? (
-              <EmptyState
-                title="No process or data nodes in this view."
-                detail="Every node resolved to physical structure; the 3D view shows it."
-              />
-            ) : (
-              <>
-                <FlowView
-                  key={`flow-${graph.version}`}
-                  graph={split.process}
-                  layout={savedLayout}
-                  diffStatuses={diffStatuses}
-                  overlay={overlay}
-                  mutating={mutating}
-                />
-                <EntityLegend entities={processEntities} title="Flow key" inline />
-              </>
-            )
-          ) : (
-            <StructureView
-              graph={graph}
-              layout={savedLayout}
-              layoutReset={layoutReset}
-              diffStatuses={diffStatuses}
-              entities={entities}
-              overlay={overlay}
-              mutating={mutating}
-              onConnectRequest={handleConnect}
-              onDeleteRequest={handleDelete}
-              onNodesMoved={handleNodesMoved}
-            />
-          )}
         </section>
 
         <div className={styles.side}>
           <InspectorPanel
             node={selectedNode}
             edge={selectedEdge}
+            diagram={effectiveDiagram}
+            paperId={paperId}
             entity={selectedEntity}
             entityError={entitiesError}
             formatShape={formatShape}
@@ -742,21 +585,110 @@ function WorkspaceLoaded({
             version={graph.version}
           />
           <RunPanel projectId={projectId} graph={graph} />
-          <CopilotPanel
-            projectId={projectId}
-            graph={graph}
-            disabled={mutating}
-            onSubmit={onSubmit}
-          />
+          <NotesPanel paperId={paperId} />
         </div>
       </div>
+      <CopilotBot
+        projectId={projectId}
+        graph={graph}
+        disabled={mutating}
+        view={view}
+        selection={effectiveDiagram}
+        onSubmit={onSubmit}
+      />
 
       <DiffPanel
         projectId={projectId}
         graphId={graph.graph_id}
         currentVersion={graph.version}
-        onDiffChange={setActiveDiff}
       />
     </div>
   );
 }
+
+/** Canvas body: the three diagram views fed only by the paper's
+ *  diagram IRs. `diagrams` is read here (not passed down) so the
+ *  loading/error states live next to the tabs. */
+function DiagramCanvas({
+  paperId,
+  projectId,
+  graphId,
+  view,
+  nodeLabels,
+  onSelect,
+}: {
+  paperId: string | null;
+  projectId: string;
+  graphId: string;
+  view: CanvasView;
+  nodeLabels: Map<string, string>;
+  onSelect: (selection: DiagramSelection) => void;
+}) {
+  const diagrams = usePaperDiagrams(paperId);
+
+  if (paperId === null) {
+    return <EmptyState title="This graph is not linked to a paper." />;
+  }
+  if (diagrams.isPending) {
+    return <LoadingState label="Loading paper diagrams…" />;
+  }
+  if (diagrams.isError) {
+    const error = diagrams.error;
+    if (error instanceof BizoraApiError && error.isNotFound) {
+      return (
+        <EmptyState
+          title="No diagrams for this paper yet."
+          detail="Diagrams appear once the paper's figures are ingested. Open “Paper figures” below to ingest the PDF."
+        />
+      );
+    }
+    return (
+      <ErrorState
+        title="Could not load the paper diagrams."
+        detail={error instanceof Error ? error.message : undefined}
+        onRetry={() => void diagrams.refetch()}
+      />
+    );
+  }
+
+  const response = diagrams.data;
+  if (view === "schematic") {
+    return (
+      <SchematicDiagramView
+        circuits={response.circuits}
+        validation={response.validation}
+        projectId={projectId}
+        graphId={graphId}
+        nodeLabels={nodeLabels}
+        onSelect={onSelect}
+      />
+    );
+  }
+  if (view === "3d") {
+    return (
+      <StructureDiagramView
+        structure={response.structure}
+        circuits={response.circuits}
+        sourceFigureId={figureIdFromSource(response.sources["structure"])}
+        warnings={response.validation["structure"]?.warnings ?? []}
+        projectId={projectId}
+        graphId={graphId}
+        nodeLabels={nodeLabels}
+        onSelect={onSelect}
+      />
+    );
+  }
+  return (
+    <MethodologyDiagramView
+      methodology={response.methodology}
+      sourceFigureId={figureIdFromSource(response.sources["methodology"])}
+      warnings={response.validation["methodology"]?.warnings ?? []}
+      projectId={projectId}
+      graphId={graphId}
+      paperId={paperId}
+      nodeLabels={nodeLabels}
+      onSelect={onSelect}
+    />
+  );
+}
+

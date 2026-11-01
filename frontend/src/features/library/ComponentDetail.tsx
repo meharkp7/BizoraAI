@@ -1,7 +1,11 @@
 import { useMemo, useState } from "react";
 import { useComponentDetail, usePreflight } from "../../app/queries.ts";
 import { BizoraApiError } from "../../lib/api.ts";
-import { useLibrarySelection, useWorkspaceSelection } from "../../lib/store.ts";
+import {
+  useLibrarySelection,
+  useSchematicSandbox,
+  useWorkspaceSelection,
+} from "../../lib/store.ts";
 import type {
   ComponentDetail,
   GraphEdge,
@@ -13,6 +17,10 @@ import type {
 import { EmptyState, ErrorState, LoadingState } from "../../components/states.tsx";
 import { SymbolGlyph } from "../canvas/SymbolGlyph.tsx";
 import { categoryLabel, domainLabel } from "../canvas/graph3d.ts";
+import {
+  sandboxEngineType,
+  sandboxValue,
+} from "../diagrams/schematicSandbox.ts";
 import { replaceNodePatch } from "../workspace/patchBuilders.ts";
 import { ConfigForm } from "./ConfigForm.tsx";
 import { PinDiagram } from "./PinDiagram.tsx";
@@ -159,6 +167,15 @@ function DetailBody({
   const [config, setConfig] = useState<Record<string, unknown>>(() => initialConfig(detail, node));
   const reference = detail.datasheet_url ?? detail.reference_url;
   const constraintEntries = Object.entries(detail.constraints);
+  const activeFigureId = useSchematicSandbox((state) => state.activeFigureId);
+  const addSandboxItem = useSchematicSandbox((state) => state.addSandboxItem);
+  const trialCount = useSchematicSandbox(
+    (state) =>
+      state.items.filter(
+        (item) =>
+          item.componentId === detail.component_id && item.figureId === activeFigureId,
+      ).length,
+  );
 
   return (
     <div className={styles.detail}>
@@ -190,6 +207,43 @@ function DetailBody({
           "No verified datasheet or reference yet."
         )}
       </p>
+
+      <div className={styles.trial}>
+        <button
+          type="button"
+          disabled={activeFigureId === null}
+          title={
+            activeFigureId === null
+              ? "Open the Schematic tab once to enable trials."
+              : "Add this part to the schematic as a local trial."
+          }
+          onClick={() => {
+            if (!activeFigureId) return;
+            addSandboxItem({
+              key: `${detail.component_id}-${Date.now()}`,
+              figureId: activeFigureId,
+              componentId: detail.component_id,
+              label: detail.label,
+              engineType: sandboxEngineType(detail),
+              value: sandboxValue(detail),
+              pinout: detail.pinout.map((pin) => ({
+                designator: pin.designator,
+                name: pin.name,
+              })),
+              pinNets: {},
+            });
+          }}
+        >
+          Try in schematic
+        </button>
+        <p className={styles.trialNote}>
+          {activeFigureId === null
+            ? "Open the Schematic tab once to enable trials."
+            : trialCount === 0
+              ? "Local trial: appears dashed on the schematic, wires up there."
+              : `On trial on the schematic ×${trialCount}.`}
+        </p>
+      </div>
 
       {node ? (
         <ReplacePreview

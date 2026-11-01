@@ -195,6 +195,7 @@ test("library tab searches and previews a replacement", async ({ page }) => {
 
 test("copilot answers with a library card", async ({ page }) => {
   await page.goto(WORKSPACE_URL);
+  await page.getByRole("button", { name: "Open research copilot" }).click();
   await page.getByLabel("Copilot message").fill("find NPN transistor");
   await page.getByRole("button", { name: "Ask" }).click();
 

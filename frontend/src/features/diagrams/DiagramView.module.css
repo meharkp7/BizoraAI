@@ -1,0 +1,162 @@
+.view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-height: 0;
+  min-width: 0;
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-4);
+}
+
+.head h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.counts {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-ink-soft);
+}
+
+/* Textbook-layer swatches for the dressed circuit scene. Colors match
+   componentModels.ts layer roles. */
+.layerLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.75rem;
+  color: var(--color-ink-soft);
+}
+
+.layerLegend li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.swatch {
+  display: inline-block;
+  width: 0.75rem;
+  height: 0.75rem;
+  border: 1px solid var(--color-line-strong);
+  border-radius: 2px;
+}
+
+.swatch[data-layer="nplus"] {
+  background: #3d9950;
+}
+
+.swatch[data-layer="pplus"] {
+  background: #8a63c8;
+}
+
+.swatch[data-layer="poly"] {
+  background: #c2571f;
+}
+
+.swatch[data-layer="metal"] {
+  background: #aeb8c2;
+}
+
+.swatch[data-layer="well"] {
+  background: #7fb6dc;
+}
+
+.canvas {
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  overflow: auto;
+  background: var(--color-surface);
+}
+
+.canvas svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Diagrams that stay readable only at their drawn size (methodology):
+   never shrink to fit; the frame scrolls instead. */
+.canvas.canvasNatural svg {
+  width: auto;
+  max-width: none;
+  margin: 0 auto;
+}
+
+.canvas [data-node-id],
+.canvas [data-id] {
+  cursor: pointer;
+  /* Symbols are thin strokes: the whole bounding box selects. */
+  pointer-events: bounding-box;
+}
+
+/* Walkthrough ring on the active component (class toggled by SignalFlow). */
+.canvas :global([data-id].flow-active) {
+  filter: drop-shadow(0 0 6px var(--color-accent-strong));
+}
+
+/* What-if badge on methodology nodes with stated settings. */
+.canvas :global(.whatif-dot) {
+  fill: var(--color-accent-strong);
+  stroke: var(--color-surface);
+  stroke-width: 2px;
+}
+
+.canvas :global(.whatif-t) {
+  fill: var(--color-surface);
+  font-size: 11px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.warnings {
+  margin: 0;
+  padding-left: var(--space-4);
+  font-size: 0.8125rem;
+  color: var(--color-ink-soft);
+}
+
+.picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.picker button {
+  padding: var(--space-1) var(--space-3);
+  background: transparent;
+  color: var(--color-ink);
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.picker button[aria-selected="true"],
+.picker button[aria-pressed="true"] {
+  background: var(--color-ink);
+  color: var(--color-surface);
+  border-color: var(--color-ink);
+}
+
+.picker button:not(:disabled):hover {
+  border-color: var(--color-ink);
+}
+
+.notes {
+  margin: 0;
+  padding-left: var(--space-4);
+  font-size: 0.8125rem;
+  color: var(--color-ink-soft);
+}

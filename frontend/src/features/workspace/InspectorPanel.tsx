@@ -9,7 +9,10 @@ import type {
 } from "../../lib/types.ts";
 import { SymbolGlyph } from "../canvas/SymbolGlyph.tsx";
 import { categoryLabel, domainLabel, prettyEntityType, symbolLabel } from "../canvas/graph3d.ts";
+import { ProvenanceTag } from "../diagrams/ProvenanceTag.tsx";
+import type { DiagramSelection } from "../diagrams/selection.ts";
 import type { NodeReplacement } from "./patchBuilders.ts";
+import { WhatIfEditor } from "./WhatIfEditor.tsx";
 import styles from "./InspectorPanel.module.css";
 
 function ProvenanceBadge({ value }: { value: string }) {
@@ -212,9 +215,15 @@ export function InspectorPanel({
   nodeLabels = {},
   onPreviewRemoval,
   onClearRemoval,
+  diagram = null,
+  paperId = null,
 }: {
   node: GraphNode | null;
   edge: GraphEdge | null;
+  /** A clicked diagram element; graph selection stays empty while set. */
+  diagram?: DiagramSelection | null;
+  /** Source paper for diagram what-if runs; null hides the editor. */
+  paperId?: string | null;
   formatShape: (shape: (number | null)[] | null) => string;
   disabled?: boolean;
   onUpdateConfig?: (config: Record<string, unknown>) => void;
@@ -229,6 +238,7 @@ export function InspectorPanel({
   onClearRemoval?: () => void;
 }) {
   if (!node && !edge) {
+    if (diagram) return <DiagramInspector diagram={diagram} paperId={paperId} />;
     return (
       <section className={styles.panel} aria-label="Inspector">
         <h2>Inspector</h2>
@@ -448,6 +458,103 @@ export function InspectorPanel({
           ) : null}
         </div>
       ) : null}
+    </section>
+  );
+}
+
+const DIAGRAM_VIEW_LABEL: Record<DiagramSelection["view"], string> = {
+  methodology: "Methodology",
+  schematic: "Schematic",
+  structure: "3D structure",
+};
+
+/** Inspector body for a clicked diagram element: read-only paper
+ *  content with its evidence. Diagram elements are not graph nodes,
+ *  so no patch editors are offered here. */
+function DiagramInspector({
+  diagram,
+  paperId,
+}: {
+  diagram: DiagramSelection;
+  paperId: string | null;
+}) {
+  const evidence = diagram.evidence;
+  // Methodology extras are the step's stated settings: editable knobs
+  // with a what-if estimate behind them. Other views keep read-only rows.
+  const whatIf = diagram.view === "methodology" && paperId !== null;
+  return (
+    <section className={styles.panel} aria-label="Inspector">
+      <h2>Inspector</h2>
+      <SelectionHead
+        eyebrow={`Diagram · ${DIAGRAM_VIEW_LABEL[diagram.view]}`}
+        title={diagram.label}
+        detail={diagram.elementId}
+      />
+      <dl className={styles.facts}>
+        <dt>Element</dt>
+        <dd className="mono">{diagram.elementId}</dd>
+        {diagram.kind ? (
+          <>
+            <dt>Kind</dt>
+            <dd>{diagram.kind}</dd>
+          </>
+        ) : null}
+        {diagram.detail ? (
+          <>
+            <dt>About</dt>
+            <dd>{diagram.detail}</dd>
+          </>
+        ) : null}
+        <dt>Provenance</dt>
+        <dd>
+          <ProvenanceTag value={diagram.provenance} />
+        </dd>
+        <dt>Confidence</dt>
+        <dd>{diagram.confidence === null ? "unknown" : diagram.confidence.toFixed(2)}</dd>
+        {whatIf && paperId ? (
+          <WhatIfEditor
+            key={diagram.elementId}
+            paperId={paperId}
+            nodeId={diagram.elementId}
+            nodeLabel={diagram.label}
+            params={diagram.extra}
+          />
+        ) : (
+          diagram.extra.map((row) => (
+            <div key={row.label} style={{ display: "contents" }}>
+              <dt>{row.label}</dt>
+              <dd className="mono">{row.value}</dd>
+            </div>
+          ))
+        )}
+        <dt>Evidence</dt>
+        <dd>
+          {!evidence ||
+          (evidence.figure_id === null &&
+            evidence.page === null &&
+            evidence.quote === null) ? (
+            <span className={styles.entityNote}>
+              No evidence recorded for this element; treat it as unverified.
+            </span>
+          ) : (
+            <ul className={styles.config}>
+              {evidence.figure_id ? (
+                <li>
+                  Figure <span className="mono">{evidence.figure_id}</span>
+                </li>
+              ) : null}
+              {evidence.page !== null ? <li>Page {evidence.page}</li> : null}
+              {evidence.bbox ? (
+                <li>
+                  Figure box{" "}
+                  <span className="mono">[{evidence.bbox.join(", ")}]</span> (0–100)
+                </li>
+              ) : null}
+              {evidence.quote ? <li>“{evidence.quote}”</li> : null}
+            </ul>
+          )}
+        </dd>
+      </dl>
     </section>
   );
 }

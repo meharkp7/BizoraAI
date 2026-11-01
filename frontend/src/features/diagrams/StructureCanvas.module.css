@@ -1,0 +1,97 @@
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.toolbar button {
+  padding: var(--space-1) var(--space-2);
+  font-size: 0.8125rem;
+  background: var(--color-surface-raised);
+  color: var(--color-ink);
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.toolbar button:hover {
+  border-color: var(--color-accent-strong);
+  color: var(--color-accent-strong);
+}
+
+.explode {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.8125rem;
+  color: var(--color-ink);
+}
+
+.explode input[type="range"] {
+  width: 10rem;
+  accent-color: var(--color-accent-strong);
+}
+
+.stage {
+  position: relative;
+  width: 100%;
+  height: clamp(28rem, calc(100vh - 26rem), 48rem);
+  overflow: hidden;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+.stage canvas {
+  display: block;
+}
+
+.labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.tagInner {
+  transform: translateY(-1.7rem);
+  max-width: 14rem;
+  padding: 0.1rem 0.45rem;
+  font-size: 0.6875rem;
+  line-height: 1.3;
+  text-align: center;
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-surface-raised) 92%, transparent);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+}
+
+.hint {
+  position: absolute;
+  left: var(--space-3);
+  bottom: var(--space-2);
+  z-index: 1;
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-ink-faint);
+  pointer-events: none;
+}
+
+/* Hover tooltip naming the part under the cursor. Rides just off the
+   pointer so the mesh stays visible. */
+.hoverTip {
+  position: absolute;
+  transform: translate(0.75rem, 0.75rem);
+  max-width: 14rem;
+  padding: 0.1rem 0.45rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-surface-raised) 94%, transparent);
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+}

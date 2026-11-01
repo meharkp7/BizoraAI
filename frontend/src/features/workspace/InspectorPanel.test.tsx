@@ -1,7 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { RemovalPreflight } from "../../lib/types.ts";
-import { entitiesFixture, graphFixture } from "../../test/fixtures.ts";
+import { diagramsFixture, entitiesFixture, graphFixture } from "../../test/fixtures.ts";
+import { methodologySelection } from "../diagrams/selection.ts";
 import { InspectorPanel } from "./InspectorPanel.tsx";
 
 describe("InspectorPanel replace form", () => {
@@ -163,5 +164,33 @@ describe("InspectorPanel removal preflight", () => {
 
     expect(screen.getByText(/this block is isolated/)).toBeInTheDocument();
     expect(screen.getByText(/none cited on this block/)).toBeInTheDocument();
+  });
+});
+
+describe("InspectorPanel diagram selection", () => {
+  it("shows a clicked methodology node with its evidence", () => {
+    const node = diagramsFixture.methodology?.nodes[1];
+    if (!node) throw new Error("fixture must carry methodology nodes");
+    render(
+      <InspectorPanel node={null} edge={null} formatShape={() => "—"} diagram={methodologySelection(node)} />,
+    );
+    const inspector = screen.getByRole("region", { name: "Inspector" });
+    expect(inspector).toHaveTextContent("Transformer encoder");
+    expect(inspector).toHaveTextContent("m-encode");
+    expect(inspector).toHaveTextContent("from paper");
+    expect(inspector).toHaveTextContent("Page 4");
+    expect(inspector).toHaveTextContent("The encoder stacks twelve blocks.");
+    expect(inspector).toHaveTextContent("layers");
+  });
+
+  it("stays honest when a diagram element has no evidence", () => {
+    const node = diagramsFixture.methodology?.nodes[2];
+    if (!node) throw new Error("fixture must carry methodology nodes");
+    render(
+      <InspectorPanel node={null} edge={null} formatShape={() => "—"} diagram={methodologySelection(node)} />,
+    );
+    const inspector = screen.getByRole("region", { name: "Inspector" });
+    expect(inspector).toHaveTextContent("assumed");
+    expect(inspector).toHaveTextContent(/No evidence recorded/);
   });
 });

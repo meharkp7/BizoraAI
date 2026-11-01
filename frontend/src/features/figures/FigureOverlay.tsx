@@ -51,7 +51,9 @@ function RegionButton({
   );
 }
 
-function FigureViewer({
+/** One paper figure with clickable region overlays. Shared by the
+ *  figures dialog and the diagram fallback views. */
+export function FigureViewer({
   figure,
   nodeLabels,
   projectId,

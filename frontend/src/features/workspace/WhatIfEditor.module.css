@@ -1,0 +1,127 @@
+.input {
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  font-size: 0.875rem;
+  font-family: var(--font-mono);
+  background: var(--color-surface-raised);
+  color: var(--color-ink);
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.actions button {
+  padding: var(--space-1) var(--space-3);
+  background: transparent;
+  color: var(--color-ink);
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.actions button:not(:disabled):hover {
+  border-color: var(--color-ink);
+}
+
+.actions button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.note {
+  display: block;
+  margin-top: var(--space-1);
+  font-size: 0.75rem;
+  font-style: italic;
+  color: var(--color-ink-soft);
+}
+
+.error {
+  margin: var(--space-2) 0 0;
+  color: var(--color-danger);
+  font-size: 0.875rem;
+}
+
+.outcome {
+  display: grid;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+
+.outcomeText {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.estimateNote {
+  margin: 0;
+  font-size: 0.75rem;
+  font-style: italic;
+  color: var(--color-ink-soft);
+}
+
+.basis,
+.assumptions {
+  margin: 0;
+  padding-left: var(--space-4);
+  font-size: 0.8125rem;
+  color: var(--color-ink-soft);
+}
+
+.confidence {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-ink-faint);
+}
+
+.history {
+  display: grid;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px dashed var(--color-line);
+}
+
+.historyHead {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 650;
+}
+
+.historyList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.historyList li {
+  display: grid;
+  gap: 2px;
+  font-size: 0.8125rem;
+}
+
+.historyChange {
+  font-family: monospace;
+  font-weight: 600;
+}
+
+.historyOutcome {
+  color: var(--color-ink-soft);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.historyMeta {
+  font-size: 0.75rem;
+  color: var(--color-ink-faint);
+}

@@ -1,0 +1,102 @@
+.panel {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--color-surface-raised);
+  border: 1px dashed var(--color-line-strong);
+  border-radius: var(--radius-sm);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.head h3 {
+  margin: 0;
+  font-size: 0.9375rem;
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.actions button {
+  padding: var(--space-1) var(--space-2);
+  background: transparent;
+  color: var(--color-ink);
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.actions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.note {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-ink-soft);
+}
+
+.staged,
+.results {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.staged li,
+.results li {
+  display: grid;
+  gap: 2px;
+  padding: var(--space-2);
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+}
+
+.stagedLabel {
+  font-weight: 650;
+  font-size: 0.875rem;
+}
+
+.stagedParams {
+  font-family: monospace;
+  color: var(--color-ink-soft);
+  overflow-wrap: anywhere;
+}
+
+.staged button {
+  justify-self: start;
+  padding: var(--space-1) var(--space-2);
+  background: transparent;
+  color: var(--color-ink);
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.outcome {
+  color: var(--color-ink-soft);
+}
+
+.meta {
+  font-size: 0.75rem;
+  color: var(--color-ink-faint);
+}
+
+.error {
+  font-size: 0.8125rem;
+  color: var(--color-error, #a93226);
+}

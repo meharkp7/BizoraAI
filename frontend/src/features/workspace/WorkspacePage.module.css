@@ -138,6 +138,13 @@
   gap: var(--space-3);
   align-content: start;
   box-shadow: var(--shadow-1);
+  /* Wide diagrams (horizontal methodology) must scroll inside the
+     canvas frame, never stretch the column over the inspector rail. */
+  min-width: 0;
+}
+
+.canvasPanel > * {
+  min-width: 0;
 }
 
 .side {

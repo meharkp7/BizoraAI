@@ -10,18 +10,20 @@ function useGraphParams(): { projectId: string; graphId: string } {
   return { projectId, graphId };
 }
 
-export type CanvasView = "structure" | "flow" | "3d";
+export type CanvasView = "methodology" | "schematic" | "3d";
 
-/** Pre-R1 view ids and their three-view equivalents. Schematic and
- *  floorplan folded into structure as render modes. */
+/** Retired view ids and their diagram-engine equivalents. The old
+ *  structure/flow editor views map to the methodology flow; floorplan
+ *  was physical geometry, now covered by the 3D structure tab. */
 const LEGACY_VIEWS: Record<string, CanvasView> = {
-  "2d": "structure",
-  process: "flow",
-  schematic: "structure",
-  floorplan: "structure",
+  "2d": "methodology",
+  process: "methodology",
+  structure: "methodology",
+  flow: "methodology",
+  floorplan: "3d",
 };
 
-const CANVAS_VIEWS: ReadonlySet<string> = new Set(["structure", "flow", "3d"]);
+const CANVAS_VIEWS: ReadonlySet<string> = new Set(["methodology", "schematic", "3d"]);
 
 export function WorkspaceRoute() {
   const { projectId, graphId } = useGraphParams();
@@ -34,7 +36,7 @@ export function WorkspaceRoute() {
       ? (requested as CanvasView)
       : requested && requested in LEGACY_VIEWS
         ? LEGACY_VIEWS[requested]
-        : "structure";
+        : "methodology";
 
   function updateParams(next: { version?: number; view?: CanvasView }): void {
     const params = new URLSearchParams(searchParams);
@@ -45,7 +47,7 @@ export function WorkspaceRoute() {
       params.set("v", String(versionValue));
     }
     const viewValue = next.view ?? view;
-    if (viewValue === "structure") {
+    if (viewValue === "methodology") {
       params.delete("view");
     } else {
       params.set("view", viewValue);
