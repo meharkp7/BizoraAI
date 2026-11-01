@@ -26,8 +26,8 @@
   color: var(--color-ink-soft);
 }
 
-/* Textbook-layer swatches for the dressed circuit scene. Colors match
-   componentModels.ts layer roles. */
+/* Part-shape swatches for the dressed scene. Colors match the body
+   tints in partIdentity.ts. */
 .layerLegend {
   display: flex;
   flex-wrap: wrap;
@@ -53,24 +53,40 @@
   border-radius: 2px;
 }
 
-.swatch[data-layer="nplus"] {
-  background: #3d9950;
+.swatch[data-shape="store"] {
+  background: #9aa4ae;
 }
 
-.swatch[data-layer="pplus"] {
-  background: #8a63c8;
+.swatch[data-shape="module"] {
+  background: #3a4250;
 }
 
-.swatch[data-layer="poly"] {
-  background: #c2571f;
+.swatch[data-shape="decision"] {
+  background: #9a6234;
 }
 
-.swatch[data-layer="metal"] {
-  background: #aeb8c2;
+.swatch[data-shape="io"] {
+  background: #3f5a66;
 }
 
-.swatch[data-layer="well"] {
-  background: #7fb6dc;
+.swatch[data-shape="transistor"] {
+  background: #4a6a8a;
+}
+
+.swatch[data-shape="passive"] {
+  background: #8a7350;
+}
+
+.swatch[data-shape="logic"] {
+  background: #5f7052;
+}
+
+.swatch[data-shape="power"] {
+  background: #2e343b;
+}
+
+.swatch[data-shape="part"] {
+  background: #5a6470;
 }
 
 .canvas {

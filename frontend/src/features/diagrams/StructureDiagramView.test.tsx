@@ -84,11 +84,11 @@ describe("StructureDiagramView", () => {
     expect(
       toggle.getByRole("button", { name: "Cell interior" }),
     ).toHaveAttribute("aria-pressed", "true");
-    // NMOS/PMOS labels name known devices: dressed caption + legend.
+    // Generic identity caption + shape legend for the dressed scene.
     expect(
-      screen.getByText(/Textbook structures for the named devices/),
+      screen.getByText(/Shapes follow the IR kind and plates name each part/),
     ).toBeInTheDocument();
-    expect(screen.getByRole("list", { name: "Textbook structure colors" })).toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "Part family legend" })).toBeInTheDocument();
   });
 
   it("hides the scene toggle when cells carry no interior", () => {
@@ -172,8 +172,9 @@ describe("StructureDiagramView", () => {
     expect(screen.getByText("3 from paper · 1 assumed")).toBeInTheDocument();
     expect(screen.queryByText("chip warning")).toBeNull();
     expect(
-      screen.getByText(/Textbook structures per component type \(terminals illustrative, not to scale\)/),
+      screen.getByText(/Shapes follow the IR kind and plates name each part/),
     ).toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "Part family legend" })).toBeInTheDocument();
     fireEvent.click(toggle.getByRole("button", { name: "Full structure" }));
     expect(screen.getByText("chip warning")).toBeInTheDocument();
   });

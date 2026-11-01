@@ -68,6 +68,13 @@
   border-radius: var(--radius-sm);
 }
 
+/* Expanded tag of the picked part: full label, called out. */
+.tagInner.tagOpen {
+  max-width: 20rem;
+  font-weight: 600;
+  border-color: var(--color-accent-strong);
+}
+
 .hint {
   position: absolute;
   left: var(--space-3);

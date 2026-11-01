@@ -15,7 +15,7 @@ import { renderStructureDiagram } from "./adapters.ts";
 import { CircuitPicker } from "./CircuitPicker.tsx";
 import { circuitToStructure } from "./circuitToStructure.ts";
 import { buildCircuitWires, wireHoverThreshold } from "./circuitWires.ts";
-import { buildComponentModel, modelKindForBlock } from "./componentModels.ts";
+import { buildPartIdentity, shortTagLabel } from "./partIdentity.ts";
 import { DiagramFallback } from "./DiagramFallback.tsx";
 import styles from "./DiagramView.module.css";
 import canvasStyles from "./StructureCanvas.module.css";
@@ -151,11 +151,6 @@ export function StructureDiagramView({
         ? detailCell
         : structure.root;
   const counts = countProvenance(walkBlocks(activeRoot));
-  // Cell-interior parts that name a known device get textbook
-  // structures; the caption and legend say so honestly.
-  const dressedParts = showingDetail
-    ? walkBlocks(activeRoot).filter((block) => modelKindForBlock(block)).length
-    : 0;
   const title = showingCircuit && circuitScene ? circuitScene.circuit.title : structure.title;
   return (
     <div className={styles.view}>
@@ -229,9 +224,9 @@ export function StructureDiagramView({
         onSelect={onSelect}
         onSpot={setSpotId}
       />
-      {activeRoot.children.length > 0 ? (
+      {walkBlocks(activeRoot).length > 1 ? (
         <div className={styles.picker} role="group" aria-label="Parts in this scene">
-          {activeRoot.children.map((child) => (
+          {walkBlocks(activeRoot).slice(1).map((child) => (
             <button
               key={child.id}
               type="button"
@@ -254,53 +249,63 @@ export function StructureDiagramView({
           ))}
         </ul>
       ) : null}
-      {showingCircuit || dressedParts > 0 ? (
-        <ul className={styles.layerLegend} aria-label="Textbook structure colors">
-          <li><span className={styles.swatch} data-layer="nplus" />N+ diffusion</li>
-          <li><span className={styles.swatch} data-layer="pplus" />P+ diffusion</li>
-          <li><span className={styles.swatch} data-layer="poly" />Poly gate</li>
-          <li><span className={styles.swatch} data-layer="metal" />Metal</li>
-          <li><span className={styles.swatch} data-layer="well" />N-well</li>
+      {showingCircuit || showingDetail ? (
+        <ul className={styles.layerLegend} aria-label="Part family legend">
+          <li><span className={styles.swatch} data-shape="transistor" />Transistor</li>
+          <li><span className={styles.swatch} data-shape="passive" />Passive</li>
+          <li><span className={styles.swatch} data-shape="logic" />Logic</li>
+          <li><span className={styles.swatch} data-shape="power" />Power</li>
+          <li><span className={styles.swatch} data-shape="part" />Part</li>
         </ul>
-      ) : null}
+      ) : (
+        <ul className={styles.layerLegend} aria-label="Part shape legend">
+          <li><span className={styles.swatch} data-shape="store" />Store / dataset</li>
+          <li><span className={styles.swatch} data-shape="module" />Module</li>
+          <li><span className={styles.swatch} data-shape="decision" />Decision</li>
+          <li><span className={styles.swatch} data-shape="io" />Input / output</li>
+          <li><span className={styles.swatch} data-shape="part" />Part</li>
+        </ul>
+      )}
       <p className={styles.counts}>
-        {showingCircuit
-          ? "Textbook structures per component type (terminals illustrative, not to scale) — click any part for its figure evidence."
-          : dressedParts > 0
-            ? "Textbook structures for the named devices, boxes for the rest (arrangement, not dimensions) — click any part for its evidence."
-            : "Boxes show arrangement, not exact dimensions — click any part for its evidence."}
+        Shapes follow the IR kind and plates name each part from the paper&apos;s own
+        text — click any part for its evidence. Arrangement, not dimensions.
       </p>
     </div>
   );
 }
 
-/** Swap engine boxes for textbook structures wherever the block
- *  names a known device (typed part or label keywords). Generic over
- *  any IR: blocks without a device (arrays, periphery, switches,
- *  keepers) keep their honest box. The model inherits the box's
- *  id/label/position so picking, hover, spotlight and disposal keep
- *  working unchanged. */
+/** Swap every engine box for its generic identity (shape by IR enum,
+ *  engraved plate from IR text). The chip root keeps its box for the
+ *  silicon finish below. Each part sits in an unscaled wrapper at the
+ *  box's position carrying the box's id/label, so picking, hover,
+ *  spotlight and disposal keep working unchanged; nested children
+ *  (module members the engine never draws) lay out in a grid on top. */
 function dressPartMeshes(group: THREE.Group, root: DiagramBlock): void {
   for (const child of [...group.children]) {
     if (!(child instanceof THREE.Mesh)) continue;
     const rawId = (child.userData as { id?: unknown }).id;
     if (typeof rawId !== "string") continue;
     const block = findBlock(root, sceneIdToBlockId(rawId));
-    if (!block) continue;
-    const kind = modelKindForBlock(block);
-    if (!kind) continue;
+    // The chip root keeps its silicon finish; array instances keep the
+    // engine box (the array annotation names them once — sixteen
+    // identical plates would be noise; interiors live in the detail
+    // scene). Everything else gets its generic identity.
+    if (!block || block.kind === "chip" || block.kind === "array") continue;
     const params = (child.geometry as THREE.BoxGeometry).parameters;
     if (!params) continue;
-    const model = buildComponentModel(kind);
-    // Unit footprint (1x1, height 0.5) scaled onto the engine box.
-    model.scale.set(params.width, params.height / 0.5, params.depth);
-    model.position.set(
+    const wrapper = new THREE.Group();
+    wrapper.position.set(
       child.position.x,
       child.position.y - params.height / 2,
       child.position.z,
     );
-    model.userData = { ...child.userData };
-    group.add(model);
+    wrapper.userData = { ...child.userData };
+    const model = buildPartIdentity(block, params.width / Math.max(params.depth, 1e-6));
+    // Unit footprint (1x1, height 0.5) scaled onto the engine box.
+    model.scale.set(params.width, params.height / 0.5, params.depth);
+    wrapper.add(model);
+    layoutNestedParts(wrapper, block, params.width, params.height, params.depth);
+    group.add(wrapper);
     group.remove(child);
     child.geometry.dispose();
     const material = child.material as THREE.Material | THREE.Material[] | undefined;
@@ -316,6 +321,45 @@ function dressPartMeshes(group: THREE.Group, root: DiagramBlock): void {
       if (line.geometry) line.geometry.dispose();
     }
   }
+}
+
+/** Lay a block's children in a grid on top of its dressed box. The
+ *  engine draws only top-level boxes, so module members (and any other
+ *  nesting) would otherwise stay invisible; this arrangement is
+ *  illustrative — the caption says so — while shapes, tints and plates
+ *  stay just as honest as top-level parts. Each child gets its own
+ *  unscaled wrapper with its block id/label, so picking, hover and
+ *  spotlight treat nested parts exactly like top-level ones. */
+function layoutNestedParts(
+  parent: THREE.Group,
+  block: DiagramBlock,
+  w: number,
+  h: number,
+  d: number,
+): void {
+  const kids = block.children;
+  if (kids.length === 0) return;
+  const cols = Math.ceil(Math.sqrt(kids.length));
+  const rows = Math.ceil(kids.length / cols);
+  const cellW = w / cols;
+  const cellD = d / rows;
+  const childH = Math.min(h * 0.9, Math.max(cellW, cellD) * 0.55);
+  kids.forEach((kid, index) => {
+    const col = index % cols;
+    const row = Math.floor(index / cols);
+    const wrapper = new THREE.Group();
+    wrapper.position.set(
+      -w / 2 + cellW * (col + 0.5),
+      h,
+      -d / 2 + cellD * (row + 0.5),
+    );
+    wrapper.userData = { id: kid.id, label: kid.label };
+    const model = buildPartIdentity(kid, cellW / Math.max(cellD, 1e-6));
+    model.scale.set(cellW * 0.9, childH / 0.5, cellD * 0.9);
+    wrapper.add(model);
+    parent.add(wrapper);
+    layoutNestedParts(wrapper, kid, cellW * 0.9, childH, cellD * 0.9);
+  });
 }
 
 /** First paintable color under a part, for the SVG snapshot. */
@@ -440,8 +484,13 @@ function StructureCanvas({
           const mesh = child as THREE.Mesh;
           if (mesh.geometry) mesh.geometry.dispose();
           const material = mesh.material as THREE.Material | THREE.Material[] | undefined;
-          if (Array.isArray(material)) material.forEach((entry) => entry.dispose());
-          else if (material) material.dispose();
+          const disposeEntry = (entry: THREE.Material): void => {
+            const mapped = (entry as THREE.MeshStandardMaterial).map;
+            if (mapped) mapped.dispose();
+            entry.dispose();
+          };
+          if (Array.isArray(material)) material.forEach(disposeEntry);
+          else if (material) disposeEntry(material);
         });
       });
 
@@ -481,12 +530,16 @@ function StructureCanvas({
       createdLabels.domElement.className = canvasStyles.labels;
       host.appendChild(createdLabels.domElement);
 
-      // Paper labels from the scene float above their boxes.
+      // Paper labels from the scene float above their boxes, kept
+      // short so neighbors stay readable; the full text rides along in
+      // dataset.full and returns when its part is clicked (see the
+      // spotlight effect below).
       const markers: THREE.Object3D[] = [];
       for (const annotation of scene.annotations) {
         const tag = document.createElement("div");
         tag.className = canvasStyles.tagInner;
-        tag.textContent = annotation.text;
+        tag.textContent = shortTagLabel(annotation.text);
+        tag.dataset.full = annotation.text;
         const marker = new CSS2DObject(tag);
         marker.position.set(annotation.x, annotation.z, annotation.y);
         scene3.add(marker);
@@ -751,6 +804,19 @@ function StructureCanvas({
   useEffect(() => {
     const group = groupRef.current;
     if (!group || failed) return;
+    // The picked part's floating tag expands to its full label; every
+    // other tag stays short so the scene keeps breathing room.
+    const host = hostRef.current;
+    const spotLabel = spotId ? (findBlock(root, spotId)?.label ?? null) : null;
+    if (host) {
+      for (const el of host.querySelectorAll(`.${canvasStyles.tagInner}`)) {
+        const tag = el as HTMLDivElement;
+        const full = tag.dataset.full ?? tag.textContent ?? "";
+        const open = spotLabel !== null && full === spotLabel;
+        tag.textContent = open ? full : shortTagLabel(full);
+        tag.classList.toggle(canvasStyles.tagOpen, open);
+      }
+    }
     group.traverse((child) => {
       if (!(child instanceof THREE.Mesh)) return;
       const raw = child.material as THREE.Material | THREE.Material[] | undefined;
