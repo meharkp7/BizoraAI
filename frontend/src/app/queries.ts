@@ -310,10 +310,12 @@ export function useCopilot(projectId: string, graphId: string, version: number) 
     mutationFn: ({
       message,
       selectedNodeId,
+      diagramContext,
     }: {
       message: string;
       selectedNodeId: string | null;
-    }) => api.askCopilot(projectId, graphId, version, message, selectedNodeId),
+      diagramContext: string | null;
+    }) => api.askCopilot(projectId, graphId, version, message, selectedNodeId, diagramContext),
   });
 }
 
@@ -375,7 +377,25 @@ export function useIngestGraphFigures(projectId: string, graphId: string) {
 export const paperKeys = {
   tables: (projectId: string, graphId: string) =>
     ["graph", projectId, graphId, "tables"] as const,
+  diagrams: (paperId: string) => ["papers", paperId, "diagrams"] as const,
 };
+
+/** Diagram IRs for one paper: the sole feed of the canvas views. */
+export function usePaperDiagrams(paperId: string | null) {
+  return useQuery({
+    queryKey: paperKeys.diagrams(paperId ?? ""),
+    queryFn: () => api.getPaperDiagrams(paperId ?? ""),
+    enabled: paperId !== null,
+  });
+}
+
+/** What-if estimate for one methodology step under edited settings. */
+export function usePaperWhatIf(paperId: string) {
+  return useMutation({
+    mutationFn: (input: { nodeId: string; params: Record<string, string> }) =>
+      api.runPaperWhatIf(paperId, input.nodeId, input.params),
+  });
+}
 
 export function useGraphTables(projectId: string, graphId: string) {
   return useQuery({
@@ -400,5 +420,97 @@ export function useExtractPaper() {
 export function useParsePaper() {
   return useMutation({
     mutationFn: (file: File) => api.parsePaper(file),
+  });
+}
+
+export const accountKeys = {
+  me: () => ["account", "me"] as const,
+  papers: () => ["account", "papers"] as const,
+  notes: (paperId: string) => ["papers", paperId, "notes"] as const,
+};
+
+/** The logged-in account, or an error when no token is stored. */
+export function useMe(enabled = true) {
+  return useQuery({
+    queryKey: accountKeys.me(),
+    queryFn: () => api.me(),
+    enabled,
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useLogin() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ email, password }: { email: string; password: string }) =>
+      api.login(email, password),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: accountKeys.me() });
+      void queryClient.invalidateQueries({ queryKey: accountKeys.papers() });
+    },
+  });
+}
+
+export function useRegister() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ email, password, name }: { email: string; password: string; name: string }) =>
+      api.register(email, password, name),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: accountKeys.me() });
+      void queryClient.invalidateQueries({ queryKey: accountKeys.papers() });
+    },
+  });
+}
+
+/** The caller's paper library. */
+export function useMyPapers(enabled = true) {
+  return useQuery({
+    queryKey: accountKeys.papers(),
+    queryFn: () => api.myPapers(),
+    enabled,
+    retry: false,
+  });
+}
+
+/** The caller's notes on one paper. */
+export function usePaperNotes(paperId: string | null, enabled = true) {
+  return useQuery({
+    queryKey: accountKeys.notes(paperId ?? ""),
+    queryFn: () => api.listNotes(paperId as string),
+    enabled: enabled && paperId !== null,
+    retry: false,
+  });
+}
+
+export function useCreateNote(paperId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: string) => api.createNote(paperId, body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: accountKeys.notes(paperId) });
+    },
+  });
+}
+
+export function useUpdateNote(paperId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ noteId, body }: { noteId: number; body: string }) =>
+      api.updateNote(paperId, noteId, body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: accountKeys.notes(paperId) });
+    },
+  });
+}
+
+export function useDeleteNote(paperId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (noteId: number) => api.deleteNote(paperId, noteId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: accountKeys.notes(paperId) });
+    },
   });
 }
