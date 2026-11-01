@@ -271,3 +271,70 @@ def test_reingest_replaces_paper_text(db_session: Session) -> None:
     asyncio.run(run_test())
 
     asyncio.run(run_test())
+
+
+def test_persist_saves_figures_and_text_without_vision(db_session: Session) -> None:
+    from bizora.core.figure_service import persist_paper_figures
+    from bizora.db.repository import list_paper_figures
+
+    pdf_bytes = make_fake_pdf_with_images(2, text="Figure 1. A flow. " * 30)
+    count, truncated, skipped = persist_paper_figures(
+        db_session,
+        project_id="project-1",
+        graph_id="graph-1",
+        pdf_bytes=pdf_bytes,
+        page_texts=extract_page_texts(pdf_bytes),
+        source_id="paper-1",
+        created_by="researcher-1",
+    )
+
+    assert (count, truncated, skipped) == (2, False, 0)
+    figures = list_paper_figures(db_session, project_id="project-1", graph_id="graph-1")
+    assert len(figures) == 2
+    assert figures[0].kind == "unknown"
+    assert figures[0].byte_size and figures[0].byte_size > 0
+    text = get_paper_text(db_session, source_id="paper-1")
+    assert text is not None
+    assert "Figure 1. A flow." in text
+
+
+def test_persist_without_figures_still_saves_text(db_session: Session) -> None:
+    from bizora.core.figure_service import persist_paper_figures
+    from bizora.db.repository import list_paper_figures
+
+    pdf_bytes = make_fake_pdf_with_images(0, text="Just prose, no figures.")
+    count, _, _ = persist_paper_figures(
+        db_session,
+        project_id="project-1",
+        graph_id="graph-1",
+        pdf_bytes=pdf_bytes,
+        page_texts=extract_page_texts(pdf_bytes),
+        source_id="paper-1",
+        created_by="researcher-1",
+    )
+
+    assert count == 0
+    assert list_paper_figures(db_session, project_id="project-1", graph_id="graph-1") == []
+    assert get_paper_text(db_session, source_id="paper-1") is not None
+
+
+def test_persist_replaces_stale_figures(db_session: Session) -> None:
+    from bizora.core.figure_service import persist_paper_figures
+    from bizora.db.repository import list_paper_figures
+
+    kwargs = dict(
+        project_id="project-1",
+        graph_id="graph-1",
+        source_id="paper-1",
+        created_by="researcher-1",
+    )
+    first = make_fake_pdf_with_images(2, text="v1")
+    persist_paper_figures(
+        db_session, pdf_bytes=first, page_texts=extract_page_texts(first), **kwargs
+    )
+    second = make_fake_pdf_with_images(1, text="v2")
+    persist_paper_figures(
+        db_session, pdf_bytes=second, page_texts=extract_page_texts(second), **kwargs
+    )
+
+    assert len(list_paper_figures(db_session, project_id="project-1", graph_id="graph-1")) == 1

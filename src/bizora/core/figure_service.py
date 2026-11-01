@@ -131,6 +131,70 @@ def _attachments(
     return tuple(attachments), image_by_id
 
 
+def persist_paper_figures(
+    session: Session,
+    *,
+    project_id: str,
+    graph_id: str,
+    pdf_bytes: bytes,
+    page_texts: tuple[PdfPageText, ...],
+    source_id: str,
+    created_by: str,
+) -> tuple[int, bool, int]:
+    """Persist embedded figures and paper text without vision calls.
+
+    Runs at extract time so the diagrams endpoint works immediately
+    after upload for any paper: figures land as UNKNOWN-kind records
+    with file metadata and caption hints, and the marked text feeds
+    the text-derived diagrams. Vision describe/localize stays in
+    :func:`ingest_paper_figures`, which replaces these rows with
+    enriched ones on re-ingest. Returns (figure count, truncated,
+    skipped).
+    """
+    ingest = extract_figures_from_pdf(pdf_bytes)
+    marked_text = marked_paper_text(page_texts)
+    delete_paper_figures(session, project_id=project_id, graph_id=graph_id)
+    save_paper_text(
+        session,
+        project_id=project_id,
+        graph_id=graph_id,
+        source_id=source_id,
+        created_by=created_by,
+        text=marked_text,
+        page_count=len(page_texts) or None,
+    )
+    if not ingest.figures:
+        session.commit()
+        return (0, ingest.truncated, ingest.skipped)
+    pages = {page.page_number: page.text for page in page_texts}
+    for raw in ingest.figures:
+        figure_id = figure_id_for(source_id, raw.page, raw.index, raw.sha256[:8])
+        page_text = pages.get(raw.page, "")
+        mentions = find_figure_mentions(page_text)
+        candidates = caption_candidates(page_text)
+        save_paper_figure(
+            session,
+            project_id=project_id,
+            graph_id=graph_id,
+            source_id=source_id,
+            created_by=created_by,
+            figure=FigureRecord(
+                figure_id=figure_id,
+                page=raw.page,
+                label=", ".join(mentions)[:128] or None,
+                caption="\n---\n".join(candidates)[:4000] or None,
+                mime_type=raw.mime_type,
+                sha256=raw.sha256,
+                byte_size=len(raw.image_bytes),
+                context=page_text[:SURROUNDING_TEXT_CHARS] or None,
+            ),
+            regions=(),
+            image_bytes=raw.image_bytes,
+        )
+    session.commit()
+    return (len(ingest.figures), ingest.truncated, ingest.skipped)
+
+
 async def ingest_paper_figures(
     session: Session,
     *,
