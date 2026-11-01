@@ -79,6 +79,30 @@ async def get_current_principal(
 PRINCIPAL_DEPENDENCY = Depends(get_current_principal)
 
 
+async def get_optional_principal(
+    credentials: HTTPAuthorizationCredentials | None = BEARER_CREDENTIALS_DEPENDENCY,
+) -> Principal | None:
+    """Resolve the Bearer [REDACTED] when one is presented.
+
+    Returns None without credentials (anonymous callers stay anonymous);
+    invalid credentials fail loudly with 401 instead of silently
+    downgrading to anonymous.
+    """
+    if credentials is None or not credentials.credentials:
+        return None
+    try:
+        return _require_verifier().verify(credentials.credentials)
+    except TokenAuthError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(exc),
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from exc
+
+
+OPTIONAL_PRINCIPAL_DEPENDENCY = Depends(get_optional_principal)
+
+
 def require_project_membership(
     project_id: str,
     *allowed_roles: ProjectRole,

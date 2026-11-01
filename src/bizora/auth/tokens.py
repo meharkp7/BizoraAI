@@ -12,10 +12,13 @@ import hashlib
 import hmac
 import json
 import os
+import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Protocol, runtime_checkable
 
 from bizora.contracts.auth import Principal
+
+DEFAULT_TOKEN_LIFETIME = timedelta(days=7)
 
 
 class TokenAuthError(Exception):
@@ -38,6 +41,50 @@ def _b64url_decode(segment: str) -> bytes:
         return base64.urlsafe_b64decode(padded.encode("ascii"))
     except (ValueError, UnicodeEncodeError) as exc:
         raise TokenAuthError("Malformed token encoding.") from exc
+
+
+def _b64url_encode(raw: bytes) -> str:
+    """Encode bytes as unpadded base64url."""
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+
+def mint_hs256_token(
+    user_id: str,
+    secret: str,
+    *,
+    expires_in: timedelta | None = None,
+    issued_at: datetime | None = None,
+) -> tuple[str, datetime]:
+    """Mint an HS256 JWT for one user id.
+
+    Returns the token and its expiry. The token verifies with
+    :func:`verify_hs256_token` against the same secret.
+    """
+    if not secret:
+        raise ValueError("Token signing is not configured.")
+    if not user_id or len(user_id) > 128:
+        raise ValueError("Token needs a usable subject.")
+    moment = issued_at.astimezone(UTC) if issued_at is not None else datetime.now(UTC)
+    if moment.tzinfo is None:
+        raise ValueError("Minting timestamps must be timezone-aware.")
+    expires_at = moment + (expires_in if expires_in is not None else DEFAULT_TOKEN_LIFETIME)
+    header_segment = _b64url_encode(json.dumps({"alg": "HS256", "typ": "JWT"}).encode("utf-8"))
+    payload_segment = _b64url_encode(
+        json.dumps(
+            {
+                "sub": user_id,
+                "exp": int(expires_at.timestamp()),
+                "iat": int(moment.timestamp()),
+                "jti": uuid.uuid4().hex,
+            }
+        ).encode("utf-8")
+    )
+    signature = hmac.new(
+        secret.encode("utf-8"),
+        f"{header_segment}.{payload_segment}".encode("ascii"),
+        hashlib.sha256,
+    ).digest()
+    return f"{header_segment}.{payload_segment}.{_b64url_encode(signature)}", expires_at
 
 
 def verify_hs256_token(
@@ -63,7 +110,7 @@ def verify_hs256_token(
     try:
         header = json.loads(_b64url_decode(header_segment))
         payload = json.loads(_b64url_decode(payload_segment))
-    except (json.JSONDecodeError, TokenAuthError) as exc:
+    except (json.JSONDecodeError, UnicodeDecodeError, TokenAuthError) as exc:
         raise TokenAuthError("Malformed token JSON.") from exc
     if not isinstance(header, dict) or header.get("alg") != "HS256":
         raise TokenAuthError("Unsupported token algorithm.")
