@@ -226,6 +226,38 @@ def test_circuit_requires_supply_or_ground_net() -> None:
     assert any("no supply or ground net" in e for e in result.errors)
 
 
+def test_pure_block_circuit_needs_no_rails() -> None:
+    ir = CircuitIR.model_validate(
+        {
+            "version": 1,
+            "title": "blocks",
+            "source": {"figure_id": "derived-x", "page": 1},
+            "components": [
+                {
+                    "id": "a",
+                    "type": "block",
+                    "label": "A",
+                    "pins": {"out": "e0"},
+                    "confidence": 0.4,
+                },
+                {
+                    "id": "b",
+                    "type": "block",
+                    "label": "B",
+                    "pins": {"in": "e0"},
+                    "confidence": 0.4,
+                },
+            ],
+            "nets": [{"id": "e0", "label": "flow", "role": "signal", "global": False}],
+            "ports": [],
+        }
+    )
+
+    result = validate_circuit(ir)
+
+    assert result.errors == ()
+
+
 def test_circuit_unexpected_pin_warns() -> None:
     ir = make_circuit()
     extra = ir.components[0].model_copy(

@@ -145,15 +145,34 @@ def test_diagrams_unknown_paper_is_404(client: TestClient) -> None:
     assert client.get("/api/v1/papers/bad!id/diagrams").status_code == 404
 
 
-def test_diagrams_provider_failure_is_502(
+def test_diagrams_provider_failure_degrades_to_reasons(
     client: TestClient, stub_diagrams: ScriptedDiagramProvider
 ) -> None:
+    from bizora.core.diagram_extraction import DiagramProviderError
+
     seed_paper_with_figures(client, "paper-1")
     stub_diagrams.fail_extract = True
 
+    async def fail_text(paper_text: str, kind: str):  # type: ignore[no-untyped-def]
+        raise DiagramProviderError("stub text failure")
+
+    stub_diagrams.extract_text_ir = fail_text  # type: ignore[method-assign]
+
     response = client.get("/api/v1/papers/paper-1/diagrams")
 
-    assert response.status_code == 502
+    assert response.status_code == 200
+    body = response.json()
+    assert body["methodology"] is None
+    assert body["circuits"] == []
+    assert body["structure"] is None
+    assert any(
+        "extraction failed" in error
+        for error in body["validation"]["methodology"]["errors"]
+    )
+    assert any(
+        "extraction failed" in error
+        for error in body["validation"]["structure"]["errors"]
+    )
 
 
 def seed_text_only_paper(client: TestClient, source_id: str) -> None:
@@ -187,10 +206,48 @@ def test_diagrams_text_only_paper_serves_text_fallback(
 
     assert response.status_code == 200
     body = response.json()
-    assert body["circuits"] == []
+    assert [circuit["title"] for circuit in body["circuits"]] == ["flow (system blocks)"]
     assert body["methodology"]["title"] == "flow"
     assert body["structure"]["title"] == "macro"
-    assert body["sources"] == {"methodology": "text", "structure": "text"}
+    assert body["sources"] == {
+        "methodology": "text",
+        "structure": "text",
+        "circuit:derived": "derived:methodology",
+    }
     # The stub saw the persisted paper text, not an empty string.
     assert stub_diagrams.calls.get("text:methodology") == 1
     assert stub_diagrams.calls.get("text:structure") == 1
+
+
+def test_extract_feeds_diagrams_without_separate_ingest(
+    client: TestClient, stub_diagrams: ScriptedDiagramProvider
+) -> None:
+    """Uploading a paper persists its text, so diagrams work immediately."""
+    from tests.unit.test_papers_api import FakePaperProvider, make_pdf_bytes
+
+    from bizora.api import get_baseten_provider
+
+    stub_diagrams.text_payloads["methodology"] = make_methodology_payload()
+    stub_diagrams.text_payloads["structure"] = make_structure_payload()
+    app.dependency_overrides[get_baseten_provider] = lambda: FakePaperProvider()
+    try:
+        upload = client.post(
+            "/api/v1/papers/extract",
+            files={"file": ("paper.pdf", make_pdf_bytes("AlphaFold2 predicts structures."), "application/pdf")},
+            data={
+                "project_id": "project-direct",
+                "graph_id": "graph-direct",
+                "source_id": "paper-direct",
+            },
+        )
+        assert upload.status_code == 201
+    finally:
+        app.dependency_overrides.pop(get_baseten_provider, None)
+
+    response = client.get("/api/v1/papers/paper-direct/diagrams")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["methodology"]["title"] == "flow"
+    assert body["sources"]["methodology"] == "text"
+    assert [circuit["title"] for circuit in body["circuits"]] == ["flow (system blocks)"]

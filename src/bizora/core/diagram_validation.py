@@ -161,7 +161,15 @@ def validate_circuit(ir: CircuitIR) -> DiagramValidationResult:
         elif count == 0:
             warnings.append(f"net '{net.id}' ({net.role.value}) is unused")
 
-    if not any(net.role in (NetRole.SUPPLY, NetRole.GROUND) for net in ir.nets):
+    # Power rails are mandatory for electrical schematics, but a
+    # system block diagram (every component a block) legitimately has
+    # none: its nets are data/control flow, not power distribution.
+    has_electrical = any(
+        component.type is not ComponentType.BLOCK for component in ir.components
+    )
+    if has_electrical and not any(
+        net.role in (NetRole.SUPPLY, NetRole.GROUND) for net in ir.nets
+    ):
         errors.append("circuit has no supply or ground net")
 
     stats = {

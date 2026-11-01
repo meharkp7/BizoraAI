@@ -28,12 +28,23 @@ from bizora.contracts.diagram_ir import (
     CIRCUIT_IR_JSON_SCHEMA,
     METHODOLOGY_IR_JSON_SCHEMA,
     STRUCTURE_IR_JSON_SCHEMA,
+    BlockKind,
     CircuitIR,
+    ComponentType,
+    MethodologyEdgeKind,
     MethodologyIR,
     MethodologyNode,
+    MethodologyNodeKind,
+    NetRole,
+    PortDirection,
+    Side,
     StructureIR,
 )
 from bizora.contracts.figures import FigureAttachment, ResponseUsage
+from bizora.core.diagram_derivation import (
+    methodology_to_circuit,
+    methodology_to_structure,
+)
 from bizora.core.diagram_validation import (
     DiagramValidationResult,
     normalize_structure_layout,
@@ -505,7 +516,17 @@ async def _extract_one_text_ir(
         return (cached_ir, cached_validation)
 
     cache_flags[kind] = False
-    draft = await provider.extract_text_ir(paper_text, kind)
+    try:
+        draft = await provider.extract_text_ir(paper_text, kind)
+    except DiagramProviderError as exc:
+        # One kind's failure must not sink the other: the surviving
+        # IR still serves, and derivation can cover the missing view.
+        # Failures stay uncached so retries heal.
+        repaired_flags[kind] = False
+        return (
+            None,
+            DiagramValidationResult(errors=(f"{kind} extraction failed: {exc}",)),
+        )
     if draft.usage is not None:
         usage.append(draft.usage)
     expected = EXPECTED_IR_CLASS[kind]
@@ -592,17 +613,37 @@ async def extract_paper_diagrams(
     paper_text: str,
     *,
     paper_hash: str,
+    source_id: str = "paper",
 ) -> PaperDiagrams:
     """Extract every diagram IR: figures first, paper text as fallback.
 
-    Circuits come only from circuit figures. Methodology comes from the
-    first flow figure, else from text; structure comes from the first
-    structure figure, else from text.
+    Circuits come from circuit figures, else derived as system blocks
+    from the methodology. Methodology comes from the first flow figure,
+    else from text; structure comes from the first structure figure,
+    else from text, else derived from the methodology. Every paper
+    with a methodology therefore yields all three views.
     """
-    figure_results = [
-        await extract_figure_diagram(provider, figure, paper_hash=paper_hash)
-        for figure in figures
-    ]
+    figure_results: list[FigureDiagramResult] = []
+    for figure in figures:
+        try:
+            figure_results.append(
+                await extract_figure_diagram(provider, figure, paper_hash=paper_hash)
+            )
+        except DiagramProviderError as exc:
+            # One unreadable figure must not sink the paper's other
+            # figures: record the failure (uncached, so retries heal)
+            # and carry on.
+            figure_results.append(
+                FigureDiagramResult(
+                    figure_id=figure.figure_id,
+                    kind=DiagramKind.OTHER,
+                    classification_confidence=0.0,
+                    ir=None,
+                    validation=DiagramValidationResult(
+                        errors=(f"figure extraction failed: {exc}",)
+                    ),
+                )
+            )
     usage: list[ResponseUsage] = []
     for result in figure_results:
         usage.extend(result.usage)
@@ -662,10 +703,46 @@ async def extract_paper_diagrams(
             methodology = text_result.methodology
             validation["methodology"] = text_result.methodology_validation
             sources["methodology"] = "text"
+        elif methodology is None and text_result.methodology_validation.errors:
+            validation["methodology"] = text_result.methodology_validation
         if structure is None and text_result.structure is not None:
             structure = text_result.structure
             validation["structure"] = text_result.structure_validation
             sources["structure"] = "text"
+        elif structure is None and text_result.structure_validation.errors:
+            validation["structure"] = text_result.structure_validation
+
+    if not circuits and methodology is not None:
+        derived_circuit = methodology_to_circuit(methodology, source_id=source_id)
+        if derived_circuit is not None:
+            circuits.append(derived_circuit)
+            report = validate_diagram(derived_circuit)
+            validation["circuit:derived"] = DiagramValidationResult(
+                errors=report.errors,
+                warnings=report.warnings
+                + (
+                    "Block schematic derived from the methodology flow "
+                    "(no circuit figure in the paper).",
+                ),
+                stats=report.stats,
+            )
+            sources["circuit:derived"] = "derived:methodology"
+
+    if structure is None and methodology is not None:
+        derived_structure = methodology_to_structure(methodology)
+        if derived_structure is not None:
+            structure = derived_structure
+            report = validate_diagram(derived_structure)
+            validation["structure"] = DiagramValidationResult(
+                errors=report.errors,
+                warnings=report.warnings
+                + (
+                    "Structure derived from the methodology flow "
+                    "(no physical structure in the paper).",
+                ),
+                stats=report.stats,
+            )
+            sources["structure"] = "derived:methodology"
 
     if structure is not None:
         structure, layout_notes = normalize_structure_layout(structure)
@@ -1089,12 +1166,52 @@ def _normalize_evidence_lists(node: Any) -> Any:
     return node
 
 
+#: Canonical enum values per kind key in diagram payloads.
+_KIND_ENUMS: dict[str, frozenset[str]] = {
+    "kind": frozenset(
+        [kind.value for kind in BlockKind]
+        + [kind.value for kind in MethodologyNodeKind]
+        + [kind.value for kind in MethodologyEdgeKind]
+    ),
+    "role": frozenset(role.value for role in NetRole),
+    "dir": frozenset(direction.value for direction in PortDirection),
+    "side": frozenset(side.value for side in Side),
+    "type": frozenset(component.value for component in ComponentType),
+}
+
+
+def _normalize_ir_kinds(node: Any) -> Any:
+    """Coerce near-miss enum spellings the model emits for kind keys.
+
+    Case/plural variants ("Modules", "layers") have exactly one
+    reading, so they fold to the canonical value. Labels, quotes, and
+    every other key pass through untouched, and anything without a
+    reading still fails validation loudly.
+    """
+    if isinstance(node, dict):
+        normalized: dict[Any, Any] = {}
+        for key, value in node.items():
+            value = _normalize_ir_kinds(value)
+            if isinstance(value, str) and key in _KIND_ENUMS:
+                lowered = value.strip().lower()
+                candidates = _KIND_ENUMS[key]
+                if lowered in candidates:
+                    value = lowered
+                elif lowered.endswith("s") and lowered[:-1] in candidates:
+                    value = lowered[:-1]
+            normalized[key] = value
+        return normalized
+    if isinstance(node, list):
+        return [_normalize_ir_kinds(item) for item in node]
+    return node
+
+
 def _parse_figure_ir(
     kind: FigureIRKind, raw: Any, figure: FigureAttachment
 ) -> CircuitIR | MethodologyIR | StructureIR:
     if not isinstance(raw, dict):
         raise DiagramProviderError("Muse output must be a JSON object.")
-    raw = _normalize_evidence_lists(raw)
+    raw = _normalize_ir_kinds(_normalize_evidence_lists(raw))
     if kind == "circuit":
         source = raw.get("source")
         if not isinstance(source, dict):
@@ -1114,7 +1231,7 @@ def _parse_text_ir(
 ) -> MethodologyIR | StructureIR:
     if not isinstance(raw, dict):
         raise DiagramProviderError("Muse output must be a JSON object.")
-    raw = _normalize_evidence_lists(raw)
+    raw = _normalize_ir_kinds(_normalize_evidence_lists(raw))
     if kind == "methodology":
         return MethodologyIR.model_validate(raw)
     return StructureIR.model_validate(raw)

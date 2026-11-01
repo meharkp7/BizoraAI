@@ -313,9 +313,12 @@ def test_text_fallback_when_no_figures(tmp_path: Any) -> None:
 
             assert isinstance(result.methodology, MethodologyIR)
             assert isinstance(result.structure, StructureIR)
-            assert result.circuits == ()
+            assert [circuit.title for circuit in result.circuits] == [
+                "flow (system blocks)"
+            ]
             assert result.sources["methodology"] == "text"
             assert result.sources["structure"] == "text"
+            assert result.sources["circuit:derived"] == "derived:methodology"
             assert result.usage
 
         asyncio.run(run_test())
@@ -661,3 +664,182 @@ def test_parse_text_ir_rejects_ambiguous_evidence_lists() -> None:
 
     with pytest.raises((DiagramProviderError, ValueError)):
         _parse_text_ir("structure", raw)
+
+
+def test_derived_fallbacks_when_figures_yield_no_structure(tmp_path: Any) -> None:
+    import os
+
+    os.environ["BIZORA_CACHE_DIR"] = str(tmp_path)
+    try:
+        provider = ScriptedDiagramProvider()
+        provider.classifications["fig1"] = DiagramKind.FLOW
+        provider.figure_payloads[("fig1", "flow")] = make_methodology_payload()
+
+        async def run_test() -> None:
+            result = await extract_paper_diagrams(
+                provider, [make_figure("fig1")], "", paper_hash="g" * 64
+            )
+
+            assert result.sources["methodology"] == "figure:fig1"
+            assert [circuit.title for circuit in result.circuits] == [
+                "flow (system blocks)"
+            ]
+            assert result.sources["circuit:derived"] == "derived:methodology"
+            assert result.structure is not None
+            assert result.structure.title == "flow (system structure)"
+            assert result.sources["structure"] == "derived:methodology"
+            assert any(
+                "derived from the methodology flow" in note
+                for note in result.validation["circuit:derived"].warnings
+            )
+
+        asyncio.run(run_test())
+    finally:
+        del os.environ["BIZORA_CACHE_DIR"]
+
+
+def test_figure_circuits_skip_derivation(tmp_path: Any) -> None:
+    import os
+
+    os.environ["BIZORA_CACHE_DIR"] = str(tmp_path)
+    try:
+        provider = ScriptedDiagramProvider()
+        provider.classifications["fig1"] = DiagramKind.FLOW
+        provider.classifications["fig2"] = DiagramKind.CIRCUIT
+        provider.figure_payloads[("fig1", "flow")] = make_methodology_payload()
+        provider.figure_payloads[("fig2", "circuit")] = make_circuit_payload()
+
+        async def run_test() -> None:
+            result = await extract_paper_diagrams(
+                provider,
+                [make_figure("fig1"), make_figure("fig2")],
+                "",
+                paper_hash="h" * 64,
+            )
+
+            assert [circuit.title for circuit in result.circuits] == ["bitcell"]
+            assert "circuit:derived" not in result.sources
+            assert result.sources["structure"] == "derived:methodology"
+
+        asyncio.run(run_test())
+    finally:
+        del os.environ["BIZORA_CACHE_DIR"]
+
+
+def test_kind_normalization_folds_case_and_plurals() -> None:
+    from bizora.core.diagram_extraction import _parse_text_ir
+
+    ir = _parse_text_ir(
+        "structure",
+        {
+            "version": 1,
+            "title": "Modules",
+            "root": {
+                "id": "sys",
+                "label": "Modules stay verbatim in labels",
+                "kind": "Modules",
+                "confidence": 0.7,
+                "children": [
+                    {
+                        "id": "enc",
+                        "label": "Encoder",
+                        "kind": "layers",
+                        "confidence": 0.6,
+                        "children": [],
+                    }
+                ],
+            },
+        },
+    )
+
+    assert ir.root.kind.value == "module"
+    assert ir.root.children[0].kind.value == "layer"
+    assert ir.root.label == "Modules stay verbatim in labels"
+
+
+def test_kind_normalization_leaves_unknown_kinds_loud() -> None:
+    import pytest
+    from pydantic import ValidationError
+
+    from bizora.core.diagram_extraction import _parse_text_ir
+
+    with pytest.raises(ValidationError):
+        _parse_text_ir(
+            "structure",
+            {
+                "version": 1,
+                "title": "x",
+                "root": {
+                    "id": "sys",
+                    "label": "x",
+                    "kind": "flux-capacitor",
+                    "confidence": 0.5,
+                    "children": [],
+                },
+            },
+        )
+
+
+def test_text_kind_failure_does_not_sink_sibling(tmp_path: Any) -> None:
+    import os
+
+    os.environ["BIZORA_CACHE_DIR"] = str(tmp_path)
+    try:
+        provider = ScriptedDiagramProvider()
+        provider.text_payloads["methodology"] = make_methodology_payload()
+
+        async def fail_structure(paper_text: str, kind: str):  # type: ignore[no-untyped-def]
+            if kind == "structure":
+                raise DiagramProviderError("stub structure failure")
+            return await ScriptedDiagramProvider.extract_text_ir(provider, paper_text, kind)  # type: ignore[arg-type]
+
+        provider.extract_text_ir = fail_structure  # type: ignore[method-assign]
+
+        async def run_test() -> None:
+            result = await extract_paper_diagrams(
+                provider, (), "Some paper text.", paper_hash="i" * 64
+            )
+
+            assert result.methodology is not None
+            assert result.structure is not None
+            assert result.sources["structure"] == "derived:methodology"
+            assert result.sources["circuit:derived"] == "derived:methodology"
+
+        asyncio.run(run_test())
+    finally:
+        del os.environ["BIZORA_CACHE_DIR"]
+
+
+def test_figure_failure_does_not_sink_siblings(tmp_path: Any) -> None:
+    import os
+
+    os.environ["BIZORA_CACHE_DIR"] = str(tmp_path)
+    try:
+        provider = ScriptedDiagramProvider()
+        provider.classifications["fig1"] = DiagramKind.FLOW
+        provider.classifications["bad"] = DiagramKind.CIRCUIT
+        provider.figure_payloads[("fig1", "flow")] = make_methodology_payload()
+
+        real_extract = provider.extract_figure_ir
+
+        async def fail_bad(figure, kind):  # type: ignore[no-untyped-def]
+            if figure.figure_id == "bad":
+                raise DiagramProviderError("stub figure failure")
+            return await real_extract(figure, kind)
+
+        provider.extract_figure_ir = fail_bad  # type: ignore[method-assign]
+
+        async def run_test() -> None:
+            result = await extract_paper_diagrams(
+                provider,
+                [make_figure("fig1"), make_figure("bad")],
+                "",
+                paper_hash="j" * 64,
+            )
+
+            assert result.sources["methodology"] == "figure:fig1"
+            assert result.sources["structure"] == "derived:methodology"
+
+        asyncio.run(run_test())
+    finally:
+        del os.environ["BIZORA_CACHE_DIR"]

@@ -81,7 +81,11 @@ from bizora.core.execution_service import ExecutionService, WorkerConfig
 from bizora.core.extraction_persistence_service import (
     ExtractionPersistenceService,
 )
-from bizora.core.figure_service import ingest_paper_figures, list_graph_figures
+from bizora.core.figure_service import (
+    ingest_paper_figures,
+    list_graph_figures,
+    persist_paper_figures,
+)
 from bizora.core.graph_persistence_service import GraphPersistenceService
 from bizora.core.layout_service import LayoutService
 from bizora.core.papers import (
@@ -343,7 +347,7 @@ async def extract_paper(
     valid Bearer [REDACTED] the paper to the caller's library;
     anonymous uploads work exactly as before.
     """
-    _, pdf = await _read_upload(file)
+    data, pdf = await _read_upload(file)
     filename = file.filename or "paper.pdf"
     suggested = _suggest_ids(filename, pdf)
 
@@ -362,6 +366,19 @@ async def extract_paper(
             "Source IDs may contain letters, digits, and . _ : - (max 128).",
             details={"source_id": resolved_source},
         )
+
+    # Figures and text land before any provider call, so the diagrams
+    # endpoint works straight after upload for every paper — even when
+    # extraction itself fails below.
+    persist_paper_figures(
+        session,
+        project_id=resolved_project,
+        graph_id=resolved_graph,
+        pdf_bytes=data,
+        page_texts=extract_page_texts(data),
+        source_id=resolved_source,
+        created_by=resolved_author,
+    )
 
     try:
         graph = await ExtractionPersistenceService.extract_and_persist_initial(
@@ -1226,6 +1243,7 @@ async def get_paper_diagrams(
             tuple(attachments),
             paper_text,
             paper_hash=_paper_figures_hash(records),
+            source_id=paper_id,
         )
     except MethodologyProviderError as exc:
         logger.warning("Diagram provider failed: %s", exc)
@@ -1303,6 +1321,7 @@ async def run_paper_whatif(
             tuple(attachments),
             paper_text,
             paper_hash=_paper_figures_hash(records),
+            source_id=paper_id,
         )
     except MethodologyProviderError as exc:
         logger.warning("Diagram provider failed: %s", exc)
