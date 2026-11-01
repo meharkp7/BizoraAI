@@ -108,7 +108,14 @@ describe("api client", () => {
   });
 
   it("asks the copilot", async () => {
-    const response = await api.askCopilot("project-1", "graph-1", 2, "find transistor", "encoder");
+    const response = await api.askCopilot(
+      "project-1",
+      "graph-1",
+      2,
+      "find transistor",
+      "encoder",
+      "viewing schematic tab",
+    );
     expect(response.cards).toHaveLength(1);
     expect(response.proposal).toBeNull();
   });
@@ -116,5 +123,19 @@ describe("api client", () => {
   it("lists execution adapters", async () => {
     const adapters = await api.listAdapters();
     expect(adapters[0]?.adapter_id).toBe("bizora.deterministic-test");
+  });
+
+  it("fetches one paper's diagram IRs", async () => {
+    const diagrams = await api.getPaperDiagrams("paper-1");
+    expect(diagrams.methodology?.nodes).toHaveLength(4);
+    expect(diagrams.circuits).toHaveLength(1);
+    expect(diagrams.structure?.root.id).toBe("chip");
+    expect(diagrams.sources["methodology"]).toBe("text");
+  });
+
+  it("reports an unknown paper for the diagrams endpoint", async () => {
+    const error = await api.getPaperDiagrams("missing").catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(BizoraApiError);
+    expect((error as BizoraApiError).isNotFound).toBe(true);
   });
 });

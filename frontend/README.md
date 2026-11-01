@@ -1,10 +1,16 @@
 # Bizora frontend (Phase D foundation)
 
-React + TypeScript + Vite single-page app. This phase delivers the runnable
-foundation: routing, workspace shell, theme system, typed API client with a
-TanStack Query layer, inspector/evidence shells, loading/error/empty states,
-and the Vitest + Playwright harnesses. The interactive 2D/3D canvases arrive
-in Phases E/F and bind to the same contracts and selection store.
+React + TypeScript + Vite single-page app: routing, workspace shell, theme
+system, typed API client with a TanStack Query layer, inspector/evidence
+panels, loading/error/empty states, and the Vitest + Playwright harnesses.
+The workspace canvas shows three diagram views (Methodology, Schematic, 3D)
+rendered by the vendored diagram engine from `GET /papers/{id}/diagrams`;
+when the engine refuses an IR, the canvas falls back to the paper's own
+figure with clickable overlays, never a placeholder diagram. Methodology
+nodes carry editable settings with a what-if estimate behind them
+(`POST /papers/{id}/whatif`, labeled as an estimate); the schematic has
+a wire-following walkthrough with per-leg explainer tags; 3D opens on
+the circuit build with a parts list, spotlight, and hover naming.
 
 ## Prerequisites
 
@@ -56,6 +62,8 @@ npx playwright install chromium
 - `src/app/queries.ts` — TanStack Query hooks; `src/app/routes.tsx` — routes
 - `src/components/` — app shell, theme toggle, loading/error/empty states
 - `src/features/` — home, workspace (revision viewer, inspector, evidence,
-  diff), runs, comparison
+  diff), diagrams (Methodology/Schematic/3D views), runs, comparison
+- `src/diagram-engine/` — vendored renderer (byte-identical to
+  `bizora-diagram-engine.zip`); checked under `tsconfig.engine.json`
 - `src/test/` — MSW handlers/fixtures shared by unit tests
 - `e2e/` — Playwright smoke specs (network-stubbed; seeded-API E2E is Phase I)

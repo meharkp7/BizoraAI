@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useCopilot } from "../../app/queries.ts";
+import type { CanvasView } from "../../app/routeElements.tsx";
 import { NODE_KINDS } from "../../lib/constants.ts";
 import { useLibrarySelection, useWorkspaceSelection } from "../../lib/store.ts";
 import type {
@@ -10,6 +11,8 @@ import type {
   MethodologyGraph,
   NodeKind,
 } from "../../lib/types.ts";
+import type { DiagramSelection } from "../diagrams/selection.ts";
+import { diagramContextFor, tabName } from "./copilotContext.ts";
 import { replaceNodePatch, updateConfigPatch } from "../workspace/patchBuilders.ts";
 import styles from "./CopilotPanel.module.css";
 import { EvidenceCard } from "./EvidenceCard.tsx";
@@ -23,6 +26,24 @@ interface Turn {
 
 function isNodeKind(value: string): value is NodeKind {
   return (NODE_KINDS as readonly string[]).includes(value);
+}
+
+/** Follow-up chips derived from what the last answer actually contained. */
+function followUpsFor(turn: Turn): string[] {
+  if (!turn.response || turn.error) return [];
+  const chips: string[] = [];
+  if (turn.response.proposal) chips.push("Why this replacement?");
+  if (turn.response.cards.some((card) => card.kind === "evidence")) {
+    chips.push("Show me the paper quote");
+  } else {
+    chips.push("What does the paper say here?");
+  }
+  if (turn.response.cards.some((card) => card.component_ids.length > 0)) {
+    chips.push("Compare the top two options");
+  } else {
+    chips.push("What are my options?");
+  }
+  return chips.slice(0, 3);
 }
 
 function ProposalActions({
@@ -128,11 +149,15 @@ export function CopilotPanel({
   projectId,
   graph,
   disabled,
+  view,
+  selection,
   onSubmit,
 }: {
   projectId: string;
   graph: MethodologyGraph;
   disabled: boolean;
+  view: CanvasView;
+  selection: DiagramSelection | null;
   onSubmit: (patches: GraphPatch[]) => void;
 }) {
   const copilot = useCopilot(projectId, graph.graph_id, graph.version);
@@ -141,15 +166,18 @@ export function CopilotPanel({
   const [turns, setTurns] = useState<Turn[]>([]);
   const [dismissed, setDismissed] = useState<Set<number>>(new Set());
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeIds[0]) ?? null;
+  const diagramContext = diagramContextFor(view, selection, selectedNode);
+  const turnIdRef = useRef(0);
 
   function ask(message: string): void {
     const text = message.trim();
     if (text === "" || copilot.isPending) return;
-    const id = Date.now() + Math.random();
+    turnIdRef.current += 1;
+    const id = turnIdRef.current;
     setTurns((current) => [...current, { id, message: text, response: null, error: null }]);
     setInput("");
     copilot.mutate(
-      { message: text, selectedNodeId: selectedNode?.id ?? null },
+      { message: text, selectedNodeId: selectedNode?.id ?? null, diagramContext },
       {
         onSuccess: (response) =>
           setTurns((current) =>
@@ -174,12 +202,17 @@ export function CopilotPanel({
     <section className={styles.panel} aria-label="Research copilot">
       <h2>Research copilot</h2>
       <p className={styles.context}>
-        {selectedNode ? (
+        {selection ? (
           <>
-            Talking about <strong>{selectedNode.label}</strong>
+            Talking about <strong>{selection.label}</strong> ({selection.elementId} ·{" "}
+            {tabName(view)} tab)
+          </>
+        ) : selectedNode ? (
+          <>
+            Talking about <strong>{selectedNode.label}</strong> ({tabName(view)} tab)
           </>
         ) : (
-          "Select a node to discuss replacements and configuration."
+          <>Viewing the {tabName(view)} tab — select a node to discuss it with the copilot.</>
         )}
       </p>
       <div className={styles.turns} aria-live="polite">
@@ -190,36 +223,54 @@ export function CopilotPanel({
             wait for your approval.
           </p>
         ) : null}
-        {turns.map((turn) => (
-          <div key={turn.id} className={styles.turn}>
-            <p className={styles.user}>{turn.message}</p>
-            {turn.response ? (
-              <>
-                <p className={styles.reply}>{turn.response.reply}</p>
-                {turn.response.cards.map((card, index) => (
-                  <CardView
-                    key={`${card.kind}-${index}`}
-                    card={card}
-                    graph={graph}
-                    disabled={disabled}
-                    proposal={turn.response?.proposal ?? null}
-                    dismissed={dismissed.has(turn.id)}
-                    onApprove={onSubmit}
-                    onDismissProposal={() =>
-                      setDismissed((current) => new Set(current).add(turn.id))
-                    }
-                  />
-                ))}
-              </>
-            ) : turn.error ? (
-              <p className={styles.error} role="alert">
-                {turn.error}
-              </p>
-            ) : (
-              <p className={styles.reply}>Thinking…</p>
-            )}
-          </div>
-        ))}
+        {turns.map((turn, turnIndex) => {
+          const chips =
+            turnIndex === turns.length - 1 && !copilot.isPending ? followUpsFor(turn) : [];
+          return (
+            <div key={turn.id} className={styles.turn}>
+              <p className={styles.user}>{turn.message}</p>
+              {turn.response ? (
+                <>
+                  <p className={styles.reply}>{turn.response.reply}</p>
+                  {turn.response.cards.map((card, index) => (
+                    <CardView
+                      key={`${card.kind}-${index}`}
+                      card={card}
+                      graph={graph}
+                      disabled={disabled}
+                      proposal={turn.response?.proposal ?? null}
+                      dismissed={dismissed.has(turn.id)}
+                      onApprove={onSubmit}
+                      onDismissProposal={() =>
+                        setDismissed((current) => new Set(current).add(turn.id))
+                      }
+                    />
+                  ))}
+                </>
+              ) : turn.error ? (
+                <p className={styles.error} role="alert">
+                  {turn.error}
+                </p>
+              ) : (
+                <p className={styles.reply}>Thinking…</p>
+              )}
+              {chips.length > 0 ? (
+                <div className={styles.chips} aria-label="Follow-up questions">
+                  {chips.map((chip) => (
+                    <button
+                      key={chip}
+                      type="button"
+                      className={styles.chip}
+                      onClick={() => ask(chip)}
+                    >
+                      {chip}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
       </div>
       <form
         className={styles.form}

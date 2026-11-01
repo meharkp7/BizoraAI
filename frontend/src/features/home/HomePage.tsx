@@ -1,8 +1,9 @@
 import { useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
-import { useNavigate } from "react-router";
-import { useExtractPaper, useParsePaper } from "../../app/queries.ts";
+import { Link, useNavigate } from "react-router";
+import { useExtractPaper, useMyPapers, useParsePaper } from "../../app/queries.ts";
 import { BizoraApiError } from "../../lib/api.ts";
+import { useSession } from "../../lib/store.ts";
 import styles from "./HomePage.module.css";
 
 function filenameStem(name: string): string {
@@ -15,10 +16,6 @@ function UploadForm() {
   const parsing = useParsePaper();
   const extraction = useExtractPaper();
   const [file, setFile] = useState<File | null>(null);
-  const [projectId, setProjectId] = useState("");
-  const [graphId, setGraphId] = useState("");
-  const [sourceId, setSourceId] = useState("");
-  const [author, setAuthor] = useState("");
   const [title, setTitle] = useState("");
 
   function onFileChange(event: ChangeEvent<HTMLInputElement>): void {
@@ -32,9 +29,6 @@ function UploadForm() {
     parsing.mutate(selected, {
       onSuccess: (parsed) => {
         setTitle(parsed.title ?? filenameStem(parsed.filename));
-        setProjectId(parsed.suggested.project_id);
-        setGraphId(parsed.suggested.graph_id);
-        setSourceId(parsed.suggested.source_id);
       },
     });
   }
@@ -45,10 +39,6 @@ function UploadForm() {
     extraction.reset();
     extraction.mutate({
       file,
-      project_id: projectId.trim() === "" ? undefined : projectId.trim(),
-      graph_id: graphId.trim() === "" ? undefined : graphId.trim(),
-      source_id: sourceId.trim() === "" ? undefined : sourceId.trim(),
-      created_by: author.trim() === "" ? undefined : author.trim(),
       title: title.trim() === "" ? undefined : title.trim(),
     });
   }
@@ -83,46 +73,6 @@ function UploadForm() {
             value={title}
             onChange={(event) => setTitle(event.target.value)}
             placeholder="Read from the paper when available"
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </label>
-        <label className={styles.field}>
-          Project ID (optional)
-          <input
-            value={projectId}
-            onChange={(event) => setProjectId(event.target.value)}
-            placeholder="Suggested automatically"
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </label>
-        <label className={styles.field}>
-          Graph ID (optional)
-          <input
-            value={graphId}
-            onChange={(event) => setGraphId(event.target.value)}
-            placeholder="Suggested automatically"
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </label>
-        <label className={styles.field}>
-          Source ID (optional)
-          <input
-            value={sourceId}
-            onChange={(event) => setSourceId(event.target.value)}
-            placeholder="Suggested automatically"
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </label>
-        <label className={styles.field}>
-          Author (optional)
-          <input
-            value={author}
-            onChange={(event) => setAuthor(event.target.value)}
-            placeholder="Defaults to paper-upload"
             autoComplete="off"
             spellCheck={false}
           />
@@ -168,6 +118,50 @@ function UploadForm() {
   );
 }
 
+function MyPapers() {
+  const { token } = useSession();
+  const papers = useMyPapers(token !== null);
+
+  if (!token) {
+    return (
+      <section className={styles.opener} aria-label="My papers">
+        <h2>My papers</h2>
+        <p className={styles.hint}>
+          <Link to="/login">Log in</Link> to keep every paper you upload — your
+          library and notes wait under My profile.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className={styles.opener} aria-label="My papers">
+      <h2>My papers</h2>
+      {papers.isPending ? (
+        <p className={styles.parseStatus} role="status">
+          Loading your papers…
+        </p>
+      ) : papers.data && papers.data.length > 0 ? (
+        <ul className={styles.papers}>
+          {papers.data.map((paper) => (
+            <li key={`${paper.project_id}/${paper.graph_id}`}>
+              <Link
+                to={`/g/${encodeURIComponent(paper.project_id)}/${encodeURIComponent(paper.graph_id)}`}
+              >
+                {paper.title}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className={styles.hint}>
+          Nothing here yet — upload a paper and it lands here automatically.
+        </p>
+      )}
+    </section>
+  );
+}
+
 export function HomePage() {
   const navigate = useNavigate();
   const [projectId, setProjectId] = useState("");
@@ -196,10 +190,12 @@ export function HomePage() {
         <h2>Upload a paper</h2>
         <UploadForm />
         <p className={styles.hint}>
-          Any research PDF works: identifiers are suggested from the file and can be
-          edited. The methodology graph plus results tables appear in the workspace.
+          Any research PDF works: just attach the file and give it a title —
+          identifiers are assigned automatically. Logged-in uploads land in your
+          library.
         </p>
       </section>
+      <MyPapers />
       <section className={styles.opener} aria-label="Open a methodology graph">
         <h2>Open a graph</h2>
         <form className={styles.form} onSubmit={open}>

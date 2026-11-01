@@ -2,18 +2,22 @@ import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import {
   adaptersFixture,
+  authFixture,
   comparisonFixture,
   componentDetailFixture,
   componentGenericFixture,
   componentSummaryFixture,
   copilotFixture,
+  diagramsFixture,
   diffFixture,
   entitiesFixture,
   failedRun,
   figuresFixture,
   graphFixture,
   layoutFixture,
+  libraryFixture,
   metricsFixture,
+  notesFixture,
   notFound,
   paperExtractionFixture,
   parsedPaperFixture,
@@ -25,7 +29,18 @@ import {
   succeededRun,
   tableFixture,
   tableFixture2,
+  whatIfFixture,
 } from "./fixtures.ts";
+import type { PaperNote } from "../lib/types.ts";
+
+/** Mutable notes store for component tests; reset between tests. */
+let notesStore: PaperNote[] = notesFixture.map((note) => ({ ...note }));
+let nextNoteId = 100;
+
+export function resetNotesStore(): void {
+  notesStore = notesFixture.map((note) => ({ ...note }));
+  nextNoteId = 100;
+}
 
 export const handlers = [
   http.get("/health", () => HttpResponse.json({ status: "ok" })),
@@ -178,6 +193,117 @@ export const handlers = [
     "/api/v1/graphs/:projectId/:graphId/revisions/:version/render-specs",
     () => HttpResponse.json(renderSpecsFixture),
   ),
+
+  http.get("/api/v1/papers/:paperId/diagrams", ({ params }) => {
+    if (params["paperId"] === "paper-1") {
+      return HttpResponse.json(diagramsFixture);
+    }
+    return notFound("RESOURCE_NOT_FOUND", "Paper not found.");
+  }),
+
+  http.post("/api/v1/papers/:paperId/whatif", async ({ params, request }) => {
+    if (params["paperId"] !== "paper-1") {
+      return notFound("RESOURCE_NOT_FOUND", "Paper not found.");
+    }
+    const body = (await request.json()) as { node_id?: unknown; params?: unknown };
+    if (typeof body.node_id !== "string" || typeof body.params !== "object") {
+      return HttpResponse.json({ detail: "Bad request." }, { status: 400 });
+    }
+    return HttpResponse.json({
+      ...whatIfFixture,
+      node_id: body.node_id,
+      params_applied: body.params,
+    });
+  }),
+
+  http.post("/api/v1/auth/register", async ({ request }) => {
+    const body = (await request.json()) as { email?: unknown; password?: unknown };
+    if (typeof body.email !== "string" || typeof body.password !== "string") {
+      return HttpResponse.json({ detail: "Bad request." }, { status: 400 });
+    }
+    return HttpResponse.json(authFixture, { status: 201 });
+  }),
+
+  http.post("/api/v1/auth/login", async ({ request }) => {
+    const body = (await request.json()) as { email?: unknown; password?: unknown };
+    if (body.email === "ghost@example.com") {
+      return HttpResponse.json({ detail: "Invalid email or password." }, { status: 401 });
+    }
+    if (typeof body.email !== "string" || typeof body.password !== "string") {
+      return HttpResponse.json({ detail: "Bad request." }, { status: 400 });
+    }
+    return HttpResponse.json(authFixture);
+  }),
+
+  http.get("/api/v1/auth/me", ({ request }) => {
+    if (!request.headers.get("Authorization")) {
+      return HttpResponse.json({ detail: "Authentication required." }, { status: 401 });
+    }
+    return HttpResponse.json(authFixture.user);
+  }),
+
+  http.get("/api/v1/users/me/papers", ({ request }) => {
+    if (!request.headers.get("Authorization")) {
+      return HttpResponse.json({ detail: "Authentication required." }, { status: 401 });
+    }
+    return HttpResponse.json(libraryFixture);
+  }),
+
+  http.get("/api/v1/papers/:paperId/notes", ({ params, request }) => {
+    if (!request.headers.get("Authorization")) {
+      return HttpResponse.json({ detail: "Authentication required." }, { status: 401 });
+    }
+    return HttpResponse.json(
+      notesStore.filter((note) => note.paper_id === params["paperId"]),
+    );
+  }),
+
+  http.post("/api/v1/papers/:paperId/notes", async ({ params, request }) => {
+    if (!request.headers.get("Authorization")) {
+      return HttpResponse.json({ detail: "Authentication required." }, { status: 401 });
+    }
+    const body = (await request.json()) as { body?: unknown };
+    if (typeof body.body !== "string" || body.body.trim() === "") {
+      return HttpResponse.json({ detail: "Note body must be non-empty." }, { status: 422 });
+    }
+    const note = {
+      id: nextNoteId++,
+      paper_id: params["paperId"] as string,
+      body: body.body.trim(),
+      created_at: "2026-01-04T00:00:00+00:00",
+      updated_at: "2026-01-04T00:00:00+00:00",
+    };
+    notesStore.push(note);
+    return HttpResponse.json(note, { status: 201 });
+  }),
+
+  http.put("/api/v1/papers/:paperId/notes/:noteId", async ({ params, request }) => {
+    if (!request.headers.get("Authorization")) {
+      return HttpResponse.json({ detail: "Authentication required." }, { status: 401 });
+    }
+    const note = notesStore.find((candidate) => candidate.id === Number(params["noteId"]));
+    if (!note || note.paper_id !== params["paperId"]) {
+      return notFound("RESOURCE_NOT_FOUND", "Note not found.");
+    }
+    const body = (await request.json()) as { body?: unknown };
+    if (typeof body.body !== "string" || body.body.trim() === "") {
+      return HttpResponse.json({ detail: "Note body must be non-empty." }, { status: 422 });
+    }
+    note.body = body.body.trim();
+    return HttpResponse.json(note);
+  }),
+
+  http.delete("/api/v1/papers/:paperId/notes/:noteId", ({ params, request }) => {
+    if (!request.headers.get("Authorization")) {
+      return HttpResponse.json({ detail: "Authentication required." }, { status: 401 });
+    }
+    const index = notesStore.findIndex((candidate) => candidate.id === Number(params["noteId"]));
+    if (index < 0 || notesStore[index].paper_id !== params["paperId"]) {
+      return notFound("RESOURCE_NOT_FOUND", "Note not found.");
+    }
+    notesStore.splice(index, 1);
+    return new HttpResponse(null, { status: 204 });
+  }),
 ];
 
 export const server = setupServer(...handlers);

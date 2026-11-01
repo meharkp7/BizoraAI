@@ -1,0 +1,93 @@
+.page {
+  display: grid;
+  max-width: 30rem;
+}
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-1);
+}
+
+.card h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.lede {
+  color: var(--color-ink-soft);
+  font-size: 0.9375rem;
+}
+
+.modes {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.modes button {
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-surface-raised);
+  color: var(--color-ink-soft);
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.modes button[aria-pressed="true"] {
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+  border-color: transparent;
+}
+
+.form {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.field {
+  display: grid;
+  gap: var(--space-1);
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.field input {
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-raised);
+  color: var(--color-ink);
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+}
+
+.form button {
+  justify-self: start;
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.form button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.formError {
+  margin: var(--space-3) 0 0;
+  color: var(--color-danger);
+  font-size: 0.875rem;
+}
+
+.back {
+  margin: var(--space-4) 0 0;
+  font-size: 0.875rem;
+}

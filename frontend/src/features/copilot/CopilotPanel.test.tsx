@@ -6,9 +6,23 @@ import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { useLibrarySelection, useWorkspaceSelection } from "../../lib/store.ts";
 import type { GraphPatch } from "../../lib/types.ts";
-import { graphFixture } from "../../test/fixtures.ts";
+import { copilotFixture, graphFixture } from "../../test/fixtures.ts";
 import { server } from "../../test/server.ts";
+import type { DiagramSelection } from "../diagrams/selection.ts";
 import { CopilotPanel } from "./CopilotPanel.tsx";
+import { diagramContextFor } from "./copilotContext.ts";
+
+const n1Selection: DiagramSelection = {
+  view: "schematic",
+  elementId: "N1",
+  label: "Inverter stage",
+  kind: "inverter",
+  detail: null,
+  confidence: 0.9,
+  provenance: "from-paper",
+  evidence: null,
+  extra: [],
+};
 
 function wrapper({ children }: { children: ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -25,6 +39,8 @@ describe("CopilotPanel", () => {
         projectId="project-1"
         graph={graphFixture}
         disabled={false}
+        view="schematic"
+        selection={null}
         onSubmit={() => {}}
       />,
       { wrapper },
@@ -73,6 +89,8 @@ describe("CopilotPanel", () => {
         projectId="project-1"
         graph={graphFixture}
         disabled={false}
+        view="schematic"
+        selection={null}
         onSubmit={onSubmit}
       />,
       { wrapper },
@@ -124,6 +142,8 @@ describe("CopilotPanel", () => {
         projectId="project-1"
         graph={graphFixture}
         disabled={false}
+        view="schematic"
+        selection={null}
         onSubmit={onSubmit}
       />,
       { wrapper },
@@ -139,5 +159,82 @@ describe("CopilotPanel", () => {
     const [[patches]] = onSubmit.mock.calls as [[GraphPatch[]]];
     expect(patches[0].operation).toBe("update_node_config");
     expect(patches[0].payload["config"]).toEqual({ layers: 24 });
+  });
+
+  it("sends the diagram tab and selection as viewer context", async () => {
+    useWorkspaceSelection.setState({ selectedNodeIds: [], selectedEdgeIds: [] });
+    const bodies: Array<Record<string, unknown>> = [];
+    server.use(
+      http.post(
+        "/api/v1/graphs/:projectId/:graphId/revisions/:version/copilot",
+        async ({ request }) => {
+          bodies.push((await request.json()) as Record<string, unknown>);
+          return HttpResponse.json(copilotFixture);
+        },
+      ),
+    );
+    const user = userEvent.setup();
+    render(
+      <CopilotPanel
+        projectId="project-1"
+        graph={graphFixture}
+        disabled={false}
+        view="schematic"
+        selection={n1Selection}
+        onSubmit={() => {}}
+      />,
+      { wrapper },
+    );
+
+    expect(screen.getByText(/Talking about/)).toHaveTextContent("N1");
+    await user.type(screen.getByLabelText("Copilot message"), "What does this do?");
+    await user.click(screen.getByRole("button", { name: "Ask" }));
+
+    expect(await screen.findByText(/Closest library matches/)).toBeInTheDocument();
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0].diagram_context).toBe(
+      "viewing schematic tab; diagram selection N1 (Inverter stage)",
+    );
+  });
+
+  it("offers follow-up chips that ask on click", async () => {
+    useWorkspaceSelection.setState({ selectedNodeIds: ["encoder"], selectedEdgeIds: [] });
+    const user = userEvent.setup();
+    render(
+      <CopilotPanel
+        projectId="project-1"
+        graph={graphFixture}
+        disabled={false}
+        view="methodology"
+        selection={null}
+        onSubmit={() => {}}
+      />,
+      { wrapper },
+    );
+
+    await user.type(screen.getByLabelText("Copilot message"), "find NPN transistor");
+    await user.click(screen.getByRole("button", { name: "Ask" }));
+
+    expect(
+      await screen.findByRole("button", { name: "What does the paper say here?" }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Compare the top two options" }));
+
+    expect(await screen.findAllByText(/Closest library matches/)).toHaveLength(2);
+    expect(
+      screen.getByRole("button", { name: "Compare the top two options" }),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("diagramContextFor", () => {
+  it("names the tab and the freshest selection", () => {
+    expect(diagramContextFor("schematic", n1Selection, null)).toBe(
+      "viewing schematic tab; diagram selection N1 (Inverter stage)",
+    );
+    expect(
+      diagramContextFor("3d", null, { id: "encoder", label: "Transformer encoder" }),
+    ).toBe("viewing 3D tab; graph selection encoder (Transformer encoder)");
+    expect(diagramContextFor("methodology", null, null)).toBe("viewing methodology tab");
   });
 });

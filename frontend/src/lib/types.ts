@@ -582,3 +582,202 @@ export interface NodeRenderSpec {
   illustrative: boolean;
   mesh: ProceduralMeshData | null;
 }
+
+/* Diagram IRs served by GET /papers/{paper_id}/diagrams. Field names
+   mirror the backend JSON verbatim; keep in sync with
+   src/bizora/contracts/diagram_ir.py and the PaperDiagramsResponse
+   in src/bizora/api.py. The vendored engine consumes normalized
+   versions of these (see features/diagrams/adapters.ts). */
+
+export interface DiagramPlacement {
+  x: number;
+  y: number;
+  rot: 0 | 90 | 180 | 270;
+  mirror: boolean;
+  flip: boolean;
+}
+
+export interface DiagramPoint {
+  x: number;
+  y: number;
+}
+
+export interface CircuitEvidenceJson {
+  figure_id: string;
+  bbox: [number, number, number, number] | null;
+  quote: string | null;
+}
+
+export interface DiagramComponent {
+  id: string;
+  type: string;
+  label: string;
+  value: string | null;
+  pins: Record<string, string>;
+  pin_sides: Record<string, string> | null;
+  placement: DiagramPlacement | null;
+  confidence: number;
+  evidence: CircuitEvidenceJson | null;
+}
+
+export interface DiagramNet {
+  id: string;
+  label: string;
+  role: string;
+  global: boolean;
+}
+
+export interface DiagramPort {
+  id: string;
+  net: string;
+  label: string;
+  dir: string;
+  side: string;
+  placement: DiagramPoint | null;
+}
+
+export interface DiagramSubcircuit {
+  id: string;
+  label: string;
+  component_ids: string[];
+}
+
+export interface CircuitIRJson {
+  version: 1;
+  title: string;
+  source: { figure_id: string; page: number };
+  components: DiagramComponent[];
+  nets: DiagramNet[];
+  ports: DiagramPort[];
+  subcircuits: DiagramSubcircuit[];
+  layout: { unit: number | null } | null;
+}
+
+export interface DiagramGroup {
+  id: string;
+  label: string;
+  parent: string | null;
+}
+
+export interface DiagramTextEvidence {
+  page: number | null;
+  figure_id: string | null;
+  quote: string | null;
+}
+
+export interface DiagramNode {
+  id: string;
+  label: string;
+  kind: string;
+  group: string | null;
+  detail: string | null;
+  params: Record<string, unknown>;
+  confidence: number;
+  evidence: DiagramTextEvidence | null;
+}
+
+export interface DiagramEdge {
+  from: string;
+  to: string;
+  label: string | null;
+  kind: string;
+}
+
+export interface MethodologyIRJson {
+  version: 1;
+  title: string;
+  groups: DiagramGroup[];
+  nodes: DiagramNode[];
+  edges: DiagramEdge[];
+}
+
+export interface DiagramBlockDims {
+  w: number | null;
+  h: number | null;
+  d: number | null;
+  unit: string | null;
+}
+
+export interface DiagramBlock {
+  id: string;
+  label: string;
+  kind: string;
+  count: number | { rows: number; cols: number } | null;
+  dims: DiagramBlockDims | null;
+  pos: string | DiagramPoint | null;
+  part: string | null;
+  tensor_shape: number[] | null;
+  children: DiagramBlock[];
+  confidence: number;
+  evidence: DiagramTextEvidence | null;
+}
+
+export interface StructureIRJson {
+  version: 1;
+  title: string;
+  root: DiagramBlock;
+}
+
+export interface DiagramValidationReportJson {
+  errors: string[];
+  warnings: string[];
+  stats: Record<string, number>;
+}
+
+export interface PaperDiagramsResponse {
+  methodology: MethodologyIRJson | null;
+  circuits: CircuitIRJson[];
+  structure: StructureIRJson | null;
+  validation: Record<string, DiagramValidationReportJson>;
+  sources: Record<string, string>;
+}
+
+/* What-if outcome served by POST /papers/{paper_id}/whatif. Field names
+   mirror the backend JSON verbatim; keep in sync with the
+   PaperWhatIfResponse in src/bizora/api.py. */
+
+export interface WhatIfBasisJson {
+  quote: string;
+  page: number | null;
+}
+
+export interface PaperWhatIfResponse {
+  node_id: string;
+  node_label: string;
+  params_previous: Record<string, string>;
+  params_applied: Record<string, string>;
+  outcome: string;
+  basis: WhatIfBasisJson[];
+  assumptions: string[];
+  confidence: number;
+  from_cache: boolean;
+}
+
+export interface AuthUser {
+  user_id: string;
+  email: string;
+  name: string;
+  created_at: string;
+}
+
+export interface AuthResponse {
+  user: AuthUser;
+  token: string;
+  expires_at: string;
+}
+
+export interface LibraryPaper {
+  project_id: string;
+  graph_id: string;
+  source_id: string;
+  title: string;
+  created_at: string;
+}
+
+export interface PaperNote {
+  id: number;
+  paper_id: string;
+  body: string;
+  created_at: string;
+  updated_at: string;
+}

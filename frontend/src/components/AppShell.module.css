@@ -63,8 +63,46 @@ a.active {
   background: var(--color-accent-strong);
 }
 
-.themeToggle {
+.authArea {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
   margin-left: auto;
+}
+
+.authLink {
+  color: var(--color-ink-soft);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.authLink:hover {
+  color: var(--color-accent-strong);
+}
+
+.authButton {
+  padding: var(--space-1) var(--space-2);
+  background: transparent;
+  color: var(--color-ink-soft);
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.authButton:hover {
+  color: var(--color-ink);
+  border-color: var(--color-accent);
+}
+
+.uploadAnother {
+  border: 1px dashed var(--color-line-strong);
+}
+
+.themeToggle {
+  margin-left: 0;
   padding: var(--space-1) var(--space-3);
   background: transparent;
   color: var(--color-ink-soft);

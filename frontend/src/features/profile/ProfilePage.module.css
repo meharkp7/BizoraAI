@@ -1,0 +1,80 @@
+.page {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 46rem;
+}
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-1);
+}
+
+.card h1,
+.card h2 {
+  margin: 0 0 var(--space-3);
+}
+
+.card h1 {
+  font-size: 1.5rem;
+}
+
+.card h2 {
+  font-size: 1.125rem;
+}
+
+.card button {
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-surface-raised);
+  color: var(--color-ink);
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.card button:hover {
+  border-color: var(--color-accent-strong);
+  color: var(--color-accent-strong);
+}
+
+.facts {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
+}
+
+.facts div {
+  display: grid;
+  grid-template-columns: 6rem 1fr;
+  gap: var(--space-2);
+}
+
+.facts dt {
+  color: var(--color-ink-faint);
+  font-size: 0.875rem;
+}
+
+.facts dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.papers {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: var(--space-4);
+}
+
+.linkButton {
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--color-accent-strong);
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+}

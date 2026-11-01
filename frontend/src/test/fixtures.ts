@@ -1,7 +1,9 @@
 import { HttpResponse } from "msw";
 import type {
   AdapterSummary,
+  AuthResponse,
   CompatibilityPreflight,
+  LibraryPaper,
   ComponentDetail,
   ComponentSummary,
   CopilotResponse,
@@ -13,9 +15,12 @@ import type {
   MethodologyGraph,
   MetricRecord,
   NodeRenderSpec,
+  PaperDiagramsResponse,
   PaperExtractionResponse,
   PaperFigure,
+  PaperNote,
   PaperReportedMetric,
+  PaperWhatIfResponse,
   ParsedPaper,
   RunComparison,
   SimulationPreview,
@@ -488,6 +493,211 @@ export const renderSpecsFixture: NodeRenderSpec[] = [
   },
 ];
 
+const DIAGRAM_FIGURE_ID = "paper-1-p2-f1-a1b2c3d4";
+
+/** Diagram IRs for paper-1. Test data only: every view renders them
+ *  through the real engine, including one low-confidence node and one
+ *  component drawn dashed to exercise the assumed labels. */
+export const diagramsFixture: PaperDiagramsResponse = {
+  methodology: {
+    version: 1,
+    title: "Test methodology",
+    groups: [{ id: "train", label: "Training", parent: null }],
+    nodes: [
+      {
+        id: "m-input",
+        label: "Patch embedding input",
+        kind: "input",
+        group: null,
+        detail: null,
+        params: {},
+        confidence: 0.9,
+        evidence: { page: 2, figure_id: null, quote: "Images are split into patches." },
+      },
+      {
+        id: "m-encode",
+        label: "Transformer encoder",
+        kind: "model",
+        group: "train",
+        detail: "Twelve stacked blocks.",
+        params: { layers: 12 },
+        confidence: 0.95,
+        evidence: { page: 4, figure_id: null, quote: "The encoder stacks twelve blocks." },
+      },
+      {
+        id: "m-check",
+        label: "Converged?",
+        kind: "decision",
+        group: "train",
+        detail: null,
+        params: {},
+        confidence: 0.45,
+        evidence: null,
+      },
+      {
+        id: "m-output",
+        label: "Class token output",
+        kind: "output",
+        group: null,
+        detail: null,
+        params: {},
+        confidence: 0.8,
+        evidence: { page: 5, figure_id: null, quote: null },
+      },
+    ],
+    edges: [
+      { from: "m-input", to: "m-encode", label: "patches", kind: "data" },
+      { from: "m-encode", to: "m-check", label: null, kind: "data" },
+      { from: "m-check", to: "m-output", label: "yes", kind: "control" },
+    ],
+  },
+  circuits: [
+    {
+      version: 1,
+      title: "Test cell",
+      source: { figure_id: DIAGRAM_FIGURE_ID, page: 2 },
+      components: [
+        {
+          id: "m1",
+          type: "nmos",
+          label: "M1",
+          value: null,
+          pins: { d: "n-out", g: "n-in", s: "n-vss" },
+          pin_sides: null,
+          placement: { x: 30, y: 40, rot: 0, mirror: false, flip: false },
+          confidence: 0.9,
+          evidence: { figure_id: DIAGRAM_FIGURE_ID, bbox: [10, 20, 30, 40], quote: null },
+        },
+        {
+          id: "r1",
+          type: "resistor",
+          label: "R1",
+          value: "1k",
+          pins: { a: "n-vdd", b: "n-out" },
+          pin_sides: null,
+          placement: { x: 30, y: 15, rot: 0, mirror: false, flip: false },
+          confidence: 0.5,
+          evidence: null,
+        },
+        {
+          id: "g1",
+          type: "ground",
+          label: "GND",
+          value: null,
+          pins: { g: "n-vss" },
+          pin_sides: null,
+          placement: { x: 30, y: 65, rot: 0, mirror: false, flip: false },
+          confidence: 0.99,
+          evidence: { figure_id: DIAGRAM_FIGURE_ID, bbox: null, quote: null },
+        },
+      ],
+      nets: [
+        { id: "n-vdd", label: "VDD", role: "supply", global: true },
+        { id: "n-vss", label: "VSS", role: "ground", global: true },
+        { id: "n-in", label: "IN", role: "input", global: false },
+        { id: "n-out", label: "OUT", role: "signal", global: false },
+      ],
+      ports: [],
+      subcircuits: [],
+      layout: null,
+    },
+  ],
+  structure: {
+    version: 1,
+    title: "Test chip",
+    root: {
+      id: "chip",
+      label: "test chip",
+      kind: "chip",
+      count: null,
+      dims: null,
+      pos: null,
+      part: null,
+      tensor_shape: null,
+      children: [
+        {
+          id: "arr",
+          label: "cell array",
+          kind: "array",
+          count: { rows: 2, cols: 3 },
+          dims: null,
+          pos: null,
+          part: null,
+          tensor_shape: null,
+          children: [
+            {
+              id: "cell",
+              label: "cell",
+              kind: "cell",
+              count: null,
+              dims: { w: 1, h: 1, d: 1, unit: null },
+              pos: null,
+              part: null,
+              tensor_shape: null,
+              children: [],
+              confidence: 0.9,
+              evidence: { page: 5, figure_id: null, quote: "Each cell occupied 12 um2." },
+            },
+          ],
+          confidence: 0.9,
+          evidence: { page: 5, figure_id: null, quote: "Array of 2000 cells." },
+        },
+        {
+          id: "peri",
+          label: "row decoder",
+          kind: "periphery",
+          count: null,
+          dims: null,
+          pos: "left",
+          part: null,
+          tensor_shape: null,
+          children: [],
+          confidence: 0.4,
+          evidence: null,
+        },
+      ],
+      confidence: 1,
+      evidence: null,
+    },
+  },
+  validation: {
+    methodology: { errors: [], warnings: [], stats: { nodes: 4, edges: 3, groups: 1 } },
+    [`circuit:${DIAGRAM_FIGURE_ID}`]: {
+      errors: [],
+      warnings: [],
+      stats: { components: 3, nets: 4, ports: 0 },
+    },
+    structure: { errors: [], warnings: [], stats: { blocks: 4 } },
+  },
+  sources: {
+    methodology: "text",
+    [`circuit:${DIAGRAM_FIGURE_ID}`]: `figure:${DIAGRAM_FIGURE_ID}`,
+    structure: "text",
+  },
+};
+
+/** A paper whose figures yielded no diagram IRs: every view must fall
+ *  back to the paper's own figure, never a placeholder diagram. */
+export const thinDiagramsFixture: PaperDiagramsResponse = {
+  methodology: null,
+  circuits: [],
+  structure: null,
+  validation: {},
+  sources: {},
+};
+
+export const whatIfFixture: PaperWhatIfResponse = {
+  node_id: "fabricate",
+  node_label: "Fabricate array",
+  params_previous: { cell_count: "2000" },
+  params_applied: { cell_count: "5000" },
+  outcome: "Estimated 10000 bits from 5000 cells at two bits per cell.",
+  basis: [{ quote: "two bits per cell", page: 3 }],
+  assumptions: ["Yield holds at the larger array size."],
+  confidence: 0.62,
+  from_cache: false,
+};
+
 export const simulationPreviewFixture: SimulationPreview = {
   pack_id: "electronics",
   title: "SPICE circuit preview",
@@ -497,3 +707,34 @@ export const simulationPreviewFixture: SimulationPreview = {
   ],
   warnings: ["WARN: electronics_missing_pullup: node d1 wants a pull-up"],
 };
+
+export const authFixture: AuthResponse = {
+  user: {
+    user_id: "user-1",
+    email: "me@example.com",
+    name: "Me",
+    created_at: "2026-01-01T00:00:00+00:00",
+  },
+  token: "test-token",
+  expires_at: "2026-01-08T00:00:00+00:00",
+};
+
+export const libraryFixture: LibraryPaper[] = [
+  {
+    project_id: "project-papers",
+    graph_id: "graph-papers",
+    source_id: "paper-papers",
+    title: "AlphaFold paper",
+    created_at: "2026-01-02T00:00:00+00:00",
+  },
+];
+
+export const notesFixture: PaperNote[] = [
+  {
+    id: 1,
+    paper_id: "paper-papers",
+    body: "Reproduce the tilt test first.",
+    created_at: "2026-01-03T00:00:00+00:00",
+    updated_at: "2026-01-03T00:00:00+00:00",
+  },
+];

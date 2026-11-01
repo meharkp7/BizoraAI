@@ -1,8 +1,11 @@
 /* Typed client for the Bizora backend API. */
 
+import { getAuthToken } from "./authToken.ts";
 import type {
   AdapterSummary,
   ArtifactRecord,
+  AuthResponse,
+  AuthUser,
   BizoraErrorBody,
   CompatibilityPreflight,
   ComponentDetail,
@@ -17,13 +20,17 @@ import type {
   GraphPatch,
   GraphPatchBatch,
   GraphRevisionDiff,
+  LibraryPaper,
   MethodologyGraph,
   MetricRecord,
   NodeRenderSpec,
+  PaperDiagramsResponse,
+  PaperNote,
   PaperExtractionResponse,
   PaperFigure,
   PaperReportedMetric,
   PaperUpload,
+  PaperWhatIfResponse,
   ParsedPaper,
   RemovalPreflight,
   RunComparison,
@@ -65,8 +72,11 @@ function isErrorBody(value: unknown): value is BizoraErrorBody {
 }
 
 async function send(path: string, init?: RequestInit): Promise<Response> {
+  const token = getAuthToken();
+  const headers: Record<string, string> = { ...(init?.headers as Record<string, string> | undefined) };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
   try {
-    return await fetch(`${apiBase()}${path}`, init);
+    return await fetch(`${apiBase()}${path}`, { ...init, headers });
   } catch (cause) {
     throw new BizoraApiError(0, "NETWORK_UNREACHABLE", "The Bizora API is unreachable.", {
       cause: String(cause),
@@ -387,17 +397,83 @@ export const api = {
     version: number,
     message: string,
     selectedNodeId: string | null,
+    diagramContext: string | null,
   ): Promise<CopilotResponse> {
     return request(
       `/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/revisions/${version}/copilot`,
       {
         method: "POST",
-        body: JSON.stringify({ message, selected_node_id: selectedNodeId }),
+        body: JSON.stringify({
+          message,
+          selected_node_id: selectedNodeId,
+          diagram_context: diagramContext,
+        }),
       },
     );
   },
 
   listAdapters(): Promise<AdapterSummary[]> {
     return request(`/api/v1/experiments/adapters`);
+  },
+
+  register(email: string, password: string, name: string): Promise<AuthResponse> {
+    return request(`/api/v1/auth/register`, {
+      method: "POST",
+      body: JSON.stringify({ email, password, name }),
+    });
+  },
+
+  login(email: string, password: string): Promise<AuthResponse> {
+    return request(`/api/v1/auth/login`, {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+  },
+
+  me(): Promise<AuthUser> {
+    return request(`/api/v1/auth/me`);
+  },
+
+  myPapers(): Promise<LibraryPaper[]> {
+    return request(`/api/v1/users/me/papers`);
+  },
+
+  listNotes(paperId: string): Promise<PaperNote[]> {
+    return request(`/api/v1/papers/${encode(paperId)}/notes`);
+  },
+
+  createNote(paperId: string, body: string): Promise<PaperNote> {
+    return request(`/api/v1/papers/${encode(paperId)}/notes`, {
+      method: "POST",
+      body: JSON.stringify({ body }),
+    });
+  },
+
+  updateNote(paperId: string, noteId: number, body: string): Promise<PaperNote> {
+    return request(`/api/v1/papers/${encode(paperId)}/notes/${noteId}`, {
+      method: "PUT",
+      body: JSON.stringify({ body }),
+    });
+  },
+
+  deleteNote(paperId: string, noteId: number): Promise<void> {
+    return request(`/api/v1/papers/${encode(paperId)}/notes/${noteId}`, {
+      method: "DELETE",
+    });
+  },
+
+  getPaperDiagrams(paperId: string): Promise<PaperDiagramsResponse> {
+    return request(`/api/v1/papers/${encode(paperId)}/diagrams`);
+  },
+
+  runPaperWhatIf(
+    paperId: string,
+    nodeId: string,
+    params: Record<string, string>,
+  ): Promise<PaperWhatIfResponse> {
+    return request(`/api/v1/papers/${encode(paperId)}/whatif`, {
+      method: "POST",
+      body: JSON.stringify({ node_id: nodeId, params }),
+    });
   },
 };

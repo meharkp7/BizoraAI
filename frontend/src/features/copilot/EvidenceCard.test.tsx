@@ -98,6 +98,8 @@ describe("CopilotPanel grounding", () => {
         projectId="project-1"
         graph={graphFixture}
         disabled={false}
+        view="schematic"
+        selection={null}
         onSubmit={() => {}}
       />,
       { wrapper },
