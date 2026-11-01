@@ -7,9 +7,12 @@ provider, and every persisted link is validated against the live graph.
 No domain, paper, or part knowledge lives in this module.
 """
 
+from contextlib import suppress
 from dataclasses import dataclass
+from io import BytesIO
 from typing import Protocol
 
+from PIL import Image
 from sqlalchemy.orm import Session
 
 from bizora.contracts.figures import (
@@ -321,3 +324,31 @@ def list_graph_figures(
             session, project_id=project_id, graph_id=graph_id
         )
     )
+
+
+#: JPEG 2000 signature box (bytes 4..12): some PDFs embed JP2 rasters,
+#: which browsers cannot render in an <img>.
+_JP2_SIGNATURE = b"jP  \r\n\x87\n"
+
+#: Raw JPEG 2000 codestream magic (no container box).
+_JP2_CODESTREAM = b"\xff\x4f\xff\x51"
+
+
+def browser_safe_figure_bytes(
+    image_bytes: bytes, mime_type: str | None
+) -> tuple[bytes, str]:
+    """Return figure bytes a browser can render, plus their mime type.
+
+    JPEG 2000 rasters (common in PDF extraction) convert to PNG at serve
+    time; everything else passes through untouched. Detection sniffs
+    magic bytes, never the stored mime type, so mislabeled rows heal too.
+    """
+    is_jp2 = image_bytes[4:12] == _JP2_SIGNATURE or image_bytes[:4] == _JP2_CODESTREAM
+    if is_jp2:
+        # A corrupt JP2 serves as-is (the viewer shows its broken-image
+        # state) rather than failing the whole figure request.
+        with suppress(Exception), Image.open(BytesIO(image_bytes)) as image:
+            buffer = BytesIO()
+            image.save(buffer, format="PNG")
+            return buffer.getvalue(), "image/png"
+    return image_bytes, mime_type or "image/png"

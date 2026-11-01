@@ -82,6 +82,7 @@ from bizora.core.extraction_persistence_service import (
     ExtractionPersistenceService,
 )
 from bizora.core.figure_service import (
+    browser_safe_figure_bytes,
     ingest_paper_figures,
     list_graph_figures,
     persist_paper_figures,
@@ -1115,7 +1116,8 @@ def get_figure_image(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Figure not found.",
         )
-    return Response(content=record.image_bytes, media_type=record.mime_type or "image/png")
+    content, media_type = browser_safe_figure_bytes(record.image_bytes, record.mime_type)
+    return Response(content=content, media_type=media_type)
 
 
 class DiagramValidationReport(BaseModel):

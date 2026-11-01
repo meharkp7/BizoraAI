@@ -80,6 +80,56 @@ def test_figure_ingest_lists_and_serves_images(client: TestClient) -> None:
     assert len(image.content) > 0
 
 
+def test_figure_image_converts_jpeg2000_to_png() -> None:
+    from io import BytesIO
+
+    from PIL import Image
+
+    from bizora.db.models import PaperFigureRecord
+
+    buffer = BytesIO()
+    Image.new("RGB", (8, 8), (255, 0, 0)).save(buffer, "JPEG2000")
+    jp2 = buffer.getvalue()
+
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    with Session(engine) as session:
+        session.add(
+            PaperFigureRecord(
+                project_id="p",
+                graph_id="g",
+                figure_id="jp2fig",
+                source_id="paper-x",
+                created_by="test",
+                kind="figure",
+                mime_type="application/octet-stream",
+                image_bytes=jp2,
+                regions_payload={},
+            )
+        )
+        session.commit()
+
+    def override_get_db_session() -> Iterator[Session]:
+        with Session(engine) as session:
+            yield session
+
+    app.dependency_overrides[get_db_session] = override_get_db_session
+    try:
+        with TestClient(app) as test_client:
+            image = test_client.get("/api/v1/graphs/p/g/figures/jp2fig/image")
+    finally:
+        app.dependency_overrides.pop(get_db_session, None)
+        engine.dispose()
+
+    assert image.status_code == 200
+    assert image.headers["content-type"] == "image/png"
+    assert image.content[:8] == b"\x89PNG\r\n\x1a\n"
+
+
 def test_figure_endpoints_report_unknown_references(client: TestClient) -> None:
     seed_graph(client)
     missing_revision = client.post(
