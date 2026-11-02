@@ -18,6 +18,7 @@ import type {
   CopilotThreadSummary,
   ExperimentConfig,
   ExperimentRun,
+  ExportBundle,
   ExtractedTable,
   FigureIngestResponse,
   GraphEntities,
@@ -170,6 +171,10 @@ export const api = {
 
   getGraphRevision(projectId: string, graphId: string, version: number): Promise<MethodologyGraph> {
     return request(`/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/revisions/${version}`);
+  },
+
+  exportBundle(projectId: string, graphId: string): Promise<ExportBundle> {
+    return request(`/api/v1/projects/${encode(projectId)}/graphs/${encode(graphId)}/export`);
   },
 
   listGraphs(filters?: { project_id?: string; source_id?: string; limit?: number }): Promise<GraphSummary[]> {

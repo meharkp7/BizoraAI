@@ -314,6 +314,16 @@ export interface ProjectInviteCreateResponse {
   token: string;
 }
 
+export interface ExportBundle {
+  bundle_version: string;
+  exported_at: string;
+  project_id: string;
+  graph_id: string;
+  version: number;
+  graph: MethodologyGraph;
+  memory: MemoryFact[];
+}
+
 export interface GraphRevisionSummary {
   version: number;
   parent_version: number | null;

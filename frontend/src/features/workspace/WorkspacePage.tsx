@@ -23,6 +23,7 @@ import { EmptyState, ErrorState, LoadingState } from "../../components/states.ts
 import { DomainBadge } from "../canvas/EntityLegend.tsx";
 import { CopilotBot } from "../copilot/CopilotBot.tsx";
 import { FigureOverlay } from "../figures/FigureOverlay.tsx";
+import { ExportBundleButton } from "./ExportBundleButton.tsx";
 import { ReportedPanel } from "./ReportedPanel.tsx";
 import { ComponentDetailView } from "../library/ComponentDetail.tsx";
 import { LibraryPanel } from "../library/LibraryPanel.tsx";
@@ -563,6 +564,11 @@ function WorkspaceLoaded({
           <button type="button" disabled={mutating} onClick={onNewer}>
             Newer →
           </button>
+          <ExportBundleButton
+            projectId={projectId}
+            graphId={graph.graph_id}
+            disabled={mutating}
+          />
         </div>
       </div>
 
