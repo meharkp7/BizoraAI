@@ -43,6 +43,18 @@ class SuggestedIds(BaseModel):
     source_id: str = Field(min_length=1, max_length=128)
 
 
+class DuplicatePaper(BaseModel):
+    """An already-extracted graph matching a parse's suggested identifiers."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    project_id: str = Field(min_length=1, max_length=128)
+    graph_id: str = Field(min_length=1, max_length=128)
+    source_id: str = Field(min_length=1, max_length=128)
+    title: str = Field(min_length=1, max_length=300)
+    workspace_path: str = Field(min_length=1, max_length=300)
+
+
 class ParsedPaper(BaseModel):
     """Metadata read from an uploaded PDF without any model call."""
 
@@ -56,6 +68,7 @@ class ParsedPaper(BaseModel):
     sha256: str = Field(min_length=64, max_length=64)
     truncated: bool = False
     suggested: SuggestedIds
+    duplicate_of: DuplicatePaper | None = None
 
 
 class PaperExtractionResponse(BaseModel):
@@ -68,3 +81,37 @@ class PaperExtractionResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     page_count: int = Field(ge=1)
     truncated: bool = False
+
+
+class PaperImportRequest(BaseModel):
+    """A request to fetch and extract a paper from an external reference."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source: str = Field(min_length=1, max_length=2048)
+    title: str | None = Field(default=None, max_length=300)
+    max_tables: int = Field(default=10, ge=1, le=20)
+
+
+class PaperImportResponse(BaseModel):
+    """The fetched paper's source facts plus its extraction result."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source: str = Field(min_length=1, max_length=2048)
+    source_url: str = Field(min_length=1, max_length=2048)
+    filename: str = Field(min_length=1, max_length=128)
+    extraction: PaperExtractionResponse
+
+
+class SamplePaper(BaseModel):
+    """Configured first-run paper and whether its workspace is seeded."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    project_id: str = Field(min_length=1, max_length=128)
+    graph_id: str = Field(min_length=1, max_length=128)
+    source_id: str = Field(min_length=1, max_length=128)
+    title: str = Field(min_length=1, max_length=300)
+    workspace_path: str = Field(min_length=1, max_length=300)
+    available: bool = False

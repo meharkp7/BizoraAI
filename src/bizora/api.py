@@ -2,7 +2,9 @@
 
 import hashlib
 import logging
+from datetime import UTC, datetime
 from typing import Annotated, Any
+from urllib.parse import quote
 
 from fastapi import (
     APIRouter,
@@ -49,6 +51,7 @@ from bizora.contracts.graph import MethodologyGraph
 from bizora.contracts.layout import GraphLayout
 from bizora.contracts.packs import SimulationPreview
 from bizora.contracts.patches import GraphPatch, GraphPatchBatch
+from bizora.contracts.quality import QualitySummary
 from bizora.contracts.run import (
     ArtifactRecord,
     CreateExperimentRunRequest,
@@ -58,16 +61,22 @@ from bizora.contracts.run import (
 )
 from bizora.contracts.streaming import PaperReportedMetric
 from bizora.contracts.table import (
+    DuplicatePaper,
     ExtractedTable,
     PaperExtractionResponse,
+    PaperImportRequest,
+    PaperImportResponse,
     ParsedPaper,
+    SamplePaper,
     SuggestedIds,
 )
+from bizora.contracts.usage import RunUsage, UsageSummary
+from bizora.copilot.service import CopilotRunReport
 from bizora.copilot.tools import CopilotContext
 from bizora.core.comparison_service import ComparisonService
 from bizora.core.component_catalog import get_component, search_components
 from bizora.core.component_service import preflight_removal, preflight_replacement
-from bizora.core.config import get_settings
+from bizora.core.config import Settings, get_settings
 from bizora.core.copilot_service import answer_copilot_async
 from bizora.core.diagram_extraction import (
     MuseDiagramProvider,
@@ -89,6 +98,11 @@ from bizora.core.figure_service import (
 )
 from bizora.core.graph_persistence_service import GraphPersistenceService
 from bizora.core.layout_service import LayoutService
+from bizora.core.paper_import import (
+    PaperDownloadError,
+    download_paper_pdf,
+    resolve_paper_source,
+)
 from bizora.core.papers import (
     DEFAULT_CREATED_BY,
     is_valid_source_id,
@@ -99,9 +113,20 @@ from bizora.core.papers import (
 )
 from bizora.core.patch_service import GraphPatchService
 from bizora.core.pdf import PdfText, extract_page_texts, extract_text_from_pdf
+from bizora.core.quality import build_quality_summary
 from bizora.core.reported_service import discover_reported_metrics, reported_metrics_for_tables
 from bizora.core.run_service import ExperimentRunService
 from bizora.core.table_persistence_service import TablePersistenceService
+from bizora.core.usage_ledger import (
+    check_run_caps,
+    check_spend_caps,
+    estimate_cost,
+    record_provider_usage,
+    record_usage,
+    spend_for_run,
+    summarize_run_usage,
+    summarize_usage,
+)
 from bizora.db.models import PaperFigureRecord
 from bizora.db.repository import (
     artifact_record_from_row,
@@ -265,6 +290,21 @@ async def extract_graph(
 PAPER_TEXT_LIMIT = 120_000
 
 
+def _pdf_from_bytes(data: bytes, max_upload_mb: int) -> PdfText:
+    """Parse PDF bytes under the upload cap, mapping failures to 422 errors."""
+    max_bytes = max_upload_mb * 1024 * 1024
+    if len(data) > max_bytes:
+        raise BizoraError(
+            ErrorCode.INVALID_REQUEST,
+            f"The uploaded file exceeds the {max_upload_mb} MB limit.",
+        )
+
+    try:
+        return extract_text_from_pdf(data, max_chars=PAPER_TEXT_LIMIT)
+    except ValueError as exc:
+        raise BizoraError(ErrorCode.INVALID_REQUEST, str(exc)) from exc
+
+
 async def _read_upload(file: UploadFile) -> tuple[bytes, PdfText]:
     """Read and parse an uploaded PDF, mapping failures to 422 errors."""
     try:
@@ -276,17 +316,7 @@ async def _read_upload(file: UploadFile) -> tuple[bytes, PdfText]:
         ) from exc
     max_bytes = settings.max_upload_mb * 1024 * 1024
     data = await file.read(max_bytes + 1)
-    if len(data) > max_bytes:
-        raise BizoraError(
-            ErrorCode.INVALID_REQUEST,
-            f"The uploaded file exceeds the {settings.max_upload_mb} MB limit.",
-        )
-
-    try:
-        pdf = extract_text_from_pdf(data, max_chars=PAPER_TEXT_LIMIT)
-    except ValueError as exc:
-        raise BizoraError(ErrorCode.INVALID_REQUEST, str(exc)) from exc
-    return data, pdf
+    return data, _pdf_from_bytes(data, settings.max_upload_mb)
 
 
 def _suggest_ids(filename: str, pdf: PdfText) -> SuggestedIds:
@@ -302,15 +332,39 @@ def _suggest_ids(filename: str, pdf: PdfText) -> SuggestedIds:
     )
 
 
+def _workspace_path(project_id: str, graph_id: str) -> str:
+    """Build an encoded frontend workspace path for one graph."""
+    return f"/g/{quote(project_id, safe='')}/{quote(graph_id, safe='')}"
+
+
 @router.post(
     "/api/v1/papers/parse",
     response_model=ParsedPaper,
     tags=["papers"],
 )
-async def parse_paper(file: UploadFile) -> ParsedPaper:
+async def parse_paper(
+    file: UploadFile, session: Session = DB_SESSION_DEPENDENCY
+) -> ParsedPaper:
     """Read an uploaded PDF's metadata without calling any model."""
     _, pdf = await _read_upload(file)
     filename = file.filename or "paper.pdf"
+    suggested = _suggest_ids(filename, pdf)
+    latest = get_latest_graph_revision(
+        session,
+        project_id=suggested.project_id,
+        graph_id=suggested.graph_id,
+    )
+    duplicate = (
+        DuplicatePaper(
+            project_id=suggested.project_id,
+            graph_id=suggested.graph_id,
+            source_id=suggested.source_id,
+            title=latest.title,
+            workspace_path=_workspace_path(suggested.project_id, suggested.graph_id),
+        )
+        if latest is not None
+        else None
+    )
     return ParsedPaper(
         filename=filename,
         title=pdf.doc_title,
@@ -319,7 +373,192 @@ async def parse_paper(file: UploadFile) -> ParsedPaper:
         chars=len(pdf.text),
         sha256=pdf.sha256,
         truncated=pdf.truncated,
-        suggested=_suggest_ids(filename, pdf),
+        suggested=suggested,
+        duplicate_of=duplicate,
+    )
+
+
+@router.get(
+    "/api/v1/papers/sample",
+    response_model=SamplePaper,
+    tags=["papers"],
+)
+def get_sample_paper(session: Session = DB_SESSION_DEPENDENCY) -> SamplePaper:
+    """Describe the configured first-run paper and its seeded workspace."""
+    try:
+        settings = get_settings()
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Sample paper configuration is invalid.",
+        ) from exc
+
+    latest = get_latest_graph_revision(
+        session,
+        project_id=settings.sample_paper_project_id,
+        graph_id=settings.sample_paper_graph_id,
+    )
+    workspace_path = _workspace_path(
+        settings.sample_paper_project_id, settings.sample_paper_graph_id
+    )
+    return SamplePaper(
+        project_id=settings.sample_paper_project_id,
+        graph_id=settings.sample_paper_graph_id,
+        source_id=settings.sample_paper_source_id,
+        title=latest.title if latest is not None else settings.sample_paper_title,
+        workspace_path=workspace_path,
+        available=latest is not None,
+    )
+
+
+@router.get(
+    "/api/v1/quality/summary",
+    response_model=QualitySummary,
+    tags=["quality"],
+)
+def get_quality_summary() -> QualitySummary:
+    """Aggregate the last eval runs for the quality dashboard."""
+    try:
+        settings = get_settings()
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Quality configuration is invalid.",
+        ) from exc
+    return build_quality_summary(
+        diagram_eval_dir=settings.diagram_eval_dir,
+        copilot_eval_results=settings.copilot_eval_results,
+    )
+
+
+async def _extract_from_pdf(
+    data: bytes,
+    pdf: PdfText,
+    filename: str,
+    *,
+    project_id: str | None,
+    graph_id: str | None,
+    source_id: str | None,
+    created_by: str | None,
+    title: str | None,
+    max_tables: int,
+    session: Session,
+    provider: BasetenMethodologyProvider,
+    principal: Principal | None,
+    settings: Settings,
+) -> PaperExtractionResponse:
+    """Extract one paper from already-read PDF bytes (upload or import)."""
+    suggested = _suggest_ids(filename, pdf)
+
+    resolved_project = (
+        project_id.strip() if project_id and project_id.strip() else suggested.project_id
+    )
+    resolved_graph = graph_id.strip() if graph_id and graph_id.strip() else suggested.graph_id
+    resolved_source = source_id.strip() if source_id and source_id.strip() else suggested.source_id
+    resolved_author = (
+        created_by.strip() if created_by and created_by.strip() else DEFAULT_CREATED_BY
+    )
+    resolved_title = title.strip() if title and title.strip() else None
+
+    if not is_valid_source_id(resolved_source):
+        raise BizoraError(
+            ErrorCode.INVALID_REQUEST,
+            "Source IDs may contain letters, digits, and . _ : - (max 128).",
+            details={"source_id": resolved_source},
+        )
+
+    # Figures and text land before any provider call, so the diagrams
+    # endpoint works straight after upload for every paper — even when
+    # extraction itself fails below.
+    persist_paper_figures(
+        session,
+        project_id=resolved_project,
+        graph_id=resolved_graph,
+        pdf_bytes=data,
+        page_texts=extract_page_texts(data),
+        source_id=resolved_source,
+        created_by=resolved_author,
+    )
+
+    # One gate per request: a request that starts under the daily cap runs
+    # to completion, and everything it spends is recorded below.
+    check_spend_caps(session, settings, now=datetime.now(UTC))
+
+    try:
+        graph = await ExtractionPersistenceService.extract_and_persist_initial(
+            session,
+            provider,
+            MethodologyExtractionRequest(
+                paper_text=pdf.text,
+                project_id=resolved_project,
+                graph_id=resolved_graph,
+                source_id=resolved_source,
+                created_by=resolved_author,
+                title=resolved_title,
+            ),
+        )
+    except MethodologyProviderError as exc:
+        logger.warning("Methodology extraction provider failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Methodology extraction provider failed.",
+        ) from exc
+    record_provider_usage(
+        session,
+        settings,
+        kind="extraction",
+        provider=provider,
+        project_id=resolved_project,
+        graph_id=resolved_graph,
+    )
+
+    warnings: list[str] = []
+    if pdf.truncated:
+        warnings.append(f"Paper text was truncated to {PAPER_TEXT_LIMIT} characters.")
+
+    tables: list[ExtractedTable] = []
+    try:
+        tables, table_warnings = await TablePersistenceService.extract_and_persist(
+            session,
+            provider,
+            TableExtractionRequest(
+                paper_text=pdf.text,
+                project_id=resolved_project,
+                graph_id=resolved_graph,
+                source_id=resolved_source,
+                created_by=resolved_author,
+                max_tables=max_tables,
+            ),
+        )
+        warnings.extend(table_warnings)
+        record_provider_usage(
+            session,
+            settings,
+            kind="tables",
+            provider=provider,
+            project_id=resolved_project,
+            graph_id=resolved_graph,
+        )
+    except MethodologyProviderError:
+        warnings.append("Results tables could not be extracted: the provider request failed.")
+
+    if principal is not None:
+        stem = filename.rsplit(".", 1)[0] if "." in filename else filename
+        record_user_paper(
+            session,
+            principal.user_id,
+            project_id=resolved_project,
+            graph_id=resolved_graph,
+            source_id=resolved_source,
+            title=(resolved_title or pdf.doc_title or stem)[:300],
+        )
+
+    return PaperExtractionResponse(
+        graph=graph,
+        tables=tables,
+        warnings=warnings,
+        page_count=pdf.page_count,
+        truncated=pdf.truncated,
     )
 
 
@@ -350,96 +589,88 @@ async def extract_paper(
     """
     data, pdf = await _read_upload(file)
     filename = file.filename or "paper.pdf"
-    suggested = _suggest_ids(filename, pdf)
-
-    resolved_project = (
-        project_id.strip() if project_id and project_id.strip() else suggested.project_id
-    )
-    resolved_graph = graph_id.strip() if graph_id and graph_id.strip() else suggested.graph_id
-    resolved_source = source_id.strip() if source_id and source_id.strip() else suggested.source_id
-    resolved_author = (
-        created_by.strip() if created_by and created_by.strip() else DEFAULT_CREATED_BY
-    )
-
-    if not is_valid_source_id(resolved_source):
-        raise BizoraError(
-            ErrorCode.INVALID_REQUEST,
-            "Source IDs may contain letters, digits, and . _ : - (max 128).",
-            details={"source_id": resolved_source},
-        )
-
-    # Figures and text land before any provider call, so the diagrams
-    # endpoint works straight after upload for every paper — even when
-    # extraction itself fails below.
-    persist_paper_figures(
-        session,
-        project_id=resolved_project,
-        graph_id=resolved_graph,
-        pdf_bytes=data,
-        page_texts=extract_page_texts(data),
-        source_id=resolved_source,
-        created_by=resolved_author,
+    return await _extract_from_pdf(
+        data,
+        pdf,
+        filename,
+        project_id=project_id,
+        graph_id=graph_id,
+        source_id=source_id,
+        created_by=created_by,
+        title=title,
+        max_tables=max_tables,
+        session=session,
+        provider=provider,
+        principal=principal,
+        settings=get_settings(),
     )
 
+
+@router.post(
+    "/api/v1/papers/import",
+    response_model=PaperImportResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["papers"],
+)
+async def import_paper(
+    request: PaperImportRequest,
+    session: Session = DB_SESSION_DEPENDENCY,
+    provider: BasetenMethodologyProvider = BASETEN_PROVIDER_DEPENDENCY,
+    principal: Principal | None = OPTIONAL_PRINCIPAL_DEPENDENCY,
+) -> PaperImportResponse:
+    """Fetch a paper from an arXiv ID, DOI, or URL, then extract it.
+
+    The download is bounded by the upload cap and must be a real PDF;
+    from there the paper follows the exact same pipeline as an upload,
+    including the caller's library record for authenticated callers.
+    """
     try:
-        graph = await ExtractionPersistenceService.extract_and_persist_initial(
-            session,
-            provider,
-            MethodologyExtractionRequest(
-                paper_text=pdf.text,
-                project_id=resolved_project,
-                graph_id=resolved_graph,
-                source_id=resolved_source,
-                created_by=resolved_author,
-                title=title,
-            ),
-        )
-    except MethodologyProviderError as exc:
-        logger.warning("Methodology extraction provider failed: %s", exc)
+        settings = get_settings()
+    except ValueError as exc:
         raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Methodology extraction provider failed.",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Provider configuration is invalid.",
         ) from exc
 
-    warnings: list[str] = []
-    if pdf.truncated:
-        warnings.append(f"Paper text was truncated to {PAPER_TEXT_LIMIT} characters.")
-
-    tables: list[ExtractedTable] = []
     try:
-        tables, table_warnings = await TablePersistenceService.extract_and_persist(
-            session,
-            provider,
-            TableExtractionRequest(
-                paper_text=pdf.text,
-                project_id=resolved_project,
-                graph_id=resolved_graph,
-                source_id=resolved_source,
-                created_by=resolved_author,
-                max_tables=max_tables,
-            ),
-        )
-        warnings.extend(table_warnings)
-    except MethodologyProviderError:
-        warnings.append("Results tables could not be extracted: the provider request failed.")
+        resolved = resolve_paper_source(request.source)
+    except ValueError as exc:
+        raise BizoraError(ErrorCode.INVALID_REQUEST, str(exc)) from exc
 
-    if principal is not None:
-        stem = filename.rsplit(".", 1)[0] if "." in filename else filename
-        record_user_paper(
-            session,
-            principal.user_id,
-            project_id=resolved_project,
-            graph_id=resolved_graph,
-            source_id=resolved_source,
-            title=(title or pdf.doc_title or stem)[:300],
+    try:
+        downloaded = await download_paper_pdf(
+            resolved, max_bytes=settings.max_upload_mb * 1024 * 1024
         )
+    except PaperDownloadError as exc:
+        logger.warning("Paper download failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Paper download failed.",
+        ) from exc
+    except ValueError as exc:
+        raise BizoraError(ErrorCode.INVALID_REQUEST, str(exc)) from exc
 
-    return PaperExtractionResponse(
-        graph=graph,
-        tables=tables,
-        warnings=warnings,
-        page_count=pdf.page_count,
-        truncated=pdf.truncated,
+    pdf = _pdf_from_bytes(downloaded.data, settings.max_upload_mb)
+    extraction = await _extract_from_pdf(
+        downloaded.data,
+        pdf,
+        downloaded.filename,
+        project_id=None,
+        graph_id=None,
+        source_id=None,
+        created_by=None,
+        title=request.title,
+        max_tables=request.max_tables,
+        session=session,
+        provider=provider,
+        principal=principal,
+        settings=settings,
+    )
+    return PaperImportResponse(
+        source=request.source,
+        source_url=downloaded.source_url,
+        filename=downloaded.filename,
+        extraction=extraction,
     )
 
 
@@ -943,14 +1174,53 @@ async def ask_copilot(
         list_tables=list_tables,
         list_figures=list_figures,
     )
-    return await answer_copilot_async(
+    try:
+        settings = get_settings()
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Provider configuration is invalid.",
+        ) from exc
+    check_spend_caps(session, settings, now=datetime.now(UTC))
+    report = CopilotRunReport(provider_name="unknown")
+    response = await answer_copilot_async(
         graph,
         request.message,
         request.selected_node_id,
         provider=_copilot_provider_or_none(),
         context=context,
         mode="auto",
+        report=report,
     )
+    if report.usage:
+        models = [usage.model for usage in report.usage if usage.model]
+        input_tokens = (
+            report.total_input_tokens
+            if any(usage.input_tokens is not None for usage in report.usage)
+            else None
+        )
+        output_tokens = (
+            report.total_output_tokens
+            if any(usage.output_tokens is not None for usage in report.usage)
+            else None
+        )
+        record_usage(
+            session,
+            kind="copilot",
+            provider=report.provider_name,
+            model=models[0] if models else None,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cost_usd_estimated=estimate_cost(
+                input_tokens,
+                output_tokens,
+                usd_per_1k_input=settings.usd_per_1k_input,
+                usd_per_1k_output=settings.usd_per_1k_output,
+            ),
+            project_id=project_id,
+            graph_id=graph_id,
+        )
+    return response
 
 
 @router.get(
@@ -1488,9 +1758,77 @@ def get_execution_service() -> ExecutionService:
     response_model=ExperimentRun,
     tags=["experiments"],
 )
-def execute_experiment_run(run_id: str) -> ExperimentRun:
+def execute_experiment_run(
+    run_id: str, session: Session = DB_SESSION_DEPENDENCY
+) -> ExperimentRun:
     """Claim a run and supervise its adapter through completion."""
-    return get_execution_service().execute_run(run_id)
+    try:
+        settings = get_settings()
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Provider configuration is invalid.",
+        ) from exc
+    check_run_caps(session, settings, now=datetime.now(UTC), run_id=run_id)
+    run = get_execution_service().execute_run(run_id)
+    # Executors report no cost signal yet, so the row stays unmetered rather
+    # than inventing a number; spend_for_run picks up costs automatically
+    # once an executor records one.
+    record_usage(
+        session,
+        kind="run",
+        provider=run.config.adapter_id,
+        model=run.config.adapter_version,
+        run_id=run.run_id,
+        project_id=run.config.project_id,
+        graph_id=run.config.graph_id,
+    )
+    run_spend = spend_for_run(session, run.run_id)
+    if (
+        settings.run_spend_cap_usd > 0
+        and run_spend is not None
+        and run_spend >= settings.run_spend_cap_usd
+    ):
+        logger.warning(
+            "Run %s estimated spend $%.4f reached the $%.2f cap.",
+            run.run_id,
+            run_spend,
+            settings.run_spend_cap_usd,
+        )
+    return run
+
+
+@router.get(
+    "/api/v1/usage/summary",
+    response_model=UsageSummary,
+    tags=["usage"],
+)
+def get_usage_summary(
+    days: int = Query(default=7, ge=1, le=90),
+    session: Session = DB_SESSION_DEPENDENCY,
+) -> UsageSummary:
+    """Return estimated model and execution spend for the last UTC days."""
+    try:
+        settings = get_settings()
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Provider configuration is invalid.",
+        ) from exc
+    return summarize_usage(session, settings, days=days, now=datetime.now(UTC))
+
+
+@router.get(
+    "/api/v1/usage/runs",
+    response_model=list[RunUsage],
+    tags=["usage"],
+)
+def list_run_usage(
+    limit: int = Query(default=50, ge=1, le=200),
+    session: Session = DB_SESSION_DEPENDENCY,
+) -> list[RunUsage]:
+    """Return estimated cost per run, most recently used first."""
+    return summarize_run_usage(session, limit=limit)
 
 
 @router.get(
@@ -1624,6 +1962,11 @@ def register_error_handlers(app: FastAPI) -> None:
             status_code = status.HTTP_409_CONFLICT
         elif exc.code == ErrorCode.RESOURCE_NOT_FOUND:
             status_code = status.HTTP_404_NOT_FOUND
+        elif exc.code in (
+            ErrorCode.EXPERIMENT_LIMIT_EXCEEDED,
+            ErrorCode.SPEND_LIMIT_EXCEEDED,
+        ):
+            status_code = status.HTTP_429_TOO_MANY_REQUESTS
         else:
             status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
 

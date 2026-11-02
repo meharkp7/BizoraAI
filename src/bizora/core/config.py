@@ -17,6 +17,7 @@ never echoes credentials.
 import os
 import warnings
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, SecretStr, field_validator, model_validator
@@ -25,6 +26,14 @@ from sqlalchemy.engine.url import make_url
 from sqlalchemy.exc import SQLAlchemyError
 
 DEFAULT_DATABASE_URL = "postgresql+psycopg://bizora:bizora@localhost:5432/bizora"
+
+# This file lives at <repo>/src/bizora/core/config.py, so three levels up
+# locate the checkout the eval reports live in.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+DEFAULT_DIAGRAM_EVAL_DIR = str(_REPO_ROOT / "docs" / "visual-eval")
+DEFAULT_COPILOT_EVAL_RESULTS = str(
+    _REPO_ROOT / "tests" / "copilot_eval" / ".cache" / "results" / "latest.json"
+)
 
 
 def is_valid_database_url(value: str) -> bool:
@@ -108,6 +117,72 @@ class Settings(BaseSettings):
     modal_app_name: str = Field(
         default="bizora-experiments",
         alias="MODAL_APP_NAME",
+    )
+
+    sample_paper_project_id: str = Field(
+        default="a-2-bit-cell-tilting-sram-based-puf-with-4c144156",
+        min_length=1,
+        max_length=128,
+        alias="BIZORA_SAMPLE_PAPER_PROJECT_ID",
+    )
+    sample_paper_graph_id: str = Field(
+        default="a-2-bit-cell-tilting-sram-based-puf-with-graph-4c144156",
+        min_length=1,
+        max_length=128,
+        alias="BIZORA_SAMPLE_PAPER_GRAPH_ID",
+    )
+    sample_paper_source_id: str = Field(
+        default="paper-4c144156",
+        min_length=1,
+        max_length=128,
+        alias="BIZORA_SAMPLE_PAPER_SOURCE_ID",
+    )
+    sample_paper_title: str = Field(
+        default="A 2-Bit Cell Tilting SRAM-Based PUF With a BER of 3.1E-10 "
+        "and an Energy of 21 fJ/Bit in 65nm",
+        min_length=1,
+        max_length=300,
+        alias="BIZORA_SAMPLE_PAPER_TITLE",
+    )
+    diagram_eval_dir: str = Field(
+        default=DEFAULT_DIAGRAM_EVAL_DIR,
+        min_length=1,
+        alias="BIZORA_DIAGRAM_EVAL_DIR",
+    )
+    copilot_eval_results: str = Field(
+        default=DEFAULT_COPILOT_EVAL_RESULTS,
+        min_length=1,
+        alias="BIZORA_COPILOT_EVAL_RESULTS",
+    )
+    usd_per_1k_input: float = Field(
+        default=0.003,
+        ge=0.0,
+        alias="BIZORA_USD_PER_1K_INPUT",
+        description="Estimated USD per 1K input tokens; every display labels it estimated.",
+    )
+    usd_per_1k_output: float = Field(
+        default=0.015,
+        ge=0.0,
+        alias="BIZORA_USD_PER_1K_OUTPUT",
+        description="Estimated USD per 1K output tokens; every display labels it estimated.",
+    )
+    daily_spend_cap_usd: float = Field(
+        default=25.0,
+        ge=0.0,
+        alias="BIZORA_DAILY_SPEND_CAP_USD",
+        description="Block metered model calls past this estimated daily spend; 0 disables.",
+    )
+    run_spend_cap_usd: float = Field(
+        default=5.0,
+        ge=0.0,
+        alias="BIZORA_RUN_SPEND_CAP_USD",
+        description="Block a run past this estimated spend once executors report cost; 0 disables.",
+    )
+    max_runs_per_day: int = Field(
+        default=50,
+        ge=0,
+        alias="BIZORA_MAX_RUNS_PER_DAY",
+        description="Block run execution past this many started runs per day; 0 disables.",
     )
 
     max_upload_mb: int = Field(

@@ -22,6 +22,7 @@ from bizora.contracts.components import (
     CopilotProposal,
     CopilotResponse,
 )
+from bizora.contracts.run import RunState
 from bizora.copilot.citations import (
     ComponentCitation,
     CopilotAnswer,
@@ -189,6 +190,7 @@ def _evidence_card(citation: EvidenceCitation) -> CopilotCard:
 def _run_card(citation: RunCitation, context: CopilotContext) -> CopilotCard:
     lines = [f"Run: {citation.run_id}"]
     run = context.run(citation.run_id)
+    measured = run is not None and run.state == RunState.SUCCEEDED
     if run is not None:
         lines.append(f"State: {run.state.value}")
         if run.error:
@@ -199,12 +201,13 @@ def _run_card(citation: RunCitation, context: CopilotContext) -> CopilotCard:
             None,
         )
         if value is None:
+            measured = False
             lines.append(f"Metric: {citation.metric_name} (no recorded value)")
         else:
             lines.append(f"Metric: {citation.metric_name} = {value}")
     return CopilotCard(
         kind="info",
-        title="Measured run",
+        title="Measured run" if measured else "Unmeasured run",
         body="\n".join(lines),
         component_ids=(),
     )

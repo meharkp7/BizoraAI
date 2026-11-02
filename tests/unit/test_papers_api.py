@@ -373,3 +373,245 @@ def test_extract_rejects_invalid_source_id(client: TestClient) -> None:
 
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "INVALID_REQUEST"
+
+
+SAMPLE_PROJECT_ID = "a-2-bit-cell-tilting-sram-based-puf-with-4c144156"
+SAMPLE_GRAPH_ID = "a-2-bit-cell-tilting-sram-based-puf-with-graph-4c144156"
+SAMPLE_SOURCE_ID = "paper-4c144156"
+
+
+def use_default_sample_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Point the sample endpoint at its default SRAM configuration."""
+    from bizora import api
+    from bizora.core.config import Settings
+
+    for variable in (
+        "BIZORA_SAMPLE_PAPER_PROJECT_ID",
+        "BIZORA_SAMPLE_PAPER_GRAPH_ID",
+        "BIZORA_SAMPLE_PAPER_SOURCE_ID",
+        "BIZORA_SAMPLE_PAPER_TITLE",
+    ):
+        monkeypatch.delenv(variable, raising=False)
+    monkeypatch.setattr(api, "get_settings", lambda: Settings(_env_file=None))
+
+
+def test_sample_paper_reports_unavailable_before_seeding(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    use_default_sample_settings(monkeypatch)
+
+    response = client.get("/api/v1/papers/sample")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "project_id": SAMPLE_PROJECT_ID,
+        "graph_id": SAMPLE_GRAPH_ID,
+        "source_id": SAMPLE_SOURCE_ID,
+        "title": "A 2-Bit Cell Tilting SRAM-Based PUF With a BER of 3.1E-10 "
+        "and an Energy of 21 fJ/Bit in 65nm",
+        "workspace_path": f"/g/{SAMPLE_PROJECT_ID}/{SAMPLE_GRAPH_ID}",
+        "available": False,
+    }
+
+
+def test_sample_paper_reports_seeded_revision(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    use_default_sample_settings(monkeypatch)
+    app.dependency_overrides[get_baseten_provider] = lambda: FakePaperProvider()
+    try:
+        response = client.post(
+            "/api/v1/papers/extract",
+            files={
+                "file": (
+                    "sram.pdf",
+                    make_pdf_bytes("SRAM PUF methods."),
+                    "application/pdf",
+                )
+            },
+            data={
+                "project_id": SAMPLE_PROJECT_ID,
+                "graph_id": SAMPLE_GRAPH_ID,
+                "source_id": SAMPLE_SOURCE_ID,
+                "created_by": "sample-seed",
+                "title": "Seeded SRAM PUF",
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(get_baseten_provider, None)
+
+    assert response.status_code == 201
+
+    response = client.get("/api/v1/papers/sample")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "project_id": SAMPLE_PROJECT_ID,
+        "graph_id": SAMPLE_GRAPH_ID,
+        "source_id": SAMPLE_SOURCE_ID,
+        "title": "Seeded SRAM PUF",
+        "workspace_path": f"/g/{SAMPLE_PROJECT_ID}/{SAMPLE_GRAPH_ID}",
+        "available": True,
+    }
+
+
+def test_sample_paper_returns_503_when_settings_invalid(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from bizora import api
+
+    def broken_settings() -> object:
+        raise ValueError("Sample settings are invalid.")
+
+    monkeypatch.setattr(api, "get_settings", broken_settings)
+
+    response = client.get("/api/v1/papers/sample")
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Sample paper configuration is invalid."
+
+
+def test_parse_reports_no_duplicate_for_new_pdf(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/papers/parse",
+        files={"file": ("fresh.pdf", make_pdf_bytes("Fresh paper body."), "application/pdf")},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["duplicate_of"] is None
+
+
+def test_parse_warns_when_suggested_graph_exists(client: TestClient) -> None:
+    pdf_bytes = make_pdf_bytes("Duplicate paper body.")
+    app.dependency_overrides[get_baseten_provider] = lambda: FakePaperProvider()
+    try:
+        uploaded = client.post(
+            "/api/v1/papers/extract",
+            files={"file": ("duplicate.pdf", pdf_bytes, "application/pdf")},
+            data={"title": "Duplicate paper"},
+        )
+    finally:
+        app.dependency_overrides.pop(get_baseten_provider, None)
+
+    assert uploaded.status_code == 201
+    seeded = uploaded.json()["graph"]
+
+    response = client.post(
+        "/api/v1/papers/parse",
+        files={"file": ("duplicate.pdf", pdf_bytes, "application/pdf")},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["duplicate_of"] == {
+        "project_id": seeded["project_id"],
+        "graph_id": seeded["graph_id"],
+        "source_id": seeded["source_ids"][0],
+        "title": "Duplicate paper",
+        "workspace_path": f"/g/{seeded['project_id']}/{seeded['graph_id']}",
+    }
+
+
+def test_import_arxiv_source_extracts_downloaded_pdf(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from bizora import api
+    from bizora.core.paper_import import DownloadedPaper
+
+    pdf_bytes = make_pdf_bytes("Imported arXiv body.")
+
+    async def fake_download(resolved: object, **kwargs: object) -> DownloadedPaper:
+        return DownloadedPaper(
+            data=pdf_bytes,
+            filename="1706.03762v7.pdf",
+            source_url="https://arxiv.org/pdf/1706.03762v7",
+            content_type="application/pdf",
+        )
+
+    monkeypatch.setattr(api, "download_paper_pdf", fake_download)
+    app.dependency_overrides[get_baseten_provider] = lambda: FakePaperProvider()
+    try:
+        response = client.post(
+            "/api/v1/papers/import",
+            json={"source": "1706.03762v7", "title": "Imported arXiv paper"},
+        )
+    finally:
+        app.dependency_overrides.pop(get_baseten_provider, None)
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["source"] == "1706.03762v7"
+    assert body["source_url"] == "https://arxiv.org/pdf/1706.03762v7"
+    assert body["filename"] == "1706.03762v7.pdf"
+    assert body["extraction"]["graph"]["title"] == "Imported arXiv paper"
+    assert body["extraction"]["page_count"] == 1
+
+
+def test_import_rejects_invalid_source(client: TestClient) -> None:
+    app.dependency_overrides[get_baseten_provider] = lambda: FakePaperProvider()
+    try:
+        response = client.post("/api/v1/papers/import", json={"source": "not a paper"})
+    finally:
+        app.dependency_overrides.pop(get_baseten_provider, None)
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "INVALID_REQUEST"
+
+
+def test_import_maps_download_failure_to_502(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from bizora import api
+    from bizora.core.paper_import import PaperDownloadError
+
+    async def failing_download(*args: object, **kwargs: object) -> object:
+        raise PaperDownloadError("Paper download failed with HTTP 404.")
+
+    monkeypatch.setattr(api, "download_paper_pdf", failing_download)
+    app.dependency_overrides[get_baseten_provider] = lambda: FakePaperProvider()
+    try:
+        response = client.post(
+            "/api/v1/papers/import", json={"source": "https://example.com/missing.pdf"}
+        )
+    finally:
+        app.dependency_overrides.pop(get_baseten_provider, None)
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "Paper download failed."
+
+
+def test_import_rejects_invalid_download(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    from bizora import api
+
+    async def invalid_download(*args: object, **kwargs: object) -> object:
+        raise ValueError("The downloaded file is not a PDF document.")
+
+    monkeypatch.setattr(api, "download_paper_pdf", invalid_download)
+    app.dependency_overrides[get_baseten_provider] = lambda: FakePaperProvider()
+    try:
+        response = client.post(
+            "/api/v1/papers/import", json={"source": "https://example.com/paper.pdf"}
+        )
+    finally:
+        app.dependency_overrides.pop(get_baseten_provider, None)
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "INVALID_REQUEST"
+
+
+def test_import_returns_503_when_settings_invalid(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from bizora import api
+
+    def broken_settings() -> object:
+        raise ValueError("Import settings are invalid.")
+
+    monkeypatch.setattr(api, "get_settings", broken_settings)
+    app.dependency_overrides[get_baseten_provider] = lambda: FakePaperProvider()
+    try:
+        response = client.post("/api/v1/papers/import", json={"source": "1706.03762v7"})
+    finally:
+        app.dependency_overrides.pop(get_baseten_provider, None)
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Provider configuration is invalid."

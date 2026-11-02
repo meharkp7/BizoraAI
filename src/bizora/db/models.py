@@ -302,3 +302,35 @@ class PaperTextRecord(Base):
         server_default=func.now(),
         nullable=False,
     )
+
+
+class UsageRecordRow(Base):
+    """One metered (or explicitly unmetered) model or execution call.
+
+    Token counts and cost stay null when the provider reports no usage;
+    such rows still count calls so caps and dashboards never pretend an
+    unmetered call was free — they show it as unmetered instead.
+    """
+
+    __tablename__ = "usage_records"
+    __table_args__ = (
+        Index("ix_usage_record_created", "created_at"),
+        Index("ix_usage_record_run", "run_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    provider: Mapped[str] = mapped_column(String(64), nullable=False)
+    model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cost_usd_estimated: Mapped[float | None] = mapped_column(Float, nullable=True)
+    run_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    project_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    graph_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )

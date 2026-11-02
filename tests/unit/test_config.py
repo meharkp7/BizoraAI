@@ -16,6 +16,21 @@ def test_default_settings_are_safe_for_local_development() -> None:
     assert settings.enable_fireworks is False
     assert settings.enable_baseten is False
     assert settings.enable_modal is False
+    assert (
+        settings.sample_paper_project_id
+        == "a-2-bit-cell-tilting-sram-based-puf-with-4c144156"
+    )
+    assert (
+        settings.sample_paper_graph_id
+        == "a-2-bit-cell-tilting-sram-based-puf-with-graph-4c144156"
+    )
+    assert settings.sample_paper_source_id == "paper-4c144156"
+    assert settings.sample_paper_title.startswith("A 2-Bit Cell Tilting SRAM-Based PUF")
+    assert settings.usd_per_1k_input == 0.003
+    assert settings.usd_per_1k_output == 0.015
+    assert settings.daily_spend_cap_usd == 25.0
+    assert settings.run_spend_cap_usd == 5.0
+    assert settings.max_runs_per_day == 50
 
 
 def test_api_prefix_removes_trailing_slash() -> None:
