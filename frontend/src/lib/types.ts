@@ -287,6 +287,14 @@ export interface TransplantResponse {
   dropped_edge_count: number;
 }
 
+export interface MemoryFact {
+  id: number;
+  project_id: string;
+  fact: string;
+  created_by: string;
+  created_at: string;
+}
+
 export interface GraphRevisionSummary {
   version: number;
   parent_version: number | null;

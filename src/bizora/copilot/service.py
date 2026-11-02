@@ -473,6 +473,9 @@ def _loop_inputs(
         question += f"\n\n[Viewer context: {context.diagram_context.strip()[:280]}]"
     if context.diagram_elements:
         question += f"\n\n[Viewer context: {_roster_line(context.diagram_elements)}]"
+    if context.memory_facts:
+        joined = "; ".join(fact.strip() for fact in context.memory_facts[:10])
+        question += f"\n\n[Memory: {joined[:2000]}]"
     history: list[CopilotMessage] = [
         CopilotMessage(role="system", content=SYSTEM_PROMPT),
         CopilotMessage(role="user", content=question),

@@ -648,6 +648,16 @@ export const arenaFixture: ArenaComparison = {
   ],
 };
 
+export const memoryFixture = [
+  {
+    id: 1,
+    project_id: "project-1",
+    fact: "The tapeout uses 65nm.",
+    created_by: "cross-paper-ui",
+    created_at: "2026-11-02T00:00:00+00:00",
+  },
+];
+
 export const transplantFixture = {
   project_id: "project-2",
   graph_id: "graph-2",

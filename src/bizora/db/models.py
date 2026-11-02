@@ -366,6 +366,28 @@ class CopilotTurnRecord(Base):
     )
 
 
+class MemoryRecord(Base):
+    """One project-scoped memory fact the copilot recalls.
+
+    Facts are short user- or copilot-recorded notes ("the tapeout uses
+    65nm") that ride along with later copilot turns in the project.
+    """
+
+    __tablename__ = "memory_records"
+    __table_args__ = (Index("ix_memory_record_project", "project_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    fact: Mapped[str] = mapped_column(Text, nullable=False)
+    created_by: Mapped[str] = mapped_column(String(128), nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+
 class UsageRecordRow(Base):
     """One metered (or explicitly unmetered) model or execution call.
 

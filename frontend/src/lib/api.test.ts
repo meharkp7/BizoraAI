@@ -40,6 +40,17 @@ describe("api client", () => {
     expect(result.dropped_edge_count).toBe(1);
   });
 
+  it("manages project memory facts", async () => {
+    const facts = await api.listMemoryFacts("project-1");
+    expect(facts).toHaveLength(1);
+
+    const created = await api.createMemoryFact("project-1", "New fact.", "tester");
+    expect(created.id).toBe(2);
+    expect(created.fact).toBe("New fact.");
+
+    await api.deleteMemoryFact("project-1", 1);
+  });
+
   it("fetches a graph revision", async () => {
     const graph = await api.getGraphRevision("project-1", "graph-1", 2);
     expect(graph.title).toBe("Vision transformer");

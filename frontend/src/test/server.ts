@@ -21,6 +21,7 @@ import {
   graphSummariesFixture,
   layoutFixture,
   libraryFixture,
+  memoryFixture,
   metricsFixture,
   notesFixture,
   notFound,
@@ -67,6 +68,24 @@ export const handlers = [
     "/api/v1/graphs/:projectId/:graphId/transplant",
     () => HttpResponse.json(transplantFixture, { status: 201 }),
   ),
+
+  http.get("/api/v1/projects/:projectId/memory", () => HttpResponse.json(memoryFixture)),
+
+  http.post("/api/v1/projects/:projectId/memory", async ({ request, params }) => {
+    const body = (await request.json()) as { fact: string; created_by: string };
+    return HttpResponse.json(
+      {
+        id: 2,
+        project_id: params["projectId"],
+        fact: body.fact,
+        created_by: body.created_by,
+        created_at: "2026-11-02T00:00:00+00:00",
+      },
+      { status: 201 },
+    );
+  }),
+
+  http.delete("/api/v1/projects/:projectId/memory/:factId", () => new HttpResponse(null, { status: 204 })),
 
   http.get("/api/v1/graphs/:projectId/:graphId/revisions/:version", ({ params }) => {
     if (params["projectId"] === "project-1" && params["graphId"] === "graph-1") {

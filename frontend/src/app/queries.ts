@@ -383,6 +383,39 @@ export function useGraphs(filters?: { project_id?: string; source_id?: string; l
   });
 }
 
+export const memoryKeys = {
+  facts: (projectId: string) => ["projects", projectId, "memory"] as const,
+};
+
+export function useProjectMemory(projectId: string | null) {
+  return useQuery({
+    queryKey: memoryKeys.facts(projectId ?? ""),
+    queryFn: () => api.listMemoryFacts(projectId ?? ""),
+    enabled: projectId !== null,
+  });
+}
+
+export function useCreateMemoryFact(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ fact, createdBy }: { fact: string; createdBy: string }) =>
+      api.createMemoryFact(projectId, fact, createdBy),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: memoryKeys.facts(projectId) });
+    },
+  });
+}
+
+export function useDeleteMemoryFact(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (factId: number) => api.deleteMemoryFact(projectId, factId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: memoryKeys.facts(projectId) });
+    },
+  });
+}
+
 export function useArenaComparison(
   a: { project_id: string; graph_id: string } | null,
   b: { project_id: string; graph_id: string } | null,

@@ -65,6 +65,14 @@ SHOW_PATTERN = re.compile(
     r"(?:show|find|locate|where\s+is)\s+(?P<ref>.+?)\s*\??\s*$",
     re.IGNORECASE,
 )
+REMEMBER_PATTERN = re.compile(
+    r"^\s*remember\s+(?:that\s+)?(?P<fact>.+?)\s*$",
+    re.IGNORECASE,
+)
+RECALL_PATTERN = re.compile(
+    r"what\s+do\s+you\s+remember\b",
+    re.IGNORECASE,
+)
 
 HELP_TEXT = (
     "I can search the component library, compare entries, validate a replacement "
@@ -292,6 +300,45 @@ def _answer_diagram_lookup(
             cards=(),
         )
     return None
+
+
+def parse_remember_command(message: str) -> str | None:
+    """Extract the fact from a remember command, if any."""
+    match = REMEMBER_PATTERN.match(message.strip())
+    if match is None:
+        return None
+    fact = match.group("fact").strip().strip("\"'").strip()
+    return fact or None
+
+
+def is_recall_command(message: str) -> bool:
+    """Check whether the message asks what the copilot remembers."""
+    return RECALL_PATTERN.search(message) is not None
+
+
+def remember_command_confirmation(fact: str) -> CopilotResponse:
+    """Confirm one stored memory fact."""
+    return CopilotResponse(
+        reply=f"Noted. I'll remember that {fact}",
+        cards=(),
+    )
+
+
+def recall_command_response(facts: list[str]) -> CopilotResponse:
+    """Answer a recall command from the project's stored facts."""
+    if not facts:
+        return CopilotResponse(
+            reply=(
+                "I don't remember anything for this project yet. "
+                'Tell me "remember ..." to store a fact.'
+            ),
+            cards=(),
+        )
+    lines = "\n".join(f"- {fact}" for fact in facts)
+    return CopilotResponse(
+        reply=f"Here's what I remember for this project:\n{lines}",
+        cards=(),
+    )
 
 
 def answer_copilot(

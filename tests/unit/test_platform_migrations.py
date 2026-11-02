@@ -20,8 +20,8 @@ from bizora.core.config import get_settings
 from bizora.db.base import Base
 
 WORKTREE_ROOT = Path(__file__).resolve().parents[2]
-EXPECTED_HEAD = "0014_copilot_threads"
-EXPECTED_REVISION_COUNT = 14
+EXPECTED_HEAD = "0015_memory_records"
+EXPECTED_REVISION_COUNT = 15
 
 
 def _script() -> ScriptDirectory:

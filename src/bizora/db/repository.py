@@ -31,6 +31,7 @@ from bizora.db.models import (
     ExtractedTableRecord,
     GraphLayoutRecord,
     GraphRevisionRecord,
+    MemoryRecord,
     MetricRecordRow,
     PaperFigureRecord,
     PaperTextRecord,
@@ -909,6 +910,53 @@ def get_paper_text_record(
         .order_by(PaperTextRecord.id.desc())
     )
     return session.scalars(statement).first()
+
+
+def save_memory_fact(
+    session: Session,
+    *,
+    project_id: str,
+    fact: str,
+    created_by: str,
+    now: datetime,
+) -> MemoryRecord:
+    """Persist one memory fact without committing."""
+    record = MemoryRecord(
+        project_id=project_id,
+        fact=fact,
+        created_by=created_by,
+        created_at=now,
+    )
+    session.add(record)
+    session.flush()
+    return record
+
+
+def list_memory_facts(
+    session: Session, *, project_id: str, limit: int = 50
+) -> list[MemoryRecord]:
+    """Retrieve one project's memory facts, newest first."""
+    statement = (
+        select(MemoryRecord)
+        .where(MemoryRecord.project_id == project_id)
+        .order_by(MemoryRecord.id.desc())
+        .limit(limit)
+    )
+    return list(session.scalars(statement))
+
+
+def delete_memory_fact(session: Session, *, project_id: str, fact_id: int) -> bool:
+    """Delete one memory fact; return whether it existed."""
+    statement = select(MemoryRecord).where(
+        MemoryRecord.project_id == project_id,
+        MemoryRecord.id == fact_id,
+    )
+    record = session.scalar(statement)
+    if record is None:
+        return False
+    session.delete(record)
+    session.flush()
+    return True
 
 
 def save_copilot_thread(

@@ -60,6 +60,7 @@ from bizora.contracts.graph import (
     MethodologyGraph,
 )
 from bizora.contracts.layout import GraphLayout
+from bizora.contracts.memory import MemoryCreate, MemoryFact
 from bizora.contracts.packs import SimulationPreview
 from bizora.contracts.patches import GraphPatch, GraphPatchBatch
 from bizora.contracts.quality import QualitySummary
@@ -95,7 +96,14 @@ from bizora.core.comparison_service import ComparisonService
 from bizora.core.component_catalog import get_component, search_components
 from bizora.core.component_service import preflight_removal, preflight_replacement
 from bizora.core.config import Settings, get_settings
-from bizora.core.copilot_service import answer_copilot_async, answer_copilot_stream
+from bizora.core.copilot_service import (
+    answer_copilot_async,
+    answer_copilot_stream,
+    is_recall_command,
+    parse_remember_command,
+    recall_command_response,
+    remember_command_confirmation,
+)
 from bizora.core.copilot_threads import CopilotThreadService
 from bizora.core.diagram_extraction import (
     MuseDiagramProvider,
@@ -121,6 +129,7 @@ from bizora.core.figure_service import (
 )
 from bizora.core.graph_persistence_service import GraphPersistenceService
 from bizora.core.layout_service import LayoutService
+from bizora.core.memory import MemoryService
 from bizora.core.paper_import import (
     PaperDownloadError,
     download_paper_pdf,
@@ -615,6 +624,55 @@ def read_paper_text(
         sha256=record.sha256,
         text=record.text,
     )
+
+
+@router.post(
+    "/api/v1/projects/{project_id}/memory",
+    response_model=MemoryFact,
+    status_code=status.HTTP_201_CREATED,
+    tags=["memory"],
+)
+def create_memory_fact(
+    project_id: str,
+    payload: MemoryCreate,
+    session: Session = DB_SESSION_DEPENDENCY,
+) -> MemoryFact:
+    """Record one memory fact on a project."""
+    return MemoryService.create_fact(
+        session,
+        project_id=project_id,
+        fact=payload.fact,
+        created_by=payload.created_by,
+    )
+
+
+@router.get(
+    "/api/v1/projects/{project_id}/memory",
+    response_model=list[MemoryFact],
+    tags=["memory"],
+)
+def list_memory_facts(
+    project_id: str,
+    limit: int = Query(default=50, ge=1, le=200),
+    session: Session = DB_SESSION_DEPENDENCY,
+) -> list[MemoryFact]:
+    """List one project's memory facts, newest first."""
+    return MemoryService.list_facts(session, project_id=project_id, limit=limit)
+
+
+@router.delete(
+    "/api/v1/projects/{project_id}/memory/{fact_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["memory"],
+)
+def delete_memory_fact(
+    project_id: str,
+    fact_id: int,
+    session: Session = DB_SESSION_DEPENDENCY,
+) -> Response:
+    """Forget one memory fact."""
+    MemoryService.delete_fact(session, project_id=project_id, fact_id=fact_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post(
@@ -1407,11 +1465,13 @@ def _copilot_context(
     def list_figures() -> list[PaperFigure]:
         return list(list_graph_figures(session, project_id=project_id, graph_id=graph_id))
 
+    memory = MemoryService.list_facts(session, project_id=project_id, limit=10)
     context = CopilotContext(
         graph=graph,
         selected_node_id=request.selected_node_id,
         diagram_context=request.diagram_context,
         diagram_elements=tuple(request.diagram_elements),
+        memory_facts=tuple(entry.fact for entry in memory),
         load_revision=load_revision,
         list_runs=list_runs,
         get_run=get_run,
@@ -1466,6 +1526,22 @@ def _copilot_frame(kind: str, payload: dict[str, Any]) -> str:
     return f"event: {kind}\ndata: {json.dumps(payload)}\n\n"
 
 
+def _memory_command_response(
+    session: Session, project_id: str, message: str
+) -> CopilotResponse | None:
+    """Execute remember/recall commands, which need the session to persist."""
+    fact = parse_remember_command(message)
+    if fact is not None:
+        stored = MemoryService.create_fact(
+            session, project_id=project_id, fact=fact, created_by="copilot"
+        )
+        return remember_command_confirmation(stored.fact)
+    if is_recall_command(message):
+        facts = MemoryService.list_facts(session, project_id=project_id)
+        return recall_command_response([entry.fact for entry in facts])
+    return None
+
+
 def _copilot_settings_or_503() -> Settings:
     """Load settings for a copilot turn or fail with 503."""
     try:
@@ -1495,6 +1571,18 @@ async def ask_copilot(
         CopilotThreadService.require_thread(
             session, project_id=project_id, graph_id=graph_id, thread_id=request.thread_id
         )
+    command = _memory_command_response(session, project_id, request.message)
+    if command is not None:
+        if request.thread_id is not None:
+            CopilotThreadService.record_turn(
+                session,
+                project_id=project_id,
+                graph_id=graph_id,
+                thread_id=request.thread_id,
+                message=request.message,
+                response=command,
+            )
+        return command
     settings = _copilot_settings_or_503()
     check_spend_caps(session, settings, now=datetime.now(UTC))
     report = CopilotRunReport(provider_name="unknown")
@@ -1537,6 +1625,23 @@ async def stream_copilot(
         CopilotThreadService.require_thread(
             session, project_id=project_id, graph_id=graph_id, thread_id=request.thread_id
         )
+    command = _memory_command_response(session, project_id, request.message)
+    if command is not None:
+
+        async def replay() -> AsyncIterator[str]:
+            yield _copilot_frame("status", {"message": "Updating project memory…"})
+            yield _copilot_frame("done", {"response": command.model_dump(mode="json")})
+            if request.thread_id is not None:
+                CopilotThreadService.record_turn(
+                    session,
+                    project_id=project_id,
+                    graph_id=graph_id,
+                    thread_id=request.thread_id,
+                    message=request.message,
+                    response=command,
+                )
+
+        return StreamingResponse(replay(), media_type="text/event-stream")
     settings = _copilot_settings_or_503()
     check_spend_caps(session, settings, now=datetime.now(UTC))
     provider = _copilot_provider_or_none()

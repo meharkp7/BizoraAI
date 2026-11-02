@@ -4,6 +4,7 @@ import { useGraphs } from "../../app/queries.ts";
 import { EmptyState, ErrorState, LoadingState } from "../../components/states.tsx";
 import type { GraphSummary } from "../../lib/types.ts";
 import { ArenaPanel } from "./ArenaPanel.tsx";
+import { MemoryPanel } from "./MemoryPanel.tsx";
 import { TransplantPanel } from "./TransplantPanel.tsx";
 import styles from "./CrossPaperPage.module.css";
 import { loadTray, saveTray, trayKey, type TrayEntry } from "./tray.ts";
@@ -19,7 +20,7 @@ function entryOf(summary: GraphSummary): TrayEntry {
 export function CrossPaperPage() {
   const graphs = useGraphs();
   const [tray, setTray] = useState<TrayEntry[]>(() => loadTray());
-  const [tab, setTab] = useState<"tray" | "arena" | "transplant">("tray");
+  const [tab, setTab] = useState<"tray" | "arena" | "transplant" | "memory">("tray");
 
   useEffect(() => {
     saveTray(tray);
@@ -81,12 +82,22 @@ export function CrossPaperPage() {
         >
           Transplant
         </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "memory"}
+          onClick={() => setTab("memory")}
+        >
+          Memory
+        </button>
       </div>
 
       {tab === "arena" ? (
         <ArenaPanel tray={tray} />
       ) : tab === "transplant" ? (
         <TransplantPanel tray={tray} summaries={graphs.data} />
+      ) : tab === "memory" ? (
+        <MemoryPanel tray={tray} />
       ) : (
         <>
           <section className={styles.card} aria-label="Tray">

@@ -28,6 +28,7 @@ import type {
   GraphRevisionSummary,
   GraphSummary,
   LibraryPaper,
+  MemoryFact,
   MethodologyGraph,
   MetricRecord,
   NodeRenderSpec,
@@ -196,6 +197,27 @@ export const api = {
         body: JSON.stringify(payload),
       },
     );
+  },
+
+  listMemoryFacts(projectId: string): Promise<MemoryFact[]> {
+    return request(`/api/v1/projects/${encode(projectId)}/memory`);
+  },
+
+  createMemoryFact(
+    projectId: string,
+    fact: string,
+    createdBy: string,
+  ): Promise<MemoryFact> {
+    return request(`/api/v1/projects/${encode(projectId)}/memory`, {
+      method: "POST",
+      body: JSON.stringify({ fact, created_by: createdBy }),
+    });
+  },
+
+  async deleteMemoryFact(projectId: string, factId: number): Promise<void> {
+    await request<null>(`/api/v1/projects/${encode(projectId)}/memory/${factId}`, {
+      method: "DELETE",
+    });
   },
 
   listRevisions(projectId: string, graphId: string): Promise<GraphRevisionSummary[]> {
