@@ -24,6 +24,7 @@ import { DomainBadge } from "../canvas/EntityLegend.tsx";
 import { CopilotBot } from "../copilot/CopilotBot.tsx";
 import { FigureOverlay } from "../figures/FigureOverlay.tsx";
 import { ExportBundleButton } from "./ExportBundleButton.tsx";
+import { ReplicationPlanPanel } from "./ReplicationPlanPanel.tsx";
 import { ReportedPanel } from "./ReportedPanel.tsx";
 import { ComponentDetailView } from "../library/ComponentDetail.tsx";
 import { LibraryPanel } from "../library/LibraryPanel.tsx";
@@ -659,6 +660,7 @@ function WorkspaceLoaded({
           />
           <EvidencePanel node={selectedNode} edge={selectedEdge} />
           <ReportedPanel projectId={projectId} graphId={graph.graph_id} />
+          <ReplicationPlanPanel projectId={projectId} graphId={graph.graph_id} />
           <SimulationPreview
             projectId={projectId}
             graphId={graph.graph_id}

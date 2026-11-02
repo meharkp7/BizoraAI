@@ -31,6 +31,8 @@ export const graphKeys = {
     ["graph", projectId, graphId, "figures"] as const,
   reportedMetrics: (projectId: string, graphId: string) =>
     ["graph", projectId, graphId, "reported-metrics"] as const,
+  replicationPlan: (projectId: string, graphId: string) =>
+    ["graph", projectId, graphId, "replication-plan"] as const,
 };
 
 export const runKeys = {
@@ -531,6 +533,14 @@ export function useGraphReportedMetrics(projectId: string, graphId: string) {
     queryKey: graphKeys.reportedMetrics(projectId, graphId),
     queryFn: () => api.getGraphReportedMetrics(projectId, graphId),
     // Reported numbers are optional enrichment: tables may be absent.
+    retry: false,
+  });
+}
+
+export function useReplicationPlan(projectId: string, graphId: string) {
+  return useQuery({
+    queryKey: graphKeys.replicationPlan(projectId, graphId),
+    queryFn: () => api.getReplicationPlan(projectId, graphId),
     retry: false,
   });
 }

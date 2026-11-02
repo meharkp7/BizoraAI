@@ -324,6 +324,22 @@ export interface ExportBundle {
   memory: MemoryFact[];
 }
 
+export interface ReplicationStep {
+  seq: number;
+  node_id: string;
+  label: string;
+  kind: string;
+  action: string;
+  verify: string[];
+}
+
+export interface ReplicationPlan {
+  project_id: string;
+  graph_id: string;
+  version: number;
+  steps: ReplicationStep[];
+}
+
 export interface GraphRevisionSummary {
   version: number;
   parent_version: number | null;

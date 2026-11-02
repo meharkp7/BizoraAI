@@ -50,6 +50,7 @@ import type {
   ParsedPaper,
   QualitySummary,
   RemovalPreflight,
+  ReplicationPlan,
   RunComparison,
   RunUsage,
   SamplePaper,
@@ -175,6 +176,12 @@ export const api = {
 
   exportBundle(projectId: string, graphId: string): Promise<ExportBundle> {
     return request(`/api/v1/projects/${encode(projectId)}/graphs/${encode(graphId)}/export`);
+  },
+
+  getReplicationPlan(projectId: string, graphId: string): Promise<ReplicationPlan> {
+    return request(
+      `/api/v1/projects/${encode(projectId)}/graphs/${encode(graphId)}/replication-plan`,
+    );
   },
 
   listGraphs(filters?: { project_id?: string; source_id?: string; limit?: number }): Promise<GraphSummary[]> {
