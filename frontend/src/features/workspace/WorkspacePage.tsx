@@ -40,7 +40,9 @@ import { EvidencePanel } from "./EvidencePanel.tsx";
 import { RunPanel } from "../runs/RunPanel.tsx";
 import { SimulationPreview } from "../runs/SimulationPreview.tsx";
 import { DiffPanel } from "./DiffPanel.tsx";
+import { ScenarioDrafts } from "./ScenarioDrafts.tsx";
 import { VersionHistory } from "./VersionHistory.tsx";
+import { useScenarioDrafts, type ScenarioDraft } from "./drafts.ts";
 import styles from "./WorkspacePage.module.css";
 
 function formatShape(shape: (number | null)[] | null): string {
@@ -248,6 +250,16 @@ export function WorkspacePage({
   const history = useRevisionHistory(version, onVersionChange);
   const [patchError, setPatchError] = useState<BizoraApiError | null>(null);
   const [savedVersion, setSavedVersion] = useState<number | null>(null);
+  const drafts = useScenarioDrafts((state) => state.drafts);
+  const activeDraftId = useScenarioDrafts((state) => state.activeDraftId);
+  const stagePatches = useScenarioDrafts((state) => state.stagePatches);
+  const stageTarget =
+    drafts.find(
+      (draft) =>
+        draft.id === activeDraftId &&
+        draft.projectId === projectId &&
+        draft.graphId === graphId,
+    ) ?? null;
   const {
     selectedNodeIds,
     selectedEdgeIds,
@@ -323,6 +335,7 @@ export function WorkspacePage({
       mutating={mutating}
       patchError={patchError}
       savedVersion={savedVersion}
+      stageTarget={stageTarget}
       canUndo={history.canUndo}
       canRedo={history.canRedo}
       onOlder={() => history.go(version - 1)}
@@ -333,6 +346,11 @@ export function WorkspacePage({
       onSelectNodes={selectNodes}
       onSelectEdges={selectEdges}
       onSubmit={(patches) => {
+        if (stageTarget) {
+          clearSelection();
+          stagePatches(stageTarget.id, patches);
+          return;
+        }
         setPatchError(null);
         setSavedVersion(null);
         const callbacks = {
@@ -373,6 +391,7 @@ function WorkspaceLoaded({
   mutating,
   patchError,
   savedVersion,
+  stageTarget,
   canUndo,
   canRedo,
   onOlder,
@@ -397,6 +416,7 @@ function WorkspaceLoaded({
   mutating: boolean;
   patchError: BizoraApiError | null;
   savedVersion: number | null;
+  stageTarget: ScenarioDraft | null;
   canUndo: boolean;
   canRedo: boolean;
   onOlder: () => void;
@@ -520,6 +540,14 @@ function WorkspaceLoaded({
         onDismiss={onDismissStatus}
       />
 
+      {stageTarget ? (
+        <div className={styles.draftBanner} role="status">
+          Staging into {stageTarget.name} ({stageTarget.patches.length}{" "}
+          {stageTarget.patches.length === 1 ? "op" : "ops"}): canvas edits save to
+          the draft, not the graph.
+        </div>
+      ) : null}
+
       {graph.brief ? <ResearchBriefPanel brief={graph.brief} /> : null}
 
       <div className={styles.grid}>
@@ -603,6 +631,14 @@ function WorkspaceLoaded({
         view={view}
         selection={effectiveDiagram}
         onSubmit={onSubmit}
+      />
+
+      <ScenarioDrafts
+        projectId={projectId}
+        graphId={graph.graph_id}
+        currentVersion={graph.version}
+        currentTitle={graph.title}
+        onPromoted={onSelectVersion}
       />
 
       <VersionHistory

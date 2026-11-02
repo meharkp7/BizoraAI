@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from "vitest";
 import { useWorkspaceSelection } from "../../lib/store.ts";
 import { graphFixture, thinDiagramsFixture } from "../../test/fixtures.ts";
 import { server } from "../../test/server.ts";
+import { useScenarioDrafts } from "./drafts.ts";
 import { WorkspacePage } from "./WorkspacePage.tsx";
 
 function wrapper({ children }: { children: ReactNode }) {
@@ -234,5 +235,57 @@ describe("WorkspacePage", () => {
       { wrapper },
     );
     expect(await screen.findByText("This graph is not linked to a paper.")).toBeInTheDocument();
+  });
+
+  it("stages canvas edits into the active draft instead of saving", async () => {
+    useWorkspaceSelection.setState({ selectedNodeIds: [], selectedEdgeIds: [] });
+    useScenarioDrafts.getState().reset();
+    try {
+      useScenarioDrafts.getState().createDraft({
+        name: "Scenario 1",
+        projectId: "project-1",
+        graphId: "graph-1",
+        baseVersion: 2,
+        baseTitle: "Vision transformer",
+      });
+      const patchSpy = vi.fn();
+      server.use(
+        http.post("/api/v1/graphs/:projectId/:graphId/patches", () => {
+          patchSpy();
+          return HttpResponse.json(
+            { ...graphFixture, version: 3, parent_version: 2 },
+            { status: 201 },
+          );
+        }),
+      );
+      render(
+        <WorkspacePage
+          projectId="project-1"
+          graphId="graph-1"
+          version={2}
+          view="methodology" onViewChange={() => {}} onVersionChange={() => {}}
+        />,
+        { wrapper },
+      );
+      await screen.findByRole("heading", { name: "Vision transformer" });
+
+      const nodes = screen.getByRole("list", { name: "Graph nodes" });
+      await userEvent.click(within(nodes).getByRole("button", { name: /Transformer encoder/ }));
+
+      const inspector = screen.getByRole("region", { name: "Inspector" });
+      const config = within(inspector).getByLabelText("Node configuration JSON");
+      fireEvent.change(config, { target: { value: '{"layers": 6}' } });
+      await userEvent.click(
+        within(inspector).getByRole("button", { name: "Apply configuration" }),
+      );
+
+      expect(patchSpy).not.toHaveBeenCalled();
+      expect(
+        await screen.findByText(/Staging into Scenario 1 \(1 op\)/),
+      ).toBeInTheDocument();
+      expect(useScenarioDrafts.getState().drafts[0].patches).toHaveLength(1);
+    } finally {
+      useScenarioDrafts.getState().reset();
+    }
   });
 });
