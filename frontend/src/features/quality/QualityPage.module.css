@@ -1,0 +1,63 @@
+.page {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: var(--space-4);
+}
+
+.hint {
+  margin: 0;
+  color: var(--color-ink-soft);
+  font-size: 0.875rem;
+}
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  display: grid;
+  gap: var(--space-3);
+}
+
+.facts {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.facts div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: 0.875rem;
+}
+
+.facts dt {
+  color: var(--color-ink-soft);
+}
+
+.facts dd {
+  margin: 0;
+  font-weight: 650;
+  text-align: right;
+}
+
+.scroll {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.table th,
+.table td {
+  text-align: left;
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-line);
+  white-space: nowrap;
+}

@@ -21,8 +21,13 @@ import type {
   PaperNote,
   PaperReportedMetric,
   PaperWhatIfResponse,
+  PaperImportResponse,
   ParsedPaper,
+  QualitySummary,
   RunComparison,
+  RunUsage,
+  UsageSummary,
+  SamplePaper,
   SimulationPreview,
 } from "../lib/types.ts";
 
@@ -333,6 +338,16 @@ export const parsedPaperFixture: ParsedPaper = {
     graph_id: "vision-transformer-graph-00000000",
     source_id: "paper-00000000",
   },
+  duplicate_of: null,
+};
+
+export const samplePaperFixture: SamplePaper = {
+  project_id: "project-1",
+  graph_id: "graph-1",
+  source_id: "paper-1",
+  title: "Vision transformer",
+  workspace_path: "/g/project-1/graph-1",
+  available: true,
 };
 
 export const paperExtractionFixture: PaperExtractionResponse = {
@@ -341,6 +356,90 @@ export const paperExtractionFixture: PaperExtractionResponse = {
   warnings: [],
   page_count: 12,
   truncated: false,
+};
+
+export const paperImportFixture: PaperImportResponse = {
+  source: "1706.03762v7",
+  source_url: "https://arxiv.org/pdf/1706.03762v7",
+  filename: "1706.03762v7.pdf",
+  extraction: paperExtractionFixture,
+};
+
+export const usageSummaryFixture: UsageSummary = {
+  generated_at: "2026-11-02T10:00:00+00:00",
+  currency: "USD",
+  estimated: true,
+  days: [
+    {
+      date: "2026-11-02",
+      calls: 3,
+      input_tokens: 1200,
+      output_tokens: 300,
+      cost_usd_estimated: 0.0081,
+      unmetered_calls: 1,
+    },
+  ],
+  totals: {
+    calls: 3,
+    input_tokens: 1200,
+    output_tokens: 300,
+    cost_usd_estimated: 0.0081,
+    unmetered_calls: 1,
+  },
+  caps: { daily_cap_usd: 25.0, run_cap_usd: 5.0, max_runs_per_day: 50 },
+};
+
+export const runUsageFixture: RunUsage[] = [
+  {
+    run_id: "run-1",
+    project_id: "project-1",
+    graph_id: "graph-1",
+    calls: 1,
+    input_tokens: 0,
+    output_tokens: 0,
+    cost_usd_estimated: null,
+    unmetered: true,
+    last_used_at: "2026-11-02T09:00:00+00:00",
+  },
+  {
+    run_id: "run-2",
+    project_id: "project-1",
+    graph_id: "graph-1",
+    calls: 2,
+    input_tokens: 5000,
+    output_tokens: 1000,
+    cost_usd_estimated: 0.03,
+    unmetered: false,
+    last_used_at: "2026-11-01T09:00:00+00:00",
+  },
+];
+
+export const qualitySummaryFixture: QualitySummary = {
+  generated_at: "2026-11-02T10:00:00+00:00",
+  diagram_evals: [
+    {
+      paper_id: "sram-puf-tilting",
+      recorded_at: "2026-10-30T07:53:10+00:00",
+      validator_pass_rate: 1.0,
+      error_count: 0,
+      warning_count: 1,
+      input_tokens: 37603,
+      output_tokens: 15160,
+      provider_calls: 4,
+      gold_present: false,
+      classification_kind: "circuit",
+    },
+  ],
+  copilot_eval: {
+    total: 30,
+    passed: 30,
+    citation_accuracy: 1.0,
+    citation_recall: 1.0,
+    writes_detected: false,
+    input_tokens: 0,
+    output_tokens: 0,
+    recorded_at: "2026-11-01T18:25:35+00:00",
+  },
 };
 
 export const componentSummaryFixture: ComponentSummary = {

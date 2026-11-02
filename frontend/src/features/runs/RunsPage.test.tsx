@@ -45,6 +45,42 @@ describe("RunsPage", () => {
     render(<RunsPage projectId="project-1" graphId="graph-1" />, { wrapper });
     expect(await screen.findByText("No runs yet.")).toBeInTheDocument();
   });
+
+  it("shows each run's estimated or unmetered cost", async () => {
+    server.use(
+      http.get("/api/v1/usage/runs", () =>
+        HttpResponse.json([
+          {
+            run_id: "run-ok",
+            project_id: "project-1",
+            graph_id: "graph-1",
+            calls: 2,
+            input_tokens: 5000,
+            output_tokens: 1000,
+            cost_usd_estimated: 0.03,
+            unmetered: false,
+            last_used_at: "2026-11-01T09:00:00+00:00",
+          },
+          {
+            run_id: "run-bad",
+            project_id: "project-1",
+            graph_id: "graph-1",
+            calls: 1,
+            input_tokens: 0,
+            output_tokens: 0,
+            cost_usd_estimated: null,
+            unmetered: true,
+            last_used_at: "2026-11-02T09:00:00+00:00",
+          },
+        ]),
+      ),
+    );
+    render(<RunsPage projectId="project-1" graphId="graph-1" />, { wrapper });
+
+    expect(await screen.findByText("run-ok")).toBeInTheDocument();
+    expect(screen.getByText("$0.03 estimated")).toBeInTheDocument();
+    expect(screen.getByText("Unmetered")).toBeInTheDocument();
+  });
 });
 
 describe("RunDetailPage", () => {
@@ -74,5 +110,28 @@ describe("RunDetailPage", () => {
 
     expect(await screen.findByText("accuracy")).toBeInTheDocument();
     expect(screen.queryByLabelText("Live run telemetry")).not.toBeInTheDocument();
+  });
+
+  it("shows the run's estimated cost in its record", async () => {
+    server.use(
+      http.get("/api/v1/usage/runs", () =>
+        HttpResponse.json([
+          {
+            run_id: "run-ok",
+            project_id: "project-1",
+            graph_id: "graph-1",
+            calls: 2,
+            input_tokens: 5000,
+            output_tokens: 1000,
+            cost_usd_estimated: 0.03,
+            unmetered: false,
+            last_used_at: "2026-11-01T09:00:00+00:00",
+          },
+        ]),
+      ),
+    );
+    render(<RunDetailPage runId="run-ok" />, { wrapper });
+
+    expect(await screen.findByText("$0.03 estimated")).toBeInTheDocument();
   });
 });

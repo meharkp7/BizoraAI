@@ -28,13 +28,19 @@ import type {
   PaperNote,
   PaperExtractionResponse,
   PaperFigure,
+  PaperImportRequest,
+  PaperImportResponse,
   PaperReportedMetric,
   PaperUpload,
   PaperWhatIfResponse,
   ParsedPaper,
+  QualitySummary,
   RemovalPreflight,
   RunComparison,
+  RunUsage,
+  SamplePaper,
   SimulationPreview,
+  UsageSummary,
 } from "./types.ts";
 
 export class BizoraApiError extends Error {
@@ -338,6 +344,29 @@ export const api = {
     return send("/api/v1/papers/extract", { method: "POST", body: form }).then((response) =>
       parse<PaperExtractionResponse>(response),
     );
+  },
+
+  getSamplePaper(): Promise<SamplePaper> {
+    return request(`/api/v1/papers/sample`);
+  },
+
+  importPaper(payload: PaperImportRequest): Promise<PaperImportResponse> {
+    return request(`/api/v1/papers/import`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  getQualitySummary(): Promise<QualitySummary> {
+    return request(`/api/v1/quality/summary`);
+  },
+
+  getUsageSummary(days = 7): Promise<UsageSummary> {
+    return request(`/api/v1/usage/summary?days=${days}`);
+  },
+
+  listRunUsage(limit = 50): Promise<RunUsage[]> {
+    return request(`/api/v1/usage/runs?limit=${limit}`);
   },
 
   listGraphTables(projectId: string, graphId: string): Promise<ExtractedTable[]> {

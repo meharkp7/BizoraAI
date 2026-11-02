@@ -5,6 +5,7 @@ import { LoginPage } from "../features/auth/LoginPage.tsx";
 import { HomePage } from "../features/home/HomePage.tsx";
 import { ProfilePage } from "../features/profile/ProfilePage.tsx";
 import { ComparePage } from "../features/compare/ComparePage.tsx";
+import { QualityPage } from "../features/quality/QualityPage.tsx";
 import { RunDetailRoute, RunsRoute, TablesRoute, WorkspaceRoute } from "./routeElements.tsx";
 import { CorrectionRoute } from "./routeElements.tsx";
 
@@ -15,6 +16,7 @@ export const router = createBrowserRouter([
       { index: true, element: <HomePage /> },
       { path: "login", element: <LoginPage /> },
       { path: "profile", element: <ProfilePage /> },
+      { path: "quality", element: <QualityPage /> },
       { path: "g/:projectId/:graphId", element: <WorkspaceRoute /> },
       { path: "g/:projectId/:graphId/runs", element: <RunsRoute /> },
       { path: "g/:projectId/:graphId/runs/:runId", element: <RunDetailRoute /> },

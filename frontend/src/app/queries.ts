@@ -7,6 +7,7 @@ import type {
   GraphLayout,
   GraphPatch,
   GraphPatchBatch,
+  PaperImportRequest,
   PaperUpload,
 } from "../lib/types.ts";
 
@@ -378,6 +379,7 @@ export const paperKeys = {
   tables: (projectId: string, graphId: string) =>
     ["graph", projectId, graphId, "tables"] as const,
   diagrams: (paperId: string) => ["papers", paperId, "diagrams"] as const,
+  sample: () => ["papers", "sample"] as const,
 };
 
 /** Diagram IRs for one paper: the sole feed of the canvas views. */
@@ -394,6 +396,16 @@ export function usePaperWhatIf(paperId: string) {
   return useMutation({
     mutationFn: (input: { nodeId: string; params: Record<string, string> }) =>
       api.runPaperWhatIf(paperId, input.nodeId, input.params),
+  });
+}
+
+/** Configured first-run paper, whether or not it has been seeded yet. */
+export function useSamplePaper() {
+  return useQuery({
+    queryKey: paperKeys.sample(),
+    queryFn: () => api.getSamplePaper(),
+    retry: false,
+    staleTime: 5 * 60 * 1000,
   });
 }
 
@@ -420,6 +432,51 @@ export function useExtractPaper() {
 export function useParsePaper() {
   return useMutation({
     mutationFn: (file: File) => api.parsePaper(file),
+  });
+}
+
+export function useImportPaper() {
+  return useMutation({
+    mutationFn: (payload: PaperImportRequest) => api.importPaper(payload),
+  });
+}
+
+export const qualityKeys = {
+  summary: () => ["quality", "summary"] as const,
+};
+
+/** Last eval runs behind the quality dashboard. */
+export function useQualitySummary() {
+  return useQuery({
+    queryKey: qualityKeys.summary(),
+    queryFn: () => api.getQualitySummary(),
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export const usageKeys = {
+  summary: (days: number) => ["usage", "summary", days] as const,
+  runs: (limit: number) => ["usage", "runs", limit] as const,
+};
+
+/** Estimated spend for the last `days` UTC days. */
+export function useUsageSummary(days = 7) {
+  return useQuery({
+    queryKey: usageKeys.summary(days),
+    queryFn: () => api.getUsageSummary(days),
+    retry: false,
+    staleTime: 60 * 1000,
+  });
+}
+
+/** Estimated cost per run, most recently used first. */
+export function useRunUsage(limit = 50) {
+  return useQuery({
+    queryKey: usageKeys.runs(limit),
+    queryFn: () => api.listRunUsage(limit),
+    retry: false,
+    staleTime: 60 * 1000,
   });
 }
 

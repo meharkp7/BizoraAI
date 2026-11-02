@@ -410,6 +410,14 @@ export interface SuggestedIds {
   source_id: string;
 }
 
+export interface DuplicatePaper {
+  project_id: string;
+  graph_id: string;
+  source_id: string;
+  title: string;
+  workspace_path: string;
+}
+
 export interface ParsedPaper {
   filename: string;
   title: string | null;
@@ -419,6 +427,103 @@ export interface ParsedPaper {
   sha256: string;
   truncated: boolean;
   suggested: SuggestedIds;
+  duplicate_of: DuplicatePaper | null;
+}
+
+export interface PaperImportRequest {
+  source: string;
+  title?: string;
+  max_tables?: number;
+}
+
+export interface PaperImportResponse {
+  source: string;
+  source_url: string;
+  filename: string;
+  extraction: PaperExtractionResponse;
+}
+
+export interface SamplePaper {
+  project_id: string;
+  graph_id: string;
+  source_id: string;
+  title: string;
+  workspace_path: string;
+  available: boolean;
+}
+
+export interface DiagramEvalSummary {
+  paper_id: string;
+  recorded_at: string;
+  validator_pass_rate: number;
+  error_count: number;
+  warning_count: number;
+  input_tokens: number;
+  output_tokens: number;
+  provider_calls: number;
+  gold_present: boolean;
+  classification_kind: string | null;
+}
+
+export interface CopilotEvalSummary {
+  total: number;
+  passed: number;
+  citation_accuracy: number;
+  citation_recall: number;
+  writes_detected: boolean;
+  input_tokens: number;
+  output_tokens: number;
+  recorded_at: string;
+}
+
+export interface QualitySummary {
+  generated_at: string;
+  diagram_evals: DiagramEvalSummary[];
+  copilot_eval: CopilotEvalSummary | null;
+}
+
+export interface UsageDay {
+  date: string;
+  calls: number;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd_estimated: number;
+  unmetered_calls: number;
+}
+
+export interface UsageTotals {
+  calls: number;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd_estimated: number;
+  unmetered_calls: number;
+}
+
+export interface UsageCaps {
+  daily_cap_usd: number;
+  run_cap_usd: number;
+  max_runs_per_day: number;
+}
+
+export interface UsageSummary {
+  generated_at: string;
+  currency: string;
+  estimated: boolean;
+  days: UsageDay[];
+  totals: UsageTotals;
+  caps: UsageCaps;
+}
+
+export interface RunUsage {
+  run_id: string;
+  project_id: string | null;
+  graph_id: string | null;
+  calls: number;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd_estimated: number | null;
+  unmetered: boolean;
+  last_used_at: string | null;
 }
 
 export interface PaperUpload {

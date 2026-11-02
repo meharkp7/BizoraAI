@@ -20,15 +20,20 @@ import {
   notesFixture,
   notFound,
   paperExtractionFixture,
+  paperImportFixture,
   parsedPaperFixture,
+  qualitySummaryFixture,
   pendingRun,
   preflightFixture,
   renderSpecsFixture,
   reportedMetricsFixture,
+  runUsageFixture,
+  samplePaperFixture,
   simulationPreviewFixture,
   succeededRun,
   tableFixture,
   tableFixture2,
+  usageSummaryFixture,
   whatIfFixture,
 } from "./fixtures.ts";
 import type { PaperNote } from "../lib/types.ts";
@@ -152,6 +157,16 @@ export const handlers = [
   http.post("/api/v1/papers/extract", () => HttpResponse.json(paperExtractionFixture, { status: 201 })),
 
   http.post("/api/v1/papers/parse", () => HttpResponse.json(parsedPaperFixture)),
+
+  http.post("/api/v1/papers/import", () => HttpResponse.json(paperImportFixture, { status: 201 })),
+
+  http.get("/api/v1/papers/sample", () => HttpResponse.json(samplePaperFixture)),
+
+  http.get("/api/v1/quality/summary", () => HttpResponse.json(qualitySummaryFixture)),
+
+  http.get("/api/v1/usage/summary", () => HttpResponse.json(usageSummaryFixture)),
+
+  http.get("/api/v1/usage/runs", () => HttpResponse.json(runUsageFixture)),
 
   http.get("/api/v1/components", ({ request }) => {
     const url = new URL(request.url);

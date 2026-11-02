@@ -9,7 +9,12 @@ const BADGES: Record<string, string> = {
 
 /** Render one grounding card (evidence, run, or technique note). */
 export function EvidenceCard({ card }: { card: CopilotCard }) {
-  const badge = BADGES[card.kind] ?? "Note";
+  // Run citations arrive as kind "info"; the backend titles only genuinely
+  // measured runs "Measured run", so anything else must not wear that badge.
+  const badge =
+    card.kind === "info" && card.title !== "Measured run"
+      ? "Not measured"
+      : (BADGES[card.kind] ?? "Note");
   return (
     <div className={styles.card}>
       <div className={styles.cardHeader}>

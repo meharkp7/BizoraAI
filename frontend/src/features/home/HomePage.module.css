@@ -113,3 +113,50 @@
   margin: var(--space-3) 0 0;
   padding-left: var(--space-4);
 }
+
+.queue {
+  display: grid;
+  gap: var(--space-3);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.queueItem {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+}
+
+.queueItem legend {
+  padding: 0 var(--space-1);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--color-ink-soft);
+}
+
+.duplicate {
+  margin: 0;
+  color: var(--color-warn);
+  font-size: 0.875rem;
+}
+
+.sampleLink {
+  display: inline-block;
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+  border-radius: var(--radius-sm);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.command {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+}

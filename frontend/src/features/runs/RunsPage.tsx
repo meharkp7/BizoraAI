@@ -1,7 +1,14 @@
 import { Link } from "react-router";
-import { useExecuteRun, useRun, useRunArtifacts, useRunMetrics, useRuns } from "../../app/queries.ts";
+import {
+  useExecuteRun,
+  useRun,
+  useRunArtifacts,
+  useRunMetrics,
+  useRunUsage,
+  useRuns,
+} from "../../app/queries.ts";
 import { BizoraApiError } from "../../lib/api.ts";
-import type { RunState } from "../../lib/types.ts";
+import type { RunState, RunUsage } from "../../lib/types.ts";
 import { EmptyState, ErrorState, LoadingState } from "../../components/states.tsx";
 import { TelemetryPanel } from "../telemetry/TelemetryPanel.tsx";
 import styles from "./RunsPage.module.css";
@@ -14,9 +21,17 @@ function StateBadge({ state }: { state: RunState }) {
   );
 }
 
+function formatRunCost(usage: RunUsage | undefined): string {
+  if (!usage) return "—";
+  if (usage.cost_usd_estimated === null) return "Unmetered";
+  return `$${usage.cost_usd_estimated.toFixed(2)} estimated`;
+}
+
 export function RunsPage({ projectId, graphId }: { projectId: string; graphId: string }) {
   const runs = useRuns({ project_id: projectId, graph_id: graphId });
+  const runUsage = useRunUsage(50);
   const executeRun = useExecuteRun();
+  const usageByRun = new Map((runUsage.data ?? []).map((entry) => [entry.run_id, entry]));
 
   if (runs.isPending) return <LoadingState label="Loading runs…" />;
   if (runs.isError) {
@@ -76,6 +91,8 @@ export function RunsPage({ projectId, graphId }: { projectId: string; graphId: s
               </dd>
               <dt>Seed</dt>
               <dd className="mono">{run.config.seed}</dd>
+              <dt>Est. cost</dt>
+              <dd className="mono">{formatRunCost(usageByRun.get(run.run_id))}</dd>
             </dl>
             {run.error ? <p className={styles.runError}>{run.error}</p> : null}
           </li>
@@ -95,7 +112,9 @@ export function RunDetailPage({
   const run = useRun(runId);
   const metrics = useRunMetrics(runId, run.data?.state === "succeeded");
   const artifacts = useRunArtifacts(runId, run.data?.state === "succeeded");
+  const runUsage = useRunUsage(50);
   const executeRun = useExecuteRun();
+  const usage = (runUsage.data ?? []).find((entry) => entry.run_id === runId);
 
   if (run.isPending) return <LoadingState label="Loading run…" />;
   if (run.isError) {
@@ -158,6 +177,8 @@ export function RunDetailPage({
           <dd className="mono">{data.started_at ?? "—"}</dd>
           <dt>Finished</dt>
           <dd className="mono">{data.finished_at ?? "—"}</dd>
+          <dt>Est. cost</dt>
+          <dd className="mono">{formatRunCost(usage)}</dd>
         </dl>
       </section>
 

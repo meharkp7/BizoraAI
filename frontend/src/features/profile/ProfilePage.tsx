@@ -1,8 +1,78 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router";
-import { accountKeys, useMe, useMyPapers } from "../../app/queries.ts";
+import { accountKeys, useMe, useMyPapers, useUsageSummary } from "../../app/queries.ts";
 import { useSession } from "../../lib/store.ts";
 import styles from "./ProfilePage.module.css";
+
+function formatUsd(value: number): string {
+  return `$${value.toFixed(2)}`;
+}
+
+function UsageSection() {
+  const usage = useUsageSummary(7);
+  const today = usage.data?.days.at(-1) ?? null;
+  return (
+    <section className={styles.card} aria-label="Usage and spend">
+      <h2>Usage &amp; spend</h2>
+      {usage.isPending ? (
+        <p role="status">Loading spend…</p>
+      ) : usage.isError || !usage.data ? (
+        <p>Spend is unavailable right now.</p>
+      ) : (
+        <>
+          <p className={styles.hint}>
+            All costs are estimates from configured per-token rates; unmetered
+            calls ran but reported no usage.
+          </p>
+          <dl className={styles.facts}>
+            <div>
+              <dt>Today (estimated)</dt>
+              <dd>
+                {today ? formatUsd(today.cost_usd_estimated) : "—"}
+                {today && today.unmetered_calls > 0
+                  ? ` · ${today.unmetered_calls} unmetered`
+                  : ""}
+              </dd>
+            </div>
+            <div>
+              <dt>Last 7 days (estimated)</dt>
+              <dd>
+                {formatUsd(usage.data.totals.cost_usd_estimated)}
+                {usage.data.totals.unmetered_calls > 0
+                  ? ` · ${usage.data.totals.unmetered_calls} unmetered`
+                  : ""}
+              </dd>
+            </div>
+            <div>
+              <dt>Daily cap</dt>
+              <dd>
+                {usage.data.caps.daily_cap_usd > 0
+                  ? formatUsd(usage.data.caps.daily_cap_usd)
+                  : "Off"}
+              </dd>
+            </div>
+            <div>
+              <dt>Run cap</dt>
+              <dd>
+                {usage.data.caps.run_cap_usd > 0
+                  ? formatUsd(usage.data.caps.run_cap_usd)
+                  : "Off"}
+              </dd>
+            </div>
+            <div>
+              <dt>Max runs / day</dt>
+              <dd>
+                {usage.data.caps.max_runs_per_day > 0
+                  ? usage.data.caps.max_runs_per_day
+                  : "Off"}
+              </dd>
+            </div>
+          </dl>
+        </>
+      )}
+    </section>
+  );
+}
 
 export function ProfilePage() {
   const navigate = useNavigate();
@@ -105,6 +175,7 @@ export function ProfilePage() {
           </ul>
         )}
       </section>
+      <UsageSection />
     </div>
   );
 }

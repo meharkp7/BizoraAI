@@ -50,4 +50,19 @@ describe("ProfilePage", () => {
     expect(await screen.findByText("Homepage")).toBeInTheDocument();
     expect(useSession.getState().token).toBeNull();
   });
+
+  it("shows estimated spend and the enforced caps", async () => {
+    setAuthToken("test-token");
+    useSession.setState({ token: "test-token" });
+    render(<ProfilePage />, { wrapper });
+
+    const section = await screen.findByRole("region", { name: "Usage and spend" });
+    expect(await screen.findAllByText("$0.01 · 1 unmetered")).toHaveLength(2);
+    expect(section).toHaveTextContent("$0.01");
+    expect(section).toHaveTextContent("1 unmetered");
+    expect(section).toHaveTextContent("$25.00");
+    expect(section).toHaveTextContent("$5.00");
+    expect(section).toHaveTextContent("50");
+    expect(section).toHaveTextContent("estimates");
+  });
 });

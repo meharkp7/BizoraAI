@@ -48,6 +48,23 @@ describe("EvidenceCard", () => {
 
     expect(screen.getByText("Measured")).toBeInTheDocument();
   });
+
+  it("badges unmeasured run cards as not measured", () => {
+    render(
+      <EvidenceCard
+        card={{
+          kind: "info",
+          title: "Unmeasured run",
+          body: "Run: run-1\nState: failed",
+          component_ids: [],
+          node_id: null,
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Not measured")).toBeInTheDocument();
+    expect(screen.queryByText("Measured")).not.toBeInTheDocument();
+  });
 });
 
 describe("CopilotPanel grounding", () => {
