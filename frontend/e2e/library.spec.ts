@@ -142,6 +142,32 @@ test.beforeEach(async ({ page }) => {
       },
     });
   });
+  await page.route("**/api/v1/graphs/project-1/graph-1/revisions", async (route) => {
+    await route.fulfill({
+      json: [
+        {
+          version: 1,
+          parent_version: null,
+          title: "Vision transformer",
+          created_by: "test",
+          created_at: "2026-01-01T00:00:00Z",
+        },
+        {
+          version: 2,
+          parent_version: 1,
+          title: "Vision transformer",
+          created_by: "test",
+          created_at: "2026-01-02T00:00:00Z",
+        },
+      ],
+    });
+  });
+  await page.route("**/api/v1/graphs/**/patches", async (route) => {
+    await route.fulfill({
+      status: 201,
+      json: { ...graph, version: 3, parent_version: 2 },
+    });
+  });
   await page.route("**/api/v1/components", async (route) => {
     await route.fulfill({ json: [componentDetail] });
   });
@@ -191,6 +217,20 @@ test("library tab searches and previews a replacement", async ({ page }) => {
   await expect(page.getByText("Polarity")).toBeVisible();
   await expect(page.getByText(/Compatible: all known interfaces/)).toBeVisible();
   await expect(page.getByText(/Preserved connections \(1\)/)).toBeVisible();
+});
+
+test("palette adds a library component as a new node", async ({ page }) => {
+  await page.goto(WORKSPACE_URL);
+  await page.getByRole("tab", { name: "Library" }).click();
+  await page.getByLabel("Search components").fill("2N3904");
+  await page.getByRole("button", { name: /2N3904 NPN transistor/ }).first().click();
+
+  const section = page.getByRole("region", { name: "Add to graph" });
+  await expect(section.getByLabel("Node ID")).toHaveValue("2n3904-npn-transistor");
+  await section.getByRole("button", { name: "Add to graph (new revision)" }).click();
+
+  await expect(page.getByText("Saved as revision 3.")).toBeVisible();
+  await expect(page).toHaveURL(/v=3/);
 });
 
 test("copilot answers with a library card", async ({ page }) => {

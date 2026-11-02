@@ -21,7 +21,12 @@ import {
   sandboxEngineType,
   sandboxValue,
 } from "../diagrams/schematicSandbox.ts";
-import { replaceNodePatch } from "../workspace/patchBuilders.ts";
+import {
+  addNodePatch,
+  nodeIdProblem,
+  replaceNodePatch,
+  suggestNodeId,
+} from "../workspace/patchBuilders.ts";
 import { ConfigForm } from "./ConfigForm.tsx";
 import { PinDiagram } from "./PinDiagram.tsx";
 import styles from "./ComponentDetail.module.css";
@@ -151,6 +156,69 @@ function ReplacePreview({
   );
 }
 
+function AddToGraph({
+  graph,
+  detail,
+  config,
+  onConfigChange,
+  disabled,
+  onSubmit,
+}: {
+  graph: MethodologyGraph;
+  detail: ComponentDetail;
+  config: Record<string, unknown>;
+  onConfigChange: (key: string, value: unknown) => void;
+  disabled: boolean;
+  onSubmit: (patches: GraphPatch[]) => void;
+}) {
+  const [nodeId, setNodeId] = useState(() => suggestNodeId(graph, detail.label));
+  const problem = nodeIdProblem(graph, nodeId);
+
+  return (
+    <section className={styles.preview} aria-label="Add to graph">
+      <h3>Add {detail.label} as a new node</h3>
+      <ConfigForm
+        schema={detail.config_schema}
+        values={config}
+        onChange={onConfigChange}
+        disabled={disabled}
+      />
+      <label className={styles.idField}>
+        Node ID
+        <input
+          type="text"
+          className="mono"
+          value={nodeId}
+          maxLength={128}
+          spellCheck={false}
+          disabled={disabled}
+          onChange={(event) => setNodeId(event.target.value)}
+        />
+      </label>
+      {problem ? (
+        <p className={styles.idError} role="alert">
+          {problem}
+        </p>
+      ) : null}
+      <button
+        type="button"
+        disabled={disabled || problem !== null}
+        onClick={() =>
+          onSubmit([
+            addNodePatch(
+              graph,
+              { id: nodeId, kind: detail.kind as NodeKind, label: detail.label },
+              { description: detail.description, config },
+            ),
+          ])
+        }
+      >
+        Add to graph (new revision)
+      </button>
+    </section>
+  );
+}
+
 function DetailBody({
   graph,
   detail,
@@ -244,6 +312,15 @@ function DetailBody({
               : `On trial on the schematic ×${trialCount}.`}
         </p>
       </div>
+
+      <AddToGraph
+        graph={graph}
+        detail={detail}
+        config={config}
+        onConfigChange={(key, value) => setConfig((current) => ({ ...current, [key]: value }))}
+        disabled={disabled}
+        onSubmit={onSubmit}
+      />
 
       {node ? (
         <ReplacePreview

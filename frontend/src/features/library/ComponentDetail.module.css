@@ -130,6 +130,20 @@
   font-family: var(--font-display);
 }
 
+.idField {
+  display: grid;
+  gap: var(--space-1);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-ink-soft);
+}
+
+.idError {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-danger);
+}
+
 .verdict {
   display: grid;
   gap: var(--space-2);

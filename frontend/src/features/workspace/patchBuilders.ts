@@ -35,13 +35,44 @@ function basePatch(
 export function addNodePatch(
   graph: MethodologyGraph,
   spec: { id: string; kind: NodeKind; label: string },
+  extras?: { description?: string | null; config?: Record<string, unknown> },
 ): GraphPatch {
   const node: Record<string, unknown> = {
     id: spec.id,
     kind: spec.kind,
     label: spec.label,
   };
+  if (extras?.description) node.description = extras.description;
+  if (extras?.config) node.config = extras.config;
   return basePatch(graph, "add_node", `Add component ${spec.id}`, null, { node });
+}
+
+const NODE_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/;
+
+/** Suggest a unique node ID from a label, suffixed when taken. */
+export function suggestNodeId(graph: MethodologyGraph, label: string): string {
+  const slug =
+    label
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 120) || "node";
+  const taken = new Set(graph.nodes.map((node) => node.id));
+  if (!taken.has(slug)) return slug;
+  let counter = 2;
+  while (taken.has(`${slug}-${counter}`)) counter += 1;
+  return `${slug}-${counter}`;
+}
+
+/** Explain why a node ID is unusable, or null when it is free. */
+export function nodeIdProblem(graph: MethodologyGraph, id: string): string | null {
+  if (!NODE_ID_PATTERN.test(id)) {
+    return "IDs start with a letter or digit, then letters, digits, dots, underscores, colons, or dashes.";
+  }
+  if (graph.nodes.some((node) => node.id === id)) {
+    return "This ID is already in the graph.";
+  }
+  return null;
 }
 
 export function addEdgePatch(

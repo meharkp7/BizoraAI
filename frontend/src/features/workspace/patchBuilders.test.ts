@@ -3,8 +3,10 @@ import { graphFixture } from "../../test/fixtures.ts";
 import {
   addEdgePatch,
   addNodePatch,
+  nodeIdProblem,
   removalBatch,
   replaceNodePatch,
+  suggestNodeId,
   updateConfigPatch,
 } from "./patchBuilders.ts";
 
@@ -79,5 +81,34 @@ describe("patch builders", () => {
     const patches = removalBatch(graphFixture, [], ["e1"]);
     expect(patches).toHaveLength(1);
     expect(patches[0]).toMatchObject({ operation: "remove_edge", target_id: "e1" });
+  });
+
+  it("carries catalog description and config on an add-node patch", () => {
+    const patch = addNodePatch(
+      graphFixture,
+      { id: "q1", kind: "component", label: "2N3904" },
+      { description: "NPN transistor", config: { part: "2N3904" } },
+    );
+    expect(patch.payload["node"]).toMatchObject({
+      id: "q1",
+      kind: "component",
+      label: "2N3904",
+      description: "NPN transistor",
+      config: { part: "2N3904" },
+    });
+  });
+
+  it("suggests a unique slug id from a label", () => {
+    expect(suggestNodeId(graphFixture, "2N3904 NPN transistor")).toBe("2n3904-npn-transistor");
+    expect(suggestNodeId(graphFixture, "Transformer encoder")).toBe("transformer-encoder");
+    expect(suggestNodeId(graphFixture, "input")).toBe("input-2");
+    expect(suggestNodeId(graphFixture, "!!!")).toBe("node");
+  });
+
+  it("explains unusable node ids", () => {
+    expect(nodeIdProblem(graphFixture, "q1")).toBeNull();
+    expect(nodeIdProblem(graphFixture, "input")).toBe("This ID is already in the graph.");
+    expect(nodeIdProblem(graphFixture, "-bad")).toContain("start with a letter or digit");
+    expect(nodeIdProblem(graphFixture, "")).toContain("start with a letter or digit");
   });
 });
