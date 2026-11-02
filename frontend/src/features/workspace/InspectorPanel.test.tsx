@@ -165,6 +165,40 @@ describe("InspectorPanel removal preflight", () => {
     expect(screen.getByText(/this block is isolated/)).toBeInTheDocument();
     expect(screen.getByText(/none cited on this block/)).toBeInTheDocument();
   });
+
+  it("removes the block once a preview lands", () => {
+    const onRemoveNode = vi.fn();
+    render(
+      <InspectorPanel
+        node={node}
+        edge={null}
+        formatShape={() => "—"}
+        removal={removal}
+        onPreviewRemoval={() => {}}
+        onRemoveNode={onRemoveNode}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove block (new revision)" }));
+
+    expect(onRemoveNode).toHaveBeenCalledOnce();
+  });
+
+  it("hides removal until a preview lands", () => {
+    render(
+      <InspectorPanel
+        node={node}
+        edge={null}
+        formatShape={() => "—"}
+        onPreviewRemoval={() => {}}
+        onRemoveNode={() => {}}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Remove block (new revision)" }),
+    ).not.toBeInTheDocument();
+  });
 });
 
 describe("InspectorPanel diagram selection", () => {

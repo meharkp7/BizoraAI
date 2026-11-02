@@ -103,6 +103,37 @@ test("workspace selects a node and shows its evidence", async ({ page }) => {
   );
 });
 
+test("workspace previews a removal and removes the block", async ({ page }) => {
+  await page.route("**/removal-preflight", async (route) => {
+    await route.fulfill({
+      json: {
+        target_node_id: "encoder",
+        neighbor_node_ids: ["input"],
+        dropped_edge_ids: ["e1"],
+        evidence: [],
+      },
+    });
+  });
+  await page.route("**/api/v1/graphs/**/patch-batches", async (route) => {
+    await route.fulfill({
+      status: 201,
+      json: { ...graph, version: 3, parent_version: 2 },
+    });
+  });
+
+  await page.goto("/g/project-1/graph-1");
+  await page.getByRole("list", { name: "Graph nodes" }).getByRole("button", {
+    name: /Transformer encoder/,
+  }).click();
+  const inspector = page.getByRole("region", { name: "Inspector" });
+  await inspector.getByRole("button", { name: "Preview removal" }).click();
+  await expect(inspector.getByText("Dropped connections")).toBeVisible();
+  await inspector.getByRole("button", { name: "Remove block (new revision)" }).click();
+
+  await expect(page.getByText("Saved as revision 3.")).toBeVisible();
+  await expect(page).toHaveURL(/v=3/);
+});
+
 test("theme toggle persists across reloads", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Switch to dark theme" }).click();

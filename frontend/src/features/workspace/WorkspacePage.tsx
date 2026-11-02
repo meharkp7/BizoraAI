@@ -35,7 +35,11 @@ import type { DiagramSelection } from "../diagrams/selection.ts";
 import { useRevisionHistory } from "./history.ts";
 import { InspectorPanel } from "./InspectorPanel.tsx";
 import { NotesPanel } from "../notes/NotesPanel.tsx";
-import { replaceNodePatch, updateConfigPatch } from "./patchBuilders.ts";
+import {
+  removalBatch,
+  replaceNodePatch,
+  updateConfigPatch,
+} from "./patchBuilders.ts";
 import { EvidencePanel } from "./EvidencePanel.tsx";
 import { RunPanel } from "../runs/RunPanel.tsx";
 import { SimulationPreview } from "../runs/SimulationPreview.tsx";
@@ -606,6 +610,11 @@ function WorkspaceLoaded({
             nodeLabels={Object.fromEntries(nodeLabels)}
             onPreviewRemoval={setRemovalTarget}
             onClearRemoval={() => setRemovalTarget(null)}
+            onRemoveNode={
+              selectedNode
+                ? () => onSubmit(removalBatch(graph, [selectedNode.id], []))
+                : undefined
+            }
           />
           <FigureOverlay
             projectId={projectId}

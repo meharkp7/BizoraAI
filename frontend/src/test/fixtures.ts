@@ -25,6 +25,7 @@ import type {
   PaperImportResponse,
   ParsedPaper,
   QualitySummary,
+  RemovalPreflight,
   RunComparison,
   RunUsage,
   UsageSummary,
@@ -271,6 +272,13 @@ export const revisionHistoryFixture: GraphRevisionSummary[] = [
     created_at: "2026-01-02T00:00:00Z",
   },
 ];
+
+export const removalPreflightFixture: RemovalPreflight = {
+  target_node_id: "encoder",
+  neighbor_node_ids: ["input"],
+  dropped_edge_ids: ["e1"],
+  evidence: [],
+};
 
 export function notFound(code = "RESOURCE_NOT_FOUND", message = "Not found.") {
   return HttpResponse.json({ error: { code, message, details: {} } }, { status: 404 });

@@ -46,9 +46,9 @@ export function ScenarioDrafts({
     <section className={styles.panel} aria-label="Scenario drafts">
       <h2>Scenario drafts</h2>
       <p className={styles.hint}>
-        Draft a what-if as an op-list over v{currentVersion}: canvas edits stage into
-        the active draft, and promoting saves them as one new revision. Drafts live
-        in memory; a reload discards them.
+        Draft a structural change as an op-list over v{currentVersion}: canvas edits
+        stage into the active draft, and promoting saves them as one new revision.
+        Drafts live in memory; a reload discards them.
       </p>
       <div className={styles.create}>
         <label>

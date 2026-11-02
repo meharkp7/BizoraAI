@@ -27,6 +27,7 @@ import {
   preflightFixture,
   renderSpecsFixture,
   reportedMetricsFixture,
+  removalPreflightFixture,
   revisionHistoryFixture,
   runUsageFixture,
   samplePaperFixture,
@@ -77,6 +78,19 @@ export const handlers = [
   }),
 
   http.get("/api/v1/graphs/:projectId/:graphId/diff", () => HttpResponse.json(diffFixture)),
+
+  http.post(
+    "/api/v1/graphs/:projectId/:graphId/revisions/:version/nodes/:nodeId/removal-preflight",
+    ({ params }) => {
+      if (params["projectId"] === "project-1" && params["graphId"] === "graph-1") {
+        return HttpResponse.json({
+          ...removalPreflightFixture,
+          target_node_id: String(params["nodeId"]),
+        });
+      }
+      return notFound("RESOURCE_NOT_FOUND", "Graph revision not found.");
+    },
+  ),
 
   http.get("/api/v1/graphs/:projectId/:graphId/revisions", ({ params }) => {
     if (params["projectId"] === "project-1" && params["graphId"] === "graph-1") {

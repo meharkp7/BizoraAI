@@ -215,6 +215,7 @@ export function InspectorPanel({
   nodeLabels = {},
   onPreviewRemoval,
   onClearRemoval,
+  onRemoveNode,
   diagram = null,
   paperId = null,
 }: {
@@ -236,6 +237,7 @@ export function InspectorPanel({
   nodeLabels?: Record<string, string>;
   onPreviewRemoval?: (nodeId: string) => void;
   onClearRemoval?: () => void;
+  onRemoveNode?: () => void;
 }) {
   if (!node && !edge) {
     if (diagram) return <DiagramInspector diagram={diagram} paperId={paperId} />;
@@ -401,8 +403,8 @@ export function InspectorPanel({
         <div className={styles.editor}>
           <h3 className={styles.title}>What-if: remove this block</h3>
           <p className={styles.hint}>
-            Graph-level preflight only — nothing is changed. Shows connected blocks,
-            dropped connections, and paper claims tied to this block.
+            Preview the connected blocks, dropped connections, and paper claims
+            tied to this block, then remove it as a new revision.
           </p>
           <div className={styles.editorRow}>
             <button
@@ -424,37 +426,50 @@ export function InspectorPanel({
             </p>
           ) : null}
           {removal && removal.target_node_id === node.id ? (
-            <dl className={styles.facts}>
-              <dt>Connected blocks</dt>
-              <dd>
-                {removal.neighbor_node_ids.length === 0
-                  ? "none — this block is isolated"
-                  : removal.neighbor_node_ids
-                      .map((id) => nodeLabels[id] ?? id)
-                      .join(", ")}
-              </dd>
-              <dt>Dropped connections</dt>
-              <dd>
-                {removal.dropped_edge_ids.length === 0
-                  ? "none"
-                  : removal.dropped_edge_ids.join(", ")}
-              </dd>
-              <dt>Paper claims</dt>
-              <dd>
-                {removal.evidence.length === 0 ? (
-                  "none cited on this block or its connections"
-                ) : (
-                  <ul className={styles.config}>
-                    {removal.evidence.map((ref, index) => (
-                      <li key={`${ref.source_id}-${index}`}>
-                        {ref.quote ?? ref.figure_label ?? ref.locator ?? "reference"}
-                        {ref.page !== null ? ` (p. ${ref.page})` : null}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </dd>
-            </dl>
+            <>
+              <dl className={styles.facts}>
+                <dt>Connected blocks</dt>
+                <dd>
+                  {removal.neighbor_node_ids.length === 0
+                    ? "none — this block is isolated"
+                    : removal.neighbor_node_ids
+                        .map((id) => nodeLabels[id] ?? id)
+                        .join(", ")}
+                </dd>
+                <dt>Dropped connections</dt>
+                <dd>
+                  {removal.dropped_edge_ids.length === 0
+                    ? "none"
+                    : removal.dropped_edge_ids.join(", ")}
+                </dd>
+                <dt>Paper claims</dt>
+                <dd>
+                  {removal.evidence.length === 0 ? (
+                    "none cited on this block or its connections"
+                  ) : (
+                    <ul className={styles.config}>
+                      {removal.evidence.map((ref, index) => (
+                        <li key={`${ref.source_id}-${index}`}>
+                          {ref.quote ?? ref.figure_label ?? ref.locator ?? "reference"}
+                          {ref.page !== null ? ` (p. ${ref.page})` : null}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </dd>
+              </dl>
+              {onRemoveNode ? (
+                <div className={styles.editorRow}>
+                  <button
+                    type="button"
+                    disabled={disabled === true}
+                    onClick={onRemoveNode}
+                  >
+                    Remove block (new revision)
+                  </button>
+                </div>
+              ) : null}
+            </>
           ) : null}
         </div>
       ) : null}

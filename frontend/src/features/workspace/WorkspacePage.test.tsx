@@ -279,7 +279,7 @@ describe("WorkspacePage", () => {
         within(inspector).getByRole("button", { name: "Apply configuration" }),
       );
 
-      expect(patchSpy).not.toHaveBeenCalled();
+        expect(patchSpy).not.toHaveBeenCalled();
       expect(
         await screen.findByText(/Staging into Scenario 1 \(1 op\)/),
       ).toBeInTheDocument();
@@ -287,5 +287,55 @@ describe("WorkspacePage", () => {
     } finally {
       useScenarioDrafts.getState().reset();
     }
+  });
+
+  it("previews a removal and removes the block as one batch", async () => {
+    useWorkspaceSelection.setState({ selectedNodeIds: [], selectedEdgeIds: [] });
+    useScenarioDrafts.getState().reset();
+    const batches: { patches: { operation: string; target_id: string | null }[] }[] = [];
+    server.use(
+      http.post("/api/v1/graphs/:projectId/:graphId/patch-batches", async ({ request }) => {
+        const batch = (await request.json()) as {
+          patches: { operation: string; target_id: string | null; base_version: number }[];
+        };
+        batches.push(batch);
+        return HttpResponse.json(
+          { ...graphFixture, version: 3, parent_version: 2, nodes: [graphFixture.nodes[0]], edges: [] },
+          { status: 201 },
+        );
+      }),
+    );
+    render(
+      <WorkspacePage
+        projectId="project-1"
+        graphId="graph-1"
+        version={2}
+        view="methodology" onViewChange={() => {}} onVersionChange={() => {}}
+      />,
+      { wrapper },
+    );
+    await screen.findByRole("heading", { name: "Vision transformer" });
+
+    const nodes = screen.getByRole("list", { name: "Graph nodes" });
+    await userEvent.click(within(nodes).getByRole("button", { name: /Transformer encoder/ }));
+
+    const inspector = screen.getByRole("region", { name: "Inspector" });
+    await userEvent.click(
+      within(inspector).getByRole("button", { name: "Preview removal" }),
+    );
+    expect(
+      await within(inspector).findByText("none cited on this block or its connections"),
+    ).toBeInTheDocument();
+
+    await userEvent.click(
+      within(inspector).getByRole("button", { name: "Remove block (new revision)" }),
+    );
+
+    expect(await screen.findByText("Saved as revision 3.")).toBeInTheDocument();
+    expect(batches).toHaveLength(1);
+    expect(batches[0].patches.map((patch) => [patch.operation, patch.target_id])).toEqual([
+      ["remove_edge", "e1"],
+      ["remove_node", "encoder"],
+    ]);
   });
 });
