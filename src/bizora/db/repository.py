@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from bizora.contracts.experiment import ExperimentConfig, ResultKind
 from bizora.contracts.figures import FigureRecord, FigureRegion, PaperFigure
-from bizora.contracts.graph import GraphRevisionSummary, MethodologyGraph
+from bizora.contracts.graph import GraphRevisionSummary, GraphSummary, MethodologyGraph
 from bizora.contracts.layout import GraphLayout
 from bizora.contracts.run import (
     TERMINAL_STATES,
@@ -152,6 +152,56 @@ def graph_revision_summary_from_record(
         version=record.version,
         parent_version=record.parent_version,
         title=record.title,
+        created_by=record.created_by,
+        created_at=_ensure_aware(record.created_at),
+    )
+
+
+def list_latest_graph_revisions(
+    session: Session,
+    *,
+    project_id: str | None = None,
+    source_id: str | None = None,
+    limit: int = 50,
+) -> list[GraphRevisionRecord]:
+    """Retrieve each graph's latest revision, newest first.
+
+    Grouping and the source filter run in Python so the query stays
+    portable across SQLite and Postgres.
+    """
+    statement = select(GraphRevisionRecord).order_by(
+        GraphRevisionRecord.project_id.asc(),
+        GraphRevisionRecord.graph_id.asc(),
+        GraphRevisionRecord.version.desc(),
+    )
+    if project_id is not None:
+        statement = statement.where(GraphRevisionRecord.project_id == project_id)
+    latest: dict[tuple[str, str], GraphRevisionRecord] = {}
+    for record in session.scalars(statement):
+        key = (record.project_id, record.graph_id)
+        if key in latest:
+            continue
+        if source_id is not None:
+            sources = record.graph_payload.get("source_ids", [])
+            if source_id not in sources:
+                continue
+        latest[key] = record
+        if len(latest) >= limit:
+            break
+    return sorted(latest.values(), key=lambda record: record.id, reverse=True)
+
+
+def graph_summary_from_record(record: GraphRevisionRecord) -> GraphSummary:
+    """Convert one latest-revision record into a tray summary."""
+    payload = record.graph_payload
+    return GraphSummary(
+        project_id=record.project_id,
+        graph_id=record.graph_id,
+        version=record.version,
+        title=record.title,
+        source_ids=tuple(payload.get("source_ids", [])),
+        node_count=len(payload.get("nodes", [])),
+        edge_count=len(payload.get("edges", [])),
         created_by=record.created_by,
         created_at=_ensure_aware(record.created_at),
     )

@@ -593,6 +593,31 @@ export const copilotThreadDetailFixture: CopilotThread = {
   ],
 };
 
+export const graphSummariesFixture = [
+  {
+    project_id: "project-1",
+    graph_id: "graph-1",
+    version: 2,
+    title: "Vision transformer",
+    source_ids: ["paper-1"],
+    node_count: 2,
+    edge_count: 1,
+    created_by: "test",
+    created_at: "2026-01-02T00:00:00Z",
+  },
+  {
+    project_id: "project-2",
+    graph_id: "graph-2",
+    version: 1,
+    title: "SRAM PUF",
+    source_ids: ["paper-2"],
+    node_count: 3,
+    edge_count: 2,
+    created_by: "test",
+    created_at: "2026-01-01T00:00:00Z",
+  },
+];
+
 export const paperTextFixture: PaperText = {
   source_id: "paper-1",
   page_count: 2,

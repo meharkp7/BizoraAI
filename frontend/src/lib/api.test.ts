@@ -10,6 +10,13 @@ describe("api client", () => {
     expect(health).toEqual({ status: "ok" });
   });
 
+  it("lists graph summaries", async () => {
+    const graphs = await api.listGraphs();
+    expect(graphs).toHaveLength(2);
+    expect(graphs[0]?.title).toBe("Vision transformer");
+    expect(graphs[0]?.node_count).toBe(2);
+  });
+
   it("fetches a graph revision", async () => {
     const graph = await api.getGraphRevision("project-1", "graph-1", 2);
     expect(graph.title).toBe("Vision transformer");

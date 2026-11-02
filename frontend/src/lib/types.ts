@@ -203,6 +203,18 @@ export interface ChangedEdge {
   after: GraphEdge;
 }
 
+export interface GraphSummary {
+  project_id: string;
+  graph_id: string;
+  version: number;
+  title: string;
+  source_ids: string[];
+  node_count: number;
+  edge_count: number;
+  created_by: string;
+  created_at: string;
+}
+
 export interface GraphRevisionSummary {
   version: number;
   parent_version: number | null;

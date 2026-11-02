@@ -24,6 +24,7 @@ import type {
   GraphPatchBatch,
   GraphRevisionDiff,
   GraphRevisionSummary,
+  GraphSummary,
   LibraryPaper,
   MethodologyGraph,
   MetricRecord,
@@ -161,6 +162,15 @@ export const api = {
 
   getGraphRevision(projectId: string, graphId: string, version: number): Promise<MethodologyGraph> {
     return request(`/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/revisions/${version}`);
+  },
+
+  listGraphs(filters?: { project_id?: string; source_id?: string; limit?: number }): Promise<GraphSummary[]> {
+    const params = new URLSearchParams();
+    if (filters?.project_id) params.set("project_id", filters.project_id);
+    if (filters?.source_id) params.set("source_id", filters.source_id);
+    if (filters?.limit !== undefined) params.set("limit", String(filters.limit));
+    const query = params.size > 0 ? `?${params.toString()}` : "";
+    return request(`/api/v1/graphs${query}`);
   },
 
   listRevisions(projectId: string, graphId: string): Promise<GraphRevisionSummary[]> {

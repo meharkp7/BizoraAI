@@ -376,6 +376,13 @@ export function useCopilotThread(
   });
 }
 
+export function useGraphs(filters?: { project_id?: string; source_id?: string; limit?: number }) {
+  return useQuery({
+    queryKey: ["graphs", filters ?? {}] as const,
+    queryFn: () => api.listGraphs(filters),
+  });
+}
+
 export function usePaperText(sourceId: string, enabled = true) {
   return useQuery({
     queryKey: ["papers", sourceId, "text"] as const,

@@ -17,6 +17,7 @@ import {
   failedRun,
   figuresFixture,
   graphFixture,
+  graphSummariesFixture,
   layoutFixture,
   libraryFixture,
   metricsFixture,
@@ -55,6 +56,8 @@ export function resetNotesStore(): void {
 
 export const handlers = [
   http.get("/health", () => HttpResponse.json({ status: "ok" })),
+
+  http.get("/api/v1/graphs", () => HttpResponse.json(graphSummariesFixture)),
 
   http.get("/api/v1/graphs/:projectId/:graphId/revisions/:version", ({ params }) => {
     if (params["projectId"] === "project-1" && params["graphId"] === "graph-1") {

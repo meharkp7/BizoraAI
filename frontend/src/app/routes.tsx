@@ -4,6 +4,7 @@ import { NotFoundPage } from "../components/NotFoundPage.tsx";
 import { LoginPage } from "../features/auth/LoginPage.tsx";
 import { HomePage } from "../features/home/HomePage.tsx";
 import { PapersPage } from "../features/papers/PapersPage.tsx";
+import { CrossPaperPage } from "../features/crosspaper/CrossPaperPage.tsx";
 import { ProfilePage } from "../features/profile/ProfilePage.tsx";
 import { ComparePage } from "../features/compare/ComparePage.tsx";
 import { QualityPage } from "../features/quality/QualityPage.tsx";
@@ -17,6 +18,7 @@ export const router = createBrowserRouter([
       { index: true, element: <HomePage /> },
       { path: "login", element: <LoginPage /> },
       { path: "papers", element: <PapersPage /> },
+      { path: "cross-paper", element: <CrossPaperPage /> },
       { path: "profile", element: <ProfilePage /> },
       { path: "quality", element: <QualityPage /> },
       { path: "g/:projectId/:graphId", element: <WorkspaceRoute /> },

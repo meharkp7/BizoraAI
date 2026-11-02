@@ -55,6 +55,7 @@ from bizora.contracts.figures import (
 from bizora.contracts.graph import (
     GraphRestoreRequest,
     GraphRevisionSummary,
+    GraphSummary,
     MethodologyGraph,
 )
 from bizora.contracts.layout import GraphLayout
@@ -158,10 +159,12 @@ from bizora.db.repository import (
     get_paper_text,
     get_paper_text_record,
     graph_revision_summary_from_record,
+    graph_summary_from_record,
     list_artifacts_for_run,
     list_experiment_runs,
     list_extracted_tables,
     list_graph_revisions,
+    list_latest_graph_revisions,
     list_metrics_for_run,
     metric_record_from_row,
 )
@@ -771,6 +774,24 @@ def _error_payload(exc: BizoraError) -> dict[str, Any]:
 def health_check() -> dict[str, str]:
     """Report that the HTTP application is responding."""
     return {"status": "ok"}
+
+
+@router.get(
+    "/api/v1/graphs",
+    response_model=list[GraphSummary],
+    tags=["graphs"],
+)
+def list_graphs(
+    project_id: str | None = Query(default=None, max_length=128),
+    source_id: str | None = Query(default=None, max_length=128),
+    limit: int = Query(default=50, ge=1, le=200),
+    session: Session = DB_SESSION_DEPENDENCY,
+) -> list[GraphSummary]:
+    """List each graph's latest revision, newest first."""
+    records = list_latest_graph_revisions(
+        session, project_id=project_id, source_id=source_id, limit=limit
+    )
+    return [graph_summary_from_record(record) for record in records]
 
 
 @router.post(

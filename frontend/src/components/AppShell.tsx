@@ -112,6 +112,12 @@ export function AppShell() {
           >
             Papers
           </NavLink>
+          <NavLink
+            to="/cross-paper"
+            className={({ isActive }) => (isActive ? styles.active : undefined)}
+          >
+            Cross-paper
+          </NavLink>
         </nav>
         <WorkspaceNav />
         <AuthArea />

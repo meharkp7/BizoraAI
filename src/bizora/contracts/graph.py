@@ -135,6 +135,22 @@ class GraphRevisionSummary(BaseModel):
     created_at: AwareDatetime
 
 
+class GraphSummary(BaseModel):
+    """One graph's latest revision, for the cross-paper workspace tray."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    project_id: str = Field(min_length=1, max_length=128)
+    graph_id: str = Field(min_length=1, max_length=128)
+    version: int = Field(ge=1)
+    title: str = Field(min_length=1, max_length=300)
+    source_ids: tuple[str, ...] = ()
+    node_count: int = Field(ge=0)
+    edge_count: int = Field(ge=0)
+    created_by: str = Field(min_length=1, max_length=128)
+    created_at: AwareDatetime
+
+
 class GraphRestoreRequest(BaseModel):
     """Request a new head revision carrying an older revision's content."""
 
