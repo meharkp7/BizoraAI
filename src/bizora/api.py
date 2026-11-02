@@ -118,6 +118,7 @@ from bizora.core.execution_service import (
     WorkerConfig,
     select_isolation_provider,
 )
+from bizora.core.export_bundle import build_export_bundle
 from bizora.core.extraction_persistence_service import (
     ExtractionPersistenceService,
 )
@@ -934,6 +935,25 @@ def transplant_nodes(
         renamed=plan.renamed,
         copied_edge_count=plan.copied_edge_count,
         dropped_edge_count=plan.dropped_edge_count,
+    )
+
+
+@router.get(
+    "/api/v1/projects/{project_id}/graphs/{graph_id}/export",
+    tags=["graphs"],
+)
+def export_graph_bundle(
+    project_id: str,
+    graph_id: str,
+    session: Session = DB_SESSION_DEPENDENCY,
+) -> Response:
+    """Download the latest revision plus project memory as one JSON file."""
+    bundle = build_export_bundle(session, project_id=project_id, graph_id=graph_id)
+    filename = f"{project_id}-{graph_id}-v{bundle.version}.json"
+    return Response(
+        content=bundle.model_dump_json(),
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
