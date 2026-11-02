@@ -64,6 +64,7 @@ from bizora.contracts.memory import MemoryCreate, MemoryFact
 from bizora.contracts.packs import SimulationPreview
 from bizora.contracts.patches import GraphPatch, GraphPatchBatch
 from bizora.contracts.quality import QualitySummary
+from bizora.contracts.replication import ReplicationPlan
 from bizora.contracts.run import (
     ArtifactRecord,
     CreateExperimentRunRequest,
@@ -147,6 +148,7 @@ from bizora.core.papers import (
 from bizora.core.patch_service import GraphPatchService
 from bizora.core.pdf import PdfText, extract_page_texts, extract_text_from_pdf
 from bizora.core.quality import build_quality_summary
+from bizora.core.replication import plan_for_latest_revision
 from bizora.core.reported_service import discover_reported_metrics, reported_metrics_for_tables
 from bizora.core.run_service import ExperimentRunService
 from bizora.core.table_persistence_service import TablePersistenceService
@@ -955,6 +957,20 @@ def export_graph_bundle(
         media_type="application/json",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.get(
+    "/api/v1/projects/{project_id}/graphs/{graph_id}/replication-plan",
+    response_model=ReplicationPlan,
+    tags=["graphs"],
+)
+def read_replication_plan(
+    project_id: str,
+    graph_id: str,
+    session: Session = DB_SESSION_DEPENDENCY,
+) -> ReplicationPlan:
+    """Return the ordered build-and-verify plan for a graph."""
+    return plan_for_latest_revision(session, project_id=project_id, graph_id=graph_id)
 
 
 @router.post(
