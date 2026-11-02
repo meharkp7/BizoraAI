@@ -574,6 +574,8 @@ export const adaptersFixture: AdapterSummary[] = [
     adapter_id: "bizora.deterministic-test",
     adapter_version: "0.1.0",
     description: "Validate inputs and echo reproducibility fields without external effects.",
+    available: true,
+    unavailable_reason: null,
   },
 ];
 

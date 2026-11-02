@@ -157,3 +157,17 @@ def test_list_adapters_reports_registered_adapters(client: TestClient) -> None:
         entry["adapter_id"] == "bizora.deterministic-test" and entry["adapter_version"] == "0.1.0"
         for entry in body
     )
+    assert any(entry["adapter_id"] == "bizora.torch-train" for entry in body)
+    for entry in body:
+        assert set(entry) == {
+            "adapter_id",
+            "adapter_version",
+            "description",
+            "available",
+            "unavailable_reason",
+        }
+        assert isinstance(entry["available"], bool)
+        if entry["available"]:
+            assert entry["unavailable_reason"] is None
+        else:
+            assert entry["unavailable_reason"]

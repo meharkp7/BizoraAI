@@ -13,6 +13,12 @@ import pytest
 from sqlalchemy import Engine, create_engine, select
 from sqlalchemy.orm import Session
 
+from bizora.adapters.modal_executor import (
+    ModalCallError,
+    ModalExecutor,
+    ModalIsolationProvider,
+    ModalUnavailableError,
+)
 from bizora.contracts.experiment import ExperimentConfig
 from bizora.contracts.graph import (
     GraphEdge,
@@ -22,7 +28,11 @@ from bizora.contracts.graph import (
 )
 from bizora.contracts.run import ExperimentRun, RunState
 from bizora.core.errors import BizoraError, ErrorCode
-from bizora.core.execution_service import ExecutionService, WorkerConfig
+from bizora.core.execution_service import (
+    ExecutionService,
+    WorkerConfig,
+    select_isolation_provider,
+)
 from bizora.core.run_service import ExperimentRunService
 from bizora.db.base import Base
 from bizora.db.models import GraphRevisionRecord
@@ -724,3 +734,168 @@ def test_execute_run_discards_failed_run_results(
 def test_worker_config_rejects_invalid_tuning(options: dict[str, Any]) -> None:
     with pytest.raises(ValueError):
         WorkerConfig(**options)
+
+
+class FakeModalExecutor:
+    """Scripted Modal executor: no SDK, no network."""
+
+    def __init__(
+        self,
+        *,
+        payload: str | None = None,
+        timeouts_before_payload: int = 0,
+        submit_error: Exception | None = None,
+        fetch_error: Exception | None = None,
+    ) -> None:
+        self.payload = payload
+        self.timeouts_before_payload = timeouts_before_payload
+        self.submit_error = submit_error
+        self.fetch_error = fetch_error
+        self.submitted: list[str] = []
+        self.cancelled: list[str] = []
+
+    def submit(self, request: object) -> str:
+        del request
+        if self.submit_error is not None:
+            raise self.submit_error
+        self.submitted.append("call-1")
+        return "call-1"
+
+    def fetch_result(self, invocation_id: str, timeout_seconds: float) -> str:
+        del invocation_id, timeout_seconds
+        if self.fetch_error is not None:
+            raise self.fetch_error
+        if self.timeouts_before_payload > 0:
+            self.timeouts_before_payload -= 1
+            raise TimeoutError("slice expired")
+        assert self.payload is not None
+        return self.payload
+
+    def cancel(self, invocation_id: str) -> None:
+        self.cancelled.append(invocation_id)
+
+
+def make_modal_payload(run_id: str, config: ExperimentConfig) -> str:
+    """Build a succeeded result JSON shaped like the fake adapter child."""
+    return json.dumps(
+        {
+            "run_id": run_id,
+            "status": "succeeded",
+            "echo": {
+                "adapter_id": config.adapter_id,
+                "adapter_version": config.adapter_version,
+                "dataset_id": config.dataset_id,
+                "dataset_revision": config.dataset_revision,
+                "code_revision": config.code_revision,
+                "seed": config.seed,
+                "graph_id": config.graph_id,
+                "graph_version": config.graph_version,
+            },
+            "diagnostics": ["modal fake ok"],
+            "metrics": [
+                {
+                    "metric_id": "metric-accuracy",
+                    "name": "accuracy",
+                    "value": 0.9,
+                    "result_kind": "measured",
+                }
+            ],
+        }
+    )
+
+
+def make_modal_service(
+    session_factory: Callable[[], Session],
+    executor: FakeModalExecutor,
+    **overrides: Any,
+) -> ExecutionService:
+    """Build a worker dispatching to Modal instead of a local child."""
+    options: dict[str, Any] = {"poll_seconds": 0.05, "heartbeat_seconds": 60.0}
+    options.update(overrides)
+    return ExecutionService(
+        session_factory,
+        WorkerConfig(worker_id="worker-modal", **options),
+        isolation_provider=ModalIsolationProvider(),
+        modal_executor=executor,  # type: ignore[arg-type]
+    )
+
+
+def test_execute_run_dispatches_to_modal_and_records_outcome(
+    session_factory: Callable[[], Session],
+) -> None:
+    seed_run(session_factory)
+    config = make_config()
+    executor = FakeModalExecutor(payload=make_modal_payload("run-1", config))
+    service = make_modal_service(session_factory, executor)
+
+    result = service.execute_run("run-1")
+
+    assert result.state == RunState.SUCCEEDED
+    assert executor.submitted == ["call-1"]
+    assert executor.cancelled == []
+    metrics = list_metrics_for_run(session_factory(), run_id="run-1")
+    assert [metric.metric_id for metric in metrics] == ["metric-accuracy"]
+
+
+def test_execute_run_modal_timeout_heartbeats_then_succeeds(
+    session_factory: Callable[[], Session],
+) -> None:
+    seed_run(session_factory)
+    config = make_config()
+    executor = FakeModalExecutor(
+        payload=make_modal_payload("run-1", config), timeouts_before_payload=2
+    )
+    service = make_modal_service(session_factory, executor)
+
+    result = service.execute_run("run-1")
+
+    assert result.state == RunState.SUCCEEDED
+    assert executor.submitted == ["call-1"]
+
+
+def test_execute_run_modal_submit_unavailable_fails_run(
+    session_factory: Callable[[], Session],
+) -> None:
+    seed_run(session_factory)
+    executor = FakeModalExecutor(
+        submit_error=ModalUnavailableError("Modal execution needs the 'modal' package.")
+    )
+    service = make_modal_service(session_factory, executor)
+
+    result = service.execute_run("run-1")
+
+    assert result.state == RunState.FAILED
+    assert result.error is not None and "modal" in result.error.lower()
+
+
+def test_execute_run_modal_call_failure_fails_run(
+    session_factory: Callable[[], Session],
+) -> None:
+    seed_run(session_factory)
+    executor = FakeModalExecutor(fetch_error=ModalCallError("call exploded"))
+    service = make_modal_service(session_factory, executor)
+
+    result = service.execute_run("run-1")
+
+    assert result.state == RunState.FAILED
+    assert result.error is not None and "call exploded" in result.error
+
+
+def test_select_isolation_provider_prefers_modal_when_usable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from bizora.adapters.isolation import LocalIsolationProvider
+    from bizora.core.config import Settings
+
+    monkeypatch.setattr(ModalExecutor, "sdk_available", staticmethod(lambda: True))
+    monkeypatch.setenv("MODAL_TOKEN_ID", "id")
+    monkeypatch.setenv("MODAL_TOKEN_SECRET", "secret")
+
+    enabled = Settings(_env_file=None, BIZORA_ENABLE_MODAL=True)
+    assert isinstance(select_isolation_provider(enabled), ModalIsolationProvider)
+
+    disabled = Settings(_env_file=None, BIZORA_ENABLE_MODAL=False)
+    assert isinstance(select_isolation_provider(disabled), LocalIsolationProvider)
+
+    monkeypatch.delenv("MODAL_TOKEN_SECRET", raising=False)
+    assert isinstance(select_isolation_provider(enabled), LocalIsolationProvider)

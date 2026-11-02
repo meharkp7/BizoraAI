@@ -5,7 +5,13 @@ import pytest
 from bizora.adapters.base import ExecutionAdapter
 from bizora.adapters.deterministic_test import DeterministicTestAdapter
 from bizora.adapters.isolation import IsolationRequirement
-from bizora.adapters.registry import AdapterRegistry, create_default_registry
+from bizora.adapters.ngspice_adapter import NgspiceAdapter
+from bizora.adapters.registry import (
+    AdapterRegistry,
+    adapter_availability,
+    create_default_registry,
+)
+from bizora.adapters.torch_adapter import TorchTrainAdapter
 from bizora.contracts.execution import AdapterExecutionRequest, ExecutionResult
 from bizora.contracts.experiment import ExperimentConfig
 from bizora.contracts.graph import MethodologyGraph
@@ -54,9 +60,13 @@ def test_default_registry_resolves_test_adapter() -> None:
     adapter = registry.resolve("bizora.deterministic-test", "0.1.0")
 
     assert isinstance(adapter, DeterministicTestAdapter)
+    assert isinstance(
+        registry.resolve("bizora.torch-train", "0.1.0"), TorchTrainAdapter
+    )
     assert registry.available() == (
         ("bizora.deterministic-test", "0.1.0"),
         ("bizora.ngspice", "0.1.0"),
+        ("bizora.torch-train", "0.1.0"),
     )
 
 
@@ -71,6 +81,7 @@ def test_resolve_rejects_unknown_adapter_id() -> None:
     assert exc_info.value.details["available"] == [
         {"adapter_id": "bizora.deterministic-test", "adapter_version": "0.1.0"},
         {"adapter_id": "bizora.ngspice", "adapter_version": "0.1.0"},
+        {"adapter_id": "bizora.torch-train", "adapter_version": "0.1.0"},
     ]
 
 
@@ -89,6 +100,41 @@ def test_register_rejects_duplicates() -> None:
 
     with pytest.raises(ValueError, match="already registered"):
         registry.register(DeterministicTestAdapter())
+
+
+def test_availability_reports_missing_toolchains_honestly(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "bizora.adapters.torch_adapter.torch_version", lambda: None
+    )
+    monkeypatch.setattr(
+        "bizora.adapters.ngspice_runner.resolve_ngspice", lambda: None
+    )
+
+    available, reason = adapter_availability(TorchTrainAdapter())
+    assert available is False
+    assert reason is not None and "torch" in reason
+
+    available, reason = adapter_availability(NgspiceAdapter())
+    assert available is False
+    assert reason is not None and "ngspice" in reason
+
+    assert adapter_availability(DeterministicTestAdapter()) == (True, None)
+
+
+def test_availability_passes_when_toolchains_present(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "bizora.adapters.torch_adapter.torch_version", lambda: "2.0.0"
+    )
+    monkeypatch.setattr(
+        "bizora.adapters.ngspice_runner.resolve_ngspice", lambda: "/usr/bin/ngspice"
+    )
+
+    assert adapter_availability(TorchTrainAdapter()) == (True, None)
+    assert adapter_availability(NgspiceAdapter()) == (True, None)
 
 
 def test_registries_are_independent() -> None:

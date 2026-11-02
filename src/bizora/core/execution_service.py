@@ -27,6 +27,12 @@ from bizora.adapters.isolation import (
     LocalIsolationProvider,
     requirement_of,
 )
+from bizora.adapters.modal_executor import (
+    ModalCallError,
+    ModalExecutor,
+    ModalIsolationProvider,
+    ModalUnavailableError,
+)
 from bizora.adapters.registry import AdapterRegistry, create_default_registry
 from bizora.contracts.execution import (
     AdapterExecutionRequest,
@@ -44,6 +50,7 @@ from bizora.contracts.run import (
     MetricRecord,
     RunState,
 )
+from bizora.core.config import Settings
 from bizora.core.errors import BizoraError, ErrorCode, ExperimentStateError
 from bizora.db.models import ExperimentRunRecord
 from bizora.db.repository import (
@@ -152,6 +159,17 @@ def _read_rss_mb(pid: int) -> int | None:
         return None
 
 
+def select_isolation_provider(settings: Settings) -> IsolationProvider:
+    """Choose Modal isolation when enabled and usable, else local execution."""
+    if (
+        settings.enable_modal
+        and ModalExecutor.sdk_available()
+        and ModalExecutor.credentials_present()
+    ):
+        return ModalIsolationProvider()
+    return LocalIsolationProvider()
+
+
 class ExecutionService:
     """Claim runs atomically and supervise allowlisted adapters."""
 
@@ -165,6 +183,7 @@ class ExecutionService:
         rss_reader: Callable[[int], int | None] | None = None,
         isolation_provider: IsolationProvider | None = None,
         telemetry_bus: TelemetryBus | None = None,
+        modal_executor: ModalExecutor | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._config = config
@@ -175,6 +194,7 @@ class ExecutionService:
             isolation_provider if isolation_provider is not None else LocalIsolationProvider()
         )
         self._telemetry_bus = telemetry_bus
+        self._modal = modal_executor if modal_executor is not None else ModalExecutor()
 
     def _publish_state(self, run_id: str, state: RunState, error: str | None = None) -> None:
         """Publish one lifecycle event when telemetry is wired."""
@@ -494,7 +514,55 @@ class ExecutionService:
                 f"Run requires '{requirement.value}' isolation, which "
                 f"provider '{self._isolation.provider_id}' cannot satisfy.",
             )
+        if self._isolation.provider_id == ModalIsolationProvider.provider_id:
+            return self._dispatch_remote(run_id, request)
         return self._spawn_and_supervise(run_id, request)
+
+    def _dispatch_remote(
+        self, run_id: str, request: AdapterExecutionRequest
+    ) -> ExperimentRun:
+        """Submit one run to Modal and supervise it through completion."""
+        try:
+            invocation_id = self._modal.submit(request)
+        except ModalUnavailableError as exc:
+            return self._fail(
+                run_id,
+                ExecutionErrorCode.ISOLATION_UNAVAILABLE,
+                str(exc)[:2000],
+            )
+        deadline = time.monotonic() + request.limits.timeout_seconds
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                self._modal.cancel(invocation_id)
+                return self._fail(
+                    run_id,
+                    ExecutionErrorCode.TIMEOUT,
+                    f"Run exceeded the {request.limits.timeout_seconds}s limit.",
+                )
+            try:
+                payload = self._modal.fetch_result(
+                    invocation_id, min(remaining, self._config.poll_seconds)
+                )
+            except TimeoutError:
+                if not self._heartbeat(run_id):
+                    self._modal.cancel(invocation_id)
+                    return self._current_run(run_id)
+                continue
+            except ModalCallError as exc:
+                return self._fail(
+                    run_id, ExecutionErrorCode.ADAPTER_FAILED, str(exc)[:2000]
+                )
+            with tempfile.TemporaryDirectory(prefix=f"bizora-{run_id}-") as workspace:
+                result_path = str(Path(workspace) / "result.json")
+                Path(result_path).write_text(payload, encoding="utf-8")
+                return self._record_outcome(
+                    run_id,
+                    request,
+                    _SupervisedResult(outcome=_Outcome.COMPLETED),
+                    result_path,
+                    str(Path(workspace) / "stderr.log"),
+                )
 
     def _spawn_and_supervise(
         self, run_id: str, request: AdapterExecutionRequest

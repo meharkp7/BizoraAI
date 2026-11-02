@@ -660,6 +660,8 @@ export interface AdapterSummary {
   adapter_id: string;
   adapter_version: string;
   description: string;
+  available: boolean;
+  unavailable_reason: string | null;
 }
 
 export interface SimulationPreviewSection {

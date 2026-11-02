@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from bizora.adapters.registry import create_default_registry
+from bizora.adapters.registry import adapter_availability, create_default_registry
 from bizora.auth.dependencies import OPTIONAL_PRINCIPAL_DEPENDENCY
 from bizora.auth.router import record_user_paper
 from bizora.contracts.assets import NodeRenderSpec
@@ -90,7 +90,11 @@ from bizora.core.diagram_whatif import WhatIfBasis, run_what_if
 from bizora.core.diff_service import RevisionDiffService
 from bizora.core.entity_service import preview_graph, render_specs_for_graph, resolve_graph
 from bizora.core.errors import BizoraError, ErrorCode
-from bizora.core.execution_service import ExecutionService, WorkerConfig
+from bizora.core.execution_service import (
+    ExecutionService,
+    WorkerConfig,
+    select_isolation_provider,
+)
 from bizora.core.extraction_persistence_service import (
     ExtractionPersistenceService,
 )
@@ -1336,11 +1340,14 @@ def list_adapters() -> list[AdapterSummary]:
     summaries = []
     for adapter_id, adapter_version in registry.available():
         adapter = registry.resolve(adapter_id, adapter_version)
+        available, reason = adapter_availability(adapter)
         summaries.append(
             AdapterSummary(
                 adapter_id=adapter_id,
                 adapter_version=adapter_version,
                 description=type(adapter).__doc__ or "Registered execution adapter.",
+                available=available,
+                unavailable_reason=reason,
             )
         )
     return summaries
@@ -1903,15 +1910,28 @@ def list_runs(
 
 
 def get_execution_service() -> ExecutionService:
-    """Build the API-driven local execution worker.
+    """Build the API-driven execution worker with configured isolation.
 
     Separated for tests: endpoint tests substitute a stub instead of
     spawning the real supervised child process.
     """
+    try:
+        settings = get_settings()
+    except ValueError:
+        settings = None
+    isolation = None
+    if settings is not None:
+        isolation = select_isolation_provider(settings)
+        if settings.enable_modal and isolation.provider_id != "bizora.modal":
+            logger.warning(
+                "Modal execution is enabled but unavailable "
+                "(missing SDK or credentials); using local execution."
+            )
     return ExecutionService(
         get_session_factory(),
         WorkerConfig(worker_id="api-executor", max_runtime_seconds=600),
         telemetry_bus=get_shared_bus(),
+        isolation_provider=isolation,
     )
 
 

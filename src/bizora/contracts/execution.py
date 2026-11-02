@@ -36,6 +36,8 @@ class AdapterSummary(BaseModel):
     adapter_id: str = Field(min_length=1, max_length=128)
     adapter_version: str = Field(min_length=1, max_length=32)
     description: str = Field(min_length=1, max_length=500)
+    available: bool
+    unavailable_reason: str | None = Field(default=None, max_length=500)
 
 
 class StructuredError(BaseModel):

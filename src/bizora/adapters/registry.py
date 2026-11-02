@@ -51,5 +51,27 @@ def create_default_registry() -> AdapterRegistry:
     """Return a registry with the built-in execution adapters."""
     from bizora.adapters.deterministic_test import DeterministicTestAdapter
     from bizora.adapters.ngspice_adapter import NgspiceAdapter
+    from bizora.adapters.torch_adapter import TorchTrainAdapter
 
-    return AdapterRegistry([DeterministicTestAdapter(), NgspiceAdapter()])
+    return AdapterRegistry(
+        [DeterministicTestAdapter(), NgspiceAdapter(), TorchTrainAdapter()]
+    )
+
+
+def adapter_availability(adapter: ExecutionAdapter) -> tuple[bool, str | None]:
+    """Report whether this host can execute an adapter right now.
+
+    Local execution truth only: remote backends are selected per-run.
+    """
+    from bizora.adapters.ngspice_runner import resolve_ngspice
+    from bizora.adapters.torch_adapter import torch_version
+
+    if adapter.adapter_id == "bizora.torch-train":
+        if torch_version() is None:
+            return False, "torch is not installed in the execution environment."
+        return True, None
+    if adapter.adapter_id == "bizora.ngspice":
+        if resolve_ngspice() is None:
+            return False, "No ngspice binary found on PATH or at the known location."
+        return True, None
+    return True, None

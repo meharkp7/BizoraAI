@@ -201,6 +201,8 @@ test.beforeEach(async ({ page }) => {
           adapter_id: "bizora.deterministic-test",
           adapter_version: "0.1.0",
           description: "Deterministic validation.",
+          available: true,
+          unavailable_reason: null,
         },
       ],
     });
@@ -231,6 +233,35 @@ test("palette adds a library component as a new node", async ({ page }) => {
 
   await expect(page.getByText("Saved as revision 3.")).toBeVisible();
   await expect(page).toHaveURL(/v=3/);
+});
+
+test("run panel names unavailable adapters", async ({ page }) => {
+  await page.route("**/api/v1/experiments/adapters", async (route) => {
+    await route.fulfill({
+      json: [
+        {
+          adapter_id: "bizora.deterministic-test",
+          adapter_version: "0.1.0",
+          description: "Deterministic validation.",
+          available: true,
+          unavailable_reason: null,
+        },
+        {
+          adapter_id: "bizora.torch-train",
+          adapter_version: "0.1.0",
+          description: "Torch training.",
+          available: false,
+          unavailable_reason: "torch is not installed in the execution environment.",
+        },
+      ],
+    });
+  });
+
+  await page.goto(WORKSPACE_URL);
+  const panel = page.getByRole("region", { name: "Run revision" });
+  await expect(panel.getByText(/Connected adapters:/)).toBeVisible();
+  await expect(panel.getByText(/bizora\.torch-train/)).toBeVisible();
+  await expect(panel.getByText(/torch is not installed/)).toBeVisible();
 });
 
 test("copilot answers with a library card", async ({ page }) => {

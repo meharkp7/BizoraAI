@@ -6,13 +6,15 @@ time/memory caps, ephemeral workspace, empty environment with no secrets
 mounted). The executor submits runs through the Modal SDK, which is
 imported lazily so unit tests never make live Modal calls.
 
-Dispatch integration with :class:`bizora.core.execution_service.ExecutionService`
-needs a follow-up edit (its spawn path is local-only today); this module
-stays behind the existing provider and execution-adapter interfaces.
+:class:`bizora.core.execution_service.ExecutionService` dispatches to
+:func:`ModalExecutor.submit` plus :func:`ModalExecutor.fetch_result` when the
+Modal isolation provider is selected; the local spawn path stays for
+local-trusted runs.
 """
 
 import importlib
 import importlib.util
+import logging
 import os
 from typing import Any, Final, Literal, cast
 
@@ -21,6 +23,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from bizora.adapters.isolation import IsolationRequirement
 from bizora.contracts.execution import AdapterExecutionRequest
 from bizora.core.errors import BizoraError, ErrorCode
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_APP_NAME = "bizora-experiments"
 DEFAULT_FUNCTION_NAME = "run_adapter"
@@ -116,6 +120,13 @@ class ModalUnavailableError(BizoraError):
         super().__init__(ErrorCode.PROVIDER_UNAVAILABLE, message)
 
 
+class ModalCallError(BizoraError):
+    """Raised when a submitted Modal call fails or returns no result."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(ErrorCode.EXPERIMENT_FAILED, message)
+
+
 class ModalExecutor:
     """Submit adapter executions to Modal; fail closed without SDK/creds."""
 
@@ -182,3 +193,50 @@ class ModalExecutor:
         function = modal.Function.from_name(spec.app_name, spec.function_name)
         call = function.spawn(request_json)
         return str(call.object_id)
+
+    def fetch_result(self, invocation_id: str, timeout_seconds: float) -> str:
+        """Block for one submitted call and return its result JSON.
+
+        Raises TimeoutError when the slice expires so the caller can
+        heartbeat and retry, and ModalCallError when the call itself
+        failed. Unit tests stub _fetch; the live SDK path stays here.
+        """
+        if not self.sdk_available():
+            raise ModalUnavailableError(
+                "Modal execution needs the 'modal' package."
+            )
+        if not self.credentials_present():
+            raise ModalUnavailableError(
+                "Modal execution needs MODAL_TOKEN_ID and MODAL_TOKEN_SECRET."
+            )
+        try:
+            return self._fetch(invocation_id, timeout_seconds)
+        except TimeoutError:
+            raise
+        except ModalCallError:
+            raise
+        except Exception as exc:
+            if type(exc).__name__.endswith("TimeoutError"):
+                raise TimeoutError(
+                    f"Modal call {invocation_id} timed out after "
+                    f"{timeout_seconds}s."
+                ) from exc
+            raise ModalCallError(
+                f"Modal call {invocation_id} failed: {exc}"
+            ) from exc
+
+    def _fetch(self, invocation_id: str, timeout_seconds: float) -> str:
+        """Wait on one Modal call (live call; never exercised in tests)."""
+        modal = cast(Any, importlib.import_module("modal"))
+        call = modal.FunctionCall.from_id(invocation_id)
+        return str(call.get(timeout=timeout_seconds))
+
+    def cancel(self, invocation_id: str) -> None:
+        """Best-effort cancel of one submitted call; never raises."""
+        try:
+            if not self.sdk_available() or not self.credentials_present():
+                return
+            modal = cast(Any, importlib.import_module("modal"))
+            modal.FunctionCall.from_id(invocation_id).cancel()
+        except Exception:
+            logger.warning("Modal cancel failed for %s.", invocation_id)

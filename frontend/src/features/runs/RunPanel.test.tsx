@@ -35,6 +35,7 @@ describe("RunPanel", () => {
     );
     render(<RunPanel projectId="project-1" graph={graphFixture} />, { wrapper });
 
+    await screen.findByRole("option", { name: /deterministic-test \(0\.1\.0\)/ });
     fireEvent.change(screen.getByLabelText("Seed"), { target: { value: "7" } });
     fireEvent.click(screen.getByRole("button", { name: `Run v${graphFixture.version}` }));
 
@@ -78,6 +79,7 @@ describe("RunPanel", () => {
     );
     expect(screen.queryByLabelText("Live run telemetry")).not.toBeInTheDocument();
 
+    await screen.findByRole("option", { name: /deterministic-test \(0\.1\.0\)/ });
     fireEvent.click(screen.getByRole("button", { name: `Run v${graphFixture.version}` }));
 
     expect(await screen.findByLabelText("Live run telemetry")).toBeInTheDocument();
@@ -96,11 +98,15 @@ describe("RunPanel", () => {
             adapter_id: "bizora.deterministic-test",
             adapter_version: "0.1.0",
             description: "Deterministic validation.",
+            available: true,
+            unavailable_reason: null,
           },
           {
             adapter_id: "bizora.ngspice",
             adapter_version: "0.1.0",
             description: "SPICE-class circuit simulation.",
+            available: true,
+            unavailable_reason: null,
           },
         ]),
       ),
@@ -129,5 +135,38 @@ describe("RunPanel", () => {
       adapter_id: "bizora.ngspice",
       adapter_version: "0.1.0",
     });
+  });
+
+  it("disables unavailable adapters and names the reason", async () => {
+    server.use(
+      http.get("/api/v1/experiments/adapters", () =>
+        HttpResponse.json([
+          {
+            adapter_id: "bizora.deterministic-test",
+            adapter_version: "0.1.0",
+            description: "Deterministic validation.",
+            available: true,
+            unavailable_reason: null,
+          },
+          {
+            adapter_id: "bizora.torch-train",
+            adapter_version: "0.1.0",
+            description: "Torch training.",
+            available: false,
+            unavailable_reason: "torch is not installed in the execution environment.",
+          },
+        ]),
+      ),
+    );
+    render(<RunPanel projectId="project-1" graph={graphFixture} />, { wrapper });
+
+    const option = await screen.findByRole("option", { name: /torch-train/ });
+    expect(option).toBeDisabled();
+    expect(
+      screen.getByText(/bizora\.torch-train \(torch is not installed/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: `Run v${graphFixture.version}` }),
+    ).toBeEnabled();
   });
 });

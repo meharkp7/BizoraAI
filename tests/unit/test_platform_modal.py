@@ -19,6 +19,7 @@ from bizora.adapters.isolation import (
 from bizora.adapters.modal_executor import (
     MAX_MEMORY_MB,
     MIN_MEMORY_MB,
+    ModalCallError,
     ModalExecutor,
     ModalFunctionSpec,
     ModalIsolationProvider,
@@ -232,3 +233,80 @@ def test_submit_fails_closed_without_credentials(monkeypatch: MonkeyPatch) -> No
         ModalExecutor().submit(make_request())
 
     assert exc_info.value.code == ErrorCode.PROVIDER_UNAVAILABLE
+
+
+def test_fetch_returns_payload_through_stubbed_boundary(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(ModalExecutor, "sdk_available", staticmethod(lambda: True))
+    monkeypatch.setenv("MODAL_TOKEN_ID", FAKE_TOKEN_ID)
+    monkeypatch.setenv("MODAL_TOKEN_SECRET", FAKE_TOKEN_SECRET)
+    monkeypatch.setattr(
+        ModalExecutor, "_fetch", lambda self, call_id, timeout: '{"ok": true}'
+    )
+
+    assert ModalExecutor().fetch_result("call-1", 5.0) == '{"ok": true}'
+
+
+def test_fetch_maps_sdk_timeout_to_timeout_error(monkeypatch: MonkeyPatch) -> None:
+    class ModalTimeoutError(Exception):
+        pass
+
+    def explode(self: ModalExecutor, call_id: str, timeout: float) -> str:
+        raise ModalTimeoutError("timed out")
+
+    monkeypatch.setattr(ModalExecutor, "sdk_available", staticmethod(lambda: True))
+    monkeypatch.setenv("MODAL_TOKEN_ID", FAKE_TOKEN_ID)
+    monkeypatch.setenv("MODAL_TOKEN_SECRET", FAKE_TOKEN_SECRET)
+    monkeypatch.setattr(ModalExecutor, "_fetch", explode)
+
+    with pytest.raises(TimeoutError, match="call-1"):
+        ModalExecutor().fetch_result("call-1", 0.1)
+
+
+def test_fetch_wraps_call_failure(monkeypatch: MonkeyPatch) -> None:
+    def explode(self: ModalExecutor, call_id: str, timeout: float) -> str:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(ModalExecutor, "sdk_available", staticmethod(lambda: True))
+    monkeypatch.setenv("MODAL_TOKEN_ID", FAKE_TOKEN_ID)
+    monkeypatch.setenv("MODAL_TOKEN_SECRET", FAKE_TOKEN_SECRET)
+    monkeypatch.setattr(ModalExecutor, "_fetch", explode)
+
+    with pytest.raises(ModalCallError) as exc_info:
+        ModalExecutor().fetch_result("call-1", 5.0)
+
+    assert exc_info.value.code == ErrorCode.EXPERIMENT_FAILED
+    assert "boom" in str(exc_info.value)
+
+
+def test_fetch_fails_closed_without_sdk_or_credentials(monkeypatch: MonkeyPatch) -> None:
+    def explode(self: ModalExecutor, call_id: str, timeout: float) -> str:
+        raise AssertionError("fail-closed fetch must never invoke Modal")
+
+    monkeypatch.setattr(ModalExecutor, "_fetch", explode)
+    monkeypatch.setattr(ModalExecutor, "sdk_available", staticmethod(lambda: False))
+    monkeypatch.setenv("MODAL_TOKEN_ID", FAKE_TOKEN_ID)
+    monkeypatch.setenv("MODAL_TOKEN_SECRET", FAKE_TOKEN_SECRET)
+    with pytest.raises(ModalUnavailableError):
+        ModalExecutor().fetch_result("call-1", 5.0)
+
+    monkeypatch.setattr(ModalExecutor, "sdk_available", staticmethod(lambda: True))
+    monkeypatch.delenv("MODAL_TOKEN_ID", raising=False)
+    monkeypatch.delenv("MODAL_TOKEN_SECRET", raising=False)
+    with pytest.raises(ModalUnavailableError):
+        ModalExecutor().fetch_result("call-1", 5.0)
+
+
+def test_cancel_never_raises(monkeypatch: MonkeyPatch) -> None:
+    def explode(name: str, *args: object, **kwargs: object) -> object:
+        raise AssertionError("cancel must stay best-effort")
+
+    monkeypatch.setattr(ModalExecutor, "sdk_available", staticmethod(lambda: True))
+    monkeypatch.setenv("MODAL_TOKEN_ID", FAKE_TOKEN_ID)
+    monkeypatch.setenv("MODAL_TOKEN_SECRET", FAKE_TOKEN_SECRET)
+    monkeypatch.setattr("importlib.import_module", explode)
+
+    assert ModalExecutor().cancel("call-1") is None
+
+    monkeypatch.delenv("MODAL_TOKEN_ID", raising=False)
+    monkeypatch.delenv("MODAL_TOKEN_SECRET", raising=False)
+    assert ModalExecutor().cancel("call-1") is None

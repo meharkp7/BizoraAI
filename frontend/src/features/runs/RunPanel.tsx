@@ -35,6 +35,8 @@ export function RunPanel({
   const options = adapters.data ?? [];
   const selected = options.find((adapter) => adapter.adapter_id === adapterId) ?? null;
   const adapterVersion = selected?.adapter_version ?? DEFAULT_ADAPTER_VERSION;
+  const unavailable = options.filter((adapter) => !adapter.available);
+  const runnable = selected?.available ?? false;
 
   function submit(event: FormEvent): void {
     event.preventDefault();
@@ -89,9 +91,23 @@ export function RunPanel({
       <p className={styles.hint}>
         Connected adapters:{" "}
         {adapters.data
-          ? adapters.data.map((adapter) => adapter.adapter_id).join(", ")
+          ? options
+              .filter((adapter) => adapter.available)
+              .map((adapter) => adapter.adapter_id)
+              .join(", ") || "none"
           : "loading…"}
       </p>
+      {unavailable.length > 0 ? (
+        <p className={styles.hint}>
+          Unavailable:{" "}
+          {unavailable
+            .map(
+              (adapter) =>
+                `${adapter.adapter_id} (${adapter.unavailable_reason ?? "unknown reason"})`,
+            )
+            .join("; ")}
+        </p>
+      ) : null}
       {selected ? <p className={styles.hint}>{selected.description}</p> : null}
       <p className={styles.hint}>
         Hardware-in-the-loop, ML training, and LLM inference are not connected.
@@ -105,8 +121,13 @@ export function RunPanel({
             disabled={options.length === 0}
           >
             {options.map((adapter) => (
-              <option key={adapter.adapter_id} value={adapter.adapter_id}>
+              <option
+                key={adapter.adapter_id}
+                value={adapter.adapter_id}
+                disabled={!adapter.available}
+              >
                 {adapter.adapter_id} ({adapter.adapter_version})
+                {adapter.available ? "" : " (unavailable)"}
               </option>
             ))}
             {options.length === 0 ? (
@@ -133,7 +154,7 @@ export function RunPanel({
             autoComplete="off"
           />
         </label>
-        <button type="submit" disabled={busy || !experimentId.trim()}>
+        <button type="submit" disabled={busy || !experimentId.trim() || !runnable}>
           {busy ? "Running…" : `Run v${graph.version}`}
         </button>
       </form>
