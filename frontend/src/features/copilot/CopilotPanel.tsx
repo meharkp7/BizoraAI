@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { useCopilot } from "../../app/queries.ts";
+import { useCopilotStream } from "./useCopilotStream.ts";
 import type { CanvasView } from "../../app/routeElements.tsx";
 import { NODE_KINDS } from "../../lib/constants.ts";
 import { useLibrarySelection, useWorkspaceSelection } from "../../lib/store.ts";
@@ -21,6 +21,7 @@ interface Turn {
   id: number;
   message: string;
   response: CopilotResponse | null;
+  status: string | null;
   error: string | null;
 }
 
@@ -160,7 +161,7 @@ export function CopilotPanel({
   selection: DiagramSelection | null;
   onSubmit: (patches: GraphPatch[]) => void;
 }) {
-  const copilot = useCopilot(projectId, graph.graph_id, graph.version);
+  const copilot = useCopilotStream(projectId, graph.graph_id, graph.version);
   const { selectedNodeIds } = useWorkspaceSelection();
   const [input, setInput] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -174,28 +175,35 @@ export function CopilotPanel({
     if (text === "" || copilot.isPending) return;
     turnIdRef.current += 1;
     const id = turnIdRef.current;
-    setTurns((current) => [...current, { id, message: text, response: null, error: null }]);
+    setTurns((current) => [
+      ...current,
+      { id, message: text, response: null, status: null, error: null },
+    ]);
     setInput("");
-    copilot.mutate(
-      { message: text, selectedNodeId: selectedNode?.id ?? null, diagramContext },
-      {
-        onSuccess: (response) =>
-          setTurns((current) =>
-            current.map((turn) => (turn.id === id ? { ...turn, response } : turn)),
+    void copilot.ask(text, selectedNode?.id ?? null, diagramContext, {
+      onStatus: (status) =>
+        setTurns((current) =>
+          current.map((turn) => (turn.id === id ? { ...turn, status } : turn)),
+        ),
+      onDone: (response) =>
+        setTurns((current) =>
+          current.map((turn) =>
+            turn.id === id ? { ...turn, response, status: null } : turn,
           ),
-        onError: (error) =>
-          setTurns((current) =>
-            current.map((turn) =>
-              turn.id === id
-                ? {
-                    ...turn,
-                    error: error instanceof Error ? error.message : "The copilot failed.",
-                  }
-                : turn,
-            ),
+        ),
+      onError: (error) =>
+        setTurns((current) =>
+          current.map((turn) =>
+            turn.id === id
+              ? {
+                  ...turn,
+                  status: null,
+                  error: error instanceof Error ? error.message : "The copilot failed.",
+                }
+              : turn,
           ),
-      },
-    );
+        ),
+    });
   }
 
   return (
@@ -252,7 +260,7 @@ export function CopilotPanel({
                   {turn.error}
                 </p>
               ) : (
-                <p className={styles.reply}>Thinking…</p>
+                <p className={styles.reply}>{turn.status ?? "Thinking…"}</p>
               )}
               {chips.length > 0 ? (
                 <div className={styles.chips} aria-label="Follow-up questions">

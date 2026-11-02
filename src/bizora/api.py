@@ -1,7 +1,9 @@
 """HTTP routes for the Bizora API."""
 
 import hashlib
+import json
 import logging
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Annotated, Any
 from urllib.parse import quote
@@ -17,7 +19,7 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -75,13 +77,17 @@ from bizora.contracts.table import (
     SuggestedIds,
 )
 from bizora.contracts.usage import RunUsage, UsageSummary
-from bizora.copilot.service import CopilotRunReport
+from bizora.copilot.service import (
+    CopilotDoneEvent,
+    CopilotRunReport,
+    CopilotStatusEvent,
+)
 from bizora.copilot.tools import CopilotContext
 from bizora.core.comparison_service import ComparisonService
 from bizora.core.component_catalog import get_component, search_components
 from bizora.core.component_service import preflight_removal, preflight_replacement
 from bizora.core.config import Settings, get_settings
-from bizora.core.copilot_service import answer_copilot_async
+from bizora.core.copilot_service import answer_copilot_async, answer_copilot_stream
 from bizora.core.diagram_extraction import (
     MuseDiagramProvider,
     extract_paper_diagrams,
@@ -1220,19 +1226,14 @@ def _copilot_provider_or_none() -> CopilotProvider | None:
         return None
 
 
-@router.post(
-    "/api/v1/graphs/{project_id}/{graph_id}/revisions/{version}/copilot",
-    response_model=CopilotResponse,
-    tags=["graphs"],
-)
-async def ask_copilot(
+def _copilot_context(
+    session: Session,
     project_id: str,
     graph_id: str,
     version: int,
     request: CopilotRequest,
-    session: Session = DB_SESSION_DEPENDENCY,
-) -> CopilotResponse:
-    """Answer one copilot message against the catalog and graph state."""
+) -> tuple[MethodologyGraph, CopilotContext]:
+    """Load one revision plus the tool context for a copilot turn."""
     graph = _revision_or_404(session, project_id, graph_id, version)
 
     def load_revision(target: int) -> MethodologyGraph | None:
@@ -1280,13 +1281,79 @@ async def ask_copilot(
         list_tables=list_tables,
         list_figures=list_figures,
     )
+    return graph, context
+
+
+def _record_copilot_usage(
+    session: Session,
+    settings: Settings,
+    project_id: str,
+    graph_id: str,
+    report: CopilotRunReport,
+) -> None:
+    """Persist one copilot turn's token usage when the provider reported any."""
+    if not report.usage:
+        return
+    models = [usage.model for usage in report.usage if usage.model]
+    input_tokens = (
+        report.total_input_tokens
+        if any(usage.input_tokens is not None for usage in report.usage)
+        else None
+    )
+    output_tokens = (
+        report.total_output_tokens
+        if any(usage.output_tokens is not None for usage in report.usage)
+        else None
+    )
+    record_usage(
+        session,
+        kind="copilot",
+        provider=report.provider_name,
+        model=models[0] if models else None,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        cost_usd_estimated=estimate_cost(
+            input_tokens,
+            output_tokens,
+            usd_per_1k_input=settings.usd_per_1k_input,
+            usd_per_1k_output=settings.usd_per_1k_output,
+        ),
+        project_id=project_id,
+        graph_id=graph_id,
+    )
+
+
+def _copilot_frame(kind: str, payload: dict[str, Any]) -> str:
+    """Encode one copilot stream event as an SSE frame."""
+    return f"event: {kind}\ndata: {json.dumps(payload)}\n\n"
+
+
+def _copilot_settings_or_503() -> Settings:
+    """Load settings for a copilot turn or fail with 503."""
     try:
-        settings = get_settings()
+        return get_settings()
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Provider configuration is invalid.",
         ) from exc
+
+
+@router.post(
+    "/api/v1/graphs/{project_id}/{graph_id}/revisions/{version}/copilot",
+    response_model=CopilotResponse,
+    tags=["graphs"],
+)
+async def ask_copilot(
+    project_id: str,
+    graph_id: str,
+    version: int,
+    request: CopilotRequest,
+    session: Session = DB_SESSION_DEPENDENCY,
+) -> CopilotResponse:
+    """Answer one copilot message against the catalog and graph state."""
+    graph, context = _copilot_context(session, project_id, graph_id, version, request)
+    settings = _copilot_settings_or_503()
     check_spend_caps(session, settings, now=datetime.now(UTC))
     report = CopilotRunReport(provider_name="unknown")
     response = await answer_copilot_async(
@@ -1298,35 +1365,47 @@ async def ask_copilot(
         mode="auto",
         report=report,
     )
-    if report.usage:
-        models = [usage.model for usage in report.usage if usage.model]
-        input_tokens = (
-            report.total_input_tokens
-            if any(usage.input_tokens is not None for usage in report.usage)
-            else None
-        )
-        output_tokens = (
-            report.total_output_tokens
-            if any(usage.output_tokens is not None for usage in report.usage)
-            else None
-        )
-        record_usage(
-            session,
-            kind="copilot",
-            provider=report.provider_name,
-            model=models[0] if models else None,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            cost_usd_estimated=estimate_cost(
-                input_tokens,
-                output_tokens,
-                usd_per_1k_input=settings.usd_per_1k_input,
-                usd_per_1k_output=settings.usd_per_1k_output,
-            ),
-            project_id=project_id,
-            graph_id=graph_id,
-        )
+    _record_copilot_usage(session, settings, project_id, graph_id, report)
     return response
+
+
+@router.post(
+    "/api/v1/graphs/{project_id}/{graph_id}/revisions/{version}/copilot/stream",
+    tags=["graphs"],
+)
+async def stream_copilot(
+    project_id: str,
+    graph_id: str,
+    version: int,
+    request: CopilotRequest,
+    session: Session = DB_SESSION_DEPENDENCY,
+) -> StreamingResponse:
+    """Stream one copilot turn: progress statuses, then the final response."""
+    graph, context = _copilot_context(session, project_id, graph_id, version, request)
+    settings = _copilot_settings_or_503()
+    check_spend_caps(session, settings, now=datetime.now(UTC))
+    provider = _copilot_provider_or_none()
+    report = CopilotRunReport(provider_name="unknown")
+
+    async def generate() -> AsyncIterator[str]:
+        async for event in answer_copilot_stream(
+            graph,
+            request.message,
+            request.selected_node_id,
+            provider=provider,
+            context=context,
+            mode="auto",
+            report=report,
+        ):
+            if isinstance(event, CopilotStatusEvent):
+                yield _copilot_frame("status", {"message": event.message})
+            elif isinstance(event, CopilotDoneEvent):
+                yield _copilot_frame(
+                    "done", {"response": event.response.model_dump(mode="json")}
+                )
+        _record_copilot_usage(session, settings, project_id, graph_id, report)
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
 
 
 @router.get(

@@ -569,6 +569,18 @@ export const copilotFixture: CopilotResponse = {
   proposal: null,
 };
 
+/** Encode one copilot turn as SSE frames, mirroring the backend stream. */
+export function copilotStreamBody(
+  response: CopilotResponse,
+  statuses: string[] = ["Answering from the workspace graph…"],
+): string {
+  const frames = statuses.map(
+    (message) => `event: status\ndata: ${JSON.stringify({ message })}\n\n`,
+  );
+  frames.push(`event: done\ndata: ${JSON.stringify({ response })}\n\n`);
+  return frames.join("");
+}
+
 export const adaptersFixture: AdapterSummary[] = [
   {
     adapter_id: "bizora.deterministic-test",

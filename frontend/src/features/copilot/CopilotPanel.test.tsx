@@ -3,10 +3,11 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { api } from "../../lib/api.ts";
 import { useLibrarySelection, useWorkspaceSelection } from "../../lib/store.ts";
 import type { GraphPatch } from "../../lib/types.ts";
-import { copilotFixture, graphFixture } from "../../test/fixtures.ts";
+import { copilotFixture, copilotStreamBody, graphFixture } from "../../test/fixtures.ts";
 import { server } from "../../test/server.ts";
 import type { DiagramSelection } from "../diagrams/selection.ts";
 import { CopilotPanel } from "./CopilotPanel.tsx";
@@ -30,6 +31,53 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 
 describe("CopilotPanel", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("shows stream progress while the answer is pending", async () => {
+    useWorkspaceSelection.setState({ selectedNodeIds: [], selectedEdgeIds: [] });
+    let releaseDone!: () => void;
+    const doneGate = new Promise<void>((resolve) => {
+      releaseDone = resolve;
+    });
+    const encoder = new TextEncoder();
+    const statusChunk = `event: status\ndata: ${JSON.stringify({ message: "Thinking (round 1)…" })}\n\n`;
+    const doneChunk = `event: done\ndata: ${JSON.stringify({ response: copilotFixture })}\n\n`;
+    vi.spyOn(api, "postCopilotStream").mockResolvedValue(
+      new Response(
+        new ReadableStream<Uint8Array>({
+          async start(controller) {
+            controller.enqueue(encoder.encode(statusChunk));
+            await doneGate;
+            controller.enqueue(encoder.encode(doneChunk));
+            controller.close();
+          },
+        }),
+        { headers: { "Content-Type": "text/event-stream" } },
+      ),
+    );
+    const user = userEvent.setup();
+    render(
+      <CopilotPanel
+        projectId="project-1"
+        graph={graphFixture}
+        disabled={false}
+        view="methodology"
+        selection={null}
+        onSubmit={() => {}}
+      />,
+      { wrapper },
+    );
+
+    await user.type(screen.getByLabelText("Copilot message"), "why is this slow?");
+    await user.click(screen.getByRole("button", { name: "Ask" }));
+
+    expect(await screen.findByText("Thinking (round 1)…")).toBeInTheDocument();
+    releaseDone();
+    expect(await screen.findByText(/Closest library matches/)).toBeInTheDocument();
+  });
+
   it("answers with library cards that open the library", async () => {
     useWorkspaceSelection.setState({ selectedNodeIds: ["encoder"], selectedEdgeIds: [] });
     useLibrarySelection.setState({ selectedComponentId: null, indexTab: "graph" });
@@ -58,8 +106,8 @@ describe("CopilotPanel", () => {
   it("approves a replacement proposal as a patch", async () => {
     useWorkspaceSelection.setState({ selectedNodeIds: ["encoder"], selectedEdgeIds: [] });
     server.use(
-      http.post("/api/v1/graphs/:projectId/:graphId/revisions/:version/copilot", () =>
-        HttpResponse.json({
+      http.post("/api/v1/graphs/:projectId/:graphId/revisions/:version/copilot/stream", () =>
+        new HttpResponse(copilotStreamBody({
           reply: "2N3904 NPN transistor is compatible with Transformer encoder.",
           cards: [
             {
@@ -79,7 +127,7 @@ describe("CopilotPanel", () => {
             config: { part: "2N3904" },
             rationale: "Test proposal.",
           },
-        }),
+        }), { headers: { "Content-Type": "text/event-stream" } }),
       ),
     );
     const onSubmit = vi.fn();
@@ -111,8 +159,8 @@ describe("CopilotPanel", () => {
   it("approves a config-only proposal as a config patch", async () => {
     useWorkspaceSelection.setState({ selectedNodeIds: ["encoder"], selectedEdgeIds: [] });
     server.use(
-      http.post("/api/v1/graphs/:projectId/:graphId/revisions/:version/copilot", () =>
-        HttpResponse.json({
+      http.post("/api/v1/graphs/:projectId/:graphId/revisions/:version/copilot/stream", () =>
+        new HttpResponse(copilotStreamBody({
           reply: "Ready to set layers.",
           cards: [
             {
@@ -132,7 +180,7 @@ describe("CopilotPanel", () => {
             config: { layers: 24 },
             rationale: "Test config proposal.",
           },
-        }),
+        }), { headers: { "Content-Type": "text/event-stream" } }),
       ),
     );
     const onSubmit = vi.fn();
@@ -166,10 +214,10 @@ describe("CopilotPanel", () => {
     const bodies: Array<Record<string, unknown>> = [];
     server.use(
       http.post(
-        "/api/v1/graphs/:projectId/:graphId/revisions/:version/copilot",
+        "/api/v1/graphs/:projectId/:graphId/revisions/:version/copilot/stream",
         async ({ request }) => {
           bodies.push((await request.json()) as Record<string, unknown>);
-          return HttpResponse.json(copilotFixture);
+          return new HttpResponse(copilotStreamBody(copilotFixture), { headers: { "Content-Type": "text/event-stream" } });
         },
       ),
     );

@@ -8,6 +8,7 @@ import {
   componentGenericFixture,
   componentSummaryFixture,
   copilotFixture,
+  copilotStreamBody,
   diagramsFixture,
   diffFixture,
   entitiesFixture,
@@ -230,6 +231,14 @@ export const handlers = [
 
   http.post("/api/v1/graphs/:projectId/:graphId/revisions/:version/copilot", () =>
     HttpResponse.json(copilotFixture),
+  ),
+
+  http.post(
+    "/api/v1/graphs/:projectId/:graphId/revisions/:version/copilot/stream",
+    () =>
+      new HttpResponse(copilotStreamBody(copilotFixture), {
+        headers: { "Content-Type": "text/event-stream" },
+      }),
   ),
 
   http.get("/api/v1/experiments/adapters", () => HttpResponse.json(adaptersFixture)),

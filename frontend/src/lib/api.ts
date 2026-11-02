@@ -462,6 +462,41 @@ export const api = {
     );
   },
 
+  async postCopilotStream(
+    projectId: string,
+    graphId: string,
+    version: number,
+    message: string,
+    selectedNodeId: string | null,
+    diagramContext: string | null,
+    signal?: AbortSignal,
+  ): Promise<Response> {
+    const response = await send(
+      `/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/revisions/${version}/copilot/stream`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+        body: JSON.stringify({
+          message,
+          selected_node_id: selectedNodeId,
+          diagram_context: diagramContext,
+        }),
+        signal,
+      },
+    );
+    if (!response.ok) {
+      // parse() always throws for error responses; the line after is unreachable.
+      await parse<unknown>(response);
+      throw new BizoraApiError(
+        response.status,
+        "UNEXPECTED_RESPONSE",
+        `Request failed with status ${response.status}.`,
+        {},
+      );
+    }
+    return response;
+  },
+
   listAdapters(): Promise<AdapterSummary[]> {
     return request(`/api/v1/experiments/adapters`);
   },

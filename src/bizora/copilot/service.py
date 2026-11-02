@@ -11,7 +11,9 @@ returned for human approval and never applied here.
 
 from __future__ import annotations
 
+import asyncio
 import json
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -295,38 +297,34 @@ def _parse_final_answer(content: str) -> CopilotAnswer:
     return CopilotAnswer.model_validate(data)
 
 
-async def answer_with_llm(
-    message: str,
-    context: CopilotContext,
+@dataclass(frozen=True)
+class CopilotStatusEvent:
+    """One progress note from a streaming copilot turn."""
+
+    message: str
+
+
+@dataclass(frozen=True)
+class CopilotDoneEvent:
+    """The final grounded response of a streaming copilot turn."""
+
+    response: CopilotResponse
+
+
+async def _run_tool_loop(
     provider: CopilotProvider,
-    *,
-    max_rounds: int = MAX_TOOL_ROUNDS,
-    report: CopilotRunReport | None = None,
-) -> CopilotResponse:
-    """Answer one message through the provider's tool loop.
-
-    Raises :class:`CopilotProviderError` when the provider cannot
-    produce a usable answer; callers fall back to the deterministic
-    engine in that case.
-    """
-    run_report = report if report is not None else CopilotRunReport(provider_name="unknown")
-    run_report.provider_name = provider.provider_name
-    if max_rounds < 1:
-        raise CopilotProviderError("max_rounds must be at least 1.")
-
-    question = message.strip()[:8000] or "(empty question)"
-    if context.diagram_context:
-        question += f"\n\n[Viewer context: {context.diagram_context.strip()[:280]}]"
-    history: list[CopilotMessage] = [
-        CopilotMessage(role="system", content=SYSTEM_PROMPT),
-        CopilotMessage(role="user", content=question),
-    ]
+    history: list[CopilotMessage],
+    specs: list[Any],
+    context: CopilotContext,
+    run_report: CopilotRunReport,
+    max_rounds: int,
+    emit: Callable[[str], Awaitable[None]] | None,
+) -> list[dict[str, Any]]:
+    """Run the bounded tool loop, emitting one status per round when asked."""
     tool_results: list[dict[str, Any]] = []
-    specs = list(TOOL_SPECS)
-    if context.pack is not None:
-        specs.extend(pack_tool_specs(context.pack))
-
-    for _ in range(max_rounds):
+    for round_index in range(max_rounds):
+        if emit is not None:
+            await emit(f"Thinking (round {round_index + 1})…")
         turn: CopilotAssistantTurn = await provider.chat(history, specs)
         run_report.turns.append(
             CopilotAssistantTurn(content=turn.content, tool_calls=turn.tool_calls)
@@ -337,6 +335,9 @@ async def answer_with_llm(
             history.append(CopilotMessage(role="assistant", content=turn.content or "(no content)"))
             break
         run_report.tool_rounds += 1
+        if emit is not None:
+            names = ", ".join(call.name for call in turn.tool_calls)
+            await emit(f"Consulting {names}…")
         history.append(
             CopilotMessage(
                 role="assistant",
@@ -357,19 +358,16 @@ async def answer_with_llm(
             )
     else:
         history.append(CopilotMessage(role="assistant", content="(tool budget spent)"))
+    return tool_results
 
-    history.append(CopilotMessage(role="user", content=FINAL_ANSWER_INSTRUCTION))
-    final: CopilotAssistantTurn = await provider.chat(
-        history, [], response_schema=COPILOT_ANSWER_OUTPUT_SCHEMA
-    )
-    run_report.turns.append(CopilotAssistantTurn(content=final.content))
-    if final.usage is not None:
-        run_report.usage.append(final.usage)
-    try:
-        answer = _parse_final_answer(final.content)
-    except (ValueError, ValidationError) as exc:
-        raise CopilotProviderError(f"The model returned an invalid final answer ({exc}).") from exc
 
+def _finalize_llm_answer(
+    answer: Any,
+    tool_results: list[dict[str, Any]],
+    context: CopilotContext,
+    run_report: CopilotRunReport,
+) -> CopilotResponse:
+    """Validate citations and proposals, then build the grounded response."""
     citation_report = validate_citations(answer, tool_results, context)
     run_report.valid_citations = len(citation_report.valid)
     run_report.invalid_citations = len(citation_report.invalid)
@@ -389,4 +387,117 @@ async def answer_with_llm(
     )
     return build_grounded_response(
         grounded, context, dropped_citations=len(citation_report.invalid)
+    )
+
+
+async def _request_final_answer(
+    provider: CopilotProvider,
+    history: list[CopilotMessage],
+    run_report: CopilotRunReport,
+) -> Any:
+    """Request and parse the schema-constrained final answer."""
+    history.append(CopilotMessage(role="user", content=FINAL_ANSWER_INSTRUCTION))
+    final: CopilotAssistantTurn = await provider.chat(
+        history, [], response_schema=COPILOT_ANSWER_OUTPUT_SCHEMA
+    )
+    run_report.turns.append(CopilotAssistantTurn(content=final.content))
+    if final.usage is not None:
+        run_report.usage.append(final.usage)
+    try:
+        return _parse_final_answer(final.content)
+    except (ValueError, ValidationError) as exc:
+        raise CopilotProviderError(f"The model returned an invalid final answer ({exc}).") from exc
+
+
+def _loop_inputs(
+    message: str, context: CopilotContext
+) -> tuple[list[CopilotMessage], list[Any]]:
+    """Build the opening history and tool specs for one turn."""
+    question = message.strip()[:8000] or "(empty question)"
+    if context.diagram_context:
+        question += f"\n\n[Viewer context: {context.diagram_context.strip()[:280]}]"
+    history: list[CopilotMessage] = [
+        CopilotMessage(role="system", content=SYSTEM_PROMPT),
+        CopilotMessage(role="user", content=question),
+    ]
+    specs = list(TOOL_SPECS)
+    if context.pack is not None:
+        specs.extend(pack_tool_specs(context.pack))
+    return history, specs
+
+
+async def answer_with_llm(
+    message: str,
+    context: CopilotContext,
+    provider: CopilotProvider,
+    *,
+    max_rounds: int = MAX_TOOL_ROUNDS,
+    report: CopilotRunReport | None = None,
+) -> CopilotResponse:
+    """Answer one message through the provider's tool loop.
+
+    Raises :class:`CopilotProviderError` when the provider cannot
+    produce a usable answer; callers fall back to the deterministic
+    engine in that case.
+    """
+    run_report = report if report is not None else CopilotRunReport(provider_name="unknown")
+    run_report.provider_name = provider.provider_name
+    if max_rounds < 1:
+        raise CopilotProviderError("max_rounds must be at least 1.")
+
+    history, specs = _loop_inputs(message, context)
+    tool_results = await _run_tool_loop(
+        provider, history, specs, context, run_report, max_rounds, None
+    )
+    answer = await _request_final_answer(provider, history, run_report)
+    return _finalize_llm_answer(answer, tool_results, context, run_report)
+
+
+async def answer_with_llm_stream(
+    message: str,
+    context: CopilotContext,
+    provider: CopilotProvider,
+    *,
+    max_rounds: int = MAX_TOOL_ROUNDS,
+    report: CopilotRunReport | None = None,
+) -> AsyncIterator[CopilotStatusEvent | CopilotDoneEvent]:
+    """Answer one message, yielding progress before the final response.
+
+    Same tool loop and grounding as :func:`answer_with_llm`; raises
+    :class:`CopilotProviderError` the same way for caller fallback.
+    """
+    run_report = report if report is not None else CopilotRunReport(provider_name="unknown")
+    run_report.provider_name = provider.provider_name
+    if max_rounds < 1:
+        raise CopilotProviderError("max_rounds must be at least 1.")
+
+    history, specs = _loop_inputs(message, context)
+    queue: asyncio.Queue[str | None] = asyncio.Queue()
+
+    async def emit(note: str) -> None:
+        queue.put_nowait(note)
+
+    async def run_loop() -> list[dict[str, Any]]:
+        try:
+            return await _run_tool_loop(
+                provider, history, specs, context, run_report, max_rounds, emit
+            )
+        finally:
+            queue.put_nowait(None)
+
+    task = asyncio.create_task(run_loop())
+    try:
+        while True:
+            note = await queue.get()
+            if note is None:
+                break
+            yield CopilotStatusEvent(message=note)
+    finally:
+        if not task.done():
+            task.cancel()
+    tool_results = await task
+    yield CopilotStatusEvent(message="Writing the final answer…")
+    answer = await _request_final_answer(provider, history, run_report)
+    yield CopilotDoneEvent(
+        response=_finalize_llm_answer(answer, tool_results, context, run_report)
     )

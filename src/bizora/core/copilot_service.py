@@ -10,6 +10,7 @@ explicitly approve; it never writes anything itself.
 from __future__ import annotations
 
 import re
+from collections.abc import AsyncIterator
 from dataclasses import replace
 from typing import Any
 
@@ -21,7 +22,13 @@ from bizora.contracts.components import (
 )
 from bizora.contracts.domain import EntityResolution, GraphEntities
 from bizora.contracts.graph import GraphNode, MethodologyGraph
-from bizora.copilot.service import CopilotRunReport, answer_with_llm
+from bizora.copilot.service import (
+    CopilotDoneEvent,
+    CopilotRunReport,
+    CopilotStatusEvent,
+    answer_with_llm,
+    answer_with_llm_stream,
+)
 from bizora.copilot.tools import CopilotContext
 from bizora.core.component_catalog import (
     CATALOG,
@@ -498,3 +505,44 @@ async def answer_copilot_async(
         if report is not None:
             report.fallback = True
         return answer_copilot(graph, message, selected_node_id)
+
+
+async def answer_copilot_stream(
+    graph: MethodologyGraph,
+    message: str,
+    selected_node_id: str | None = None,
+    *,
+    provider: CopilotProvider | None = None,
+    context: CopilotContext | None = None,
+    mode: str = "auto",
+    report: CopilotRunReport | None = None,
+) -> AsyncIterator[CopilotStatusEvent | CopilotDoneEvent]:
+    """Stream one message: progress statuses, then the final response.
+
+    Same routing and fallback as :func:`answer_copilot_async`: fast-path
+    answers arrive after one status, LLM turns stream per-round progress.
+    """
+    if mode not in ("auto", "fast", "llm"):
+        raise ValueError("mode must be one of: auto, fast, llm.")
+    use_llm = provider is not None and (
+        mode == "llm" or (mode == "auto" and wants_llm_answer(message))
+    )
+    if not use_llm or provider is None:
+        yield CopilotStatusEvent(message="Answering from the workspace graph…")
+        yield CopilotDoneEvent(response=answer_copilot(graph, message, selected_node_id))
+        return
+    active_context = (
+        context if context is not None else build_default_context(graph, selected_node_id)
+    )
+    if active_context.pack is None:
+        active_context = replace(active_context, pack=pack_for_graph(active_context.graph))
+    try:
+        async for event in answer_with_llm_stream(
+            message, active_context, provider, report=report
+        ):
+            yield event
+    except Exception:
+        if report is not None:
+            report.fallback = True
+        yield CopilotStatusEvent(message="The model stumbled; answering directly…")
+        yield CopilotDoneEvent(response=answer_copilot(graph, message, selected_node_id))

@@ -5,7 +5,7 @@ import { HttpResponse, http } from "msw";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import { useWorkspaceSelection } from "../../lib/store.ts";
-import { graphFixture } from "../../test/fixtures.ts";
+import { copilotStreamBody, graphFixture } from "../../test/fixtures.ts";
 import { server } from "../../test/server.ts";
 import { CopilotPanel } from "./CopilotPanel.tsx";
 import { EvidenceCard } from "./EvidenceCard.tsx";
@@ -71,8 +71,8 @@ describe("CopilotPanel grounding", () => {
   it("renders cited answers with badges and the approval gate", async () => {
     useWorkspaceSelection.setState({ selectedNodeIds: ["encoder"], selectedEdgeIds: [] });
     server.use(
-      http.post("/api/v1/graphs/:projectId/:graphId/revisions/:version/copilot", () =>
-        HttpResponse.json({
+      http.post("/api/v1/graphs/:projectId/:graphId/revisions/:version/copilot/stream", () =>
+        new HttpResponse(copilotStreamBody({
           reply: "The paper describes the encoder on page 3.",
           cards: [
             {
@@ -106,7 +106,7 @@ describe("CopilotPanel grounding", () => {
             config: { width: 512 },
             rationale: "Try a wider layer.",
           },
-        }),
+        }), { headers: { "Content-Type": "text/event-stream" } }),
       ),
     );
     const user = userEvent.setup();
