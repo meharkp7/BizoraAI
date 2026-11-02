@@ -251,6 +251,10 @@ class CopilotRequest(BaseModel):
     diagram_elements: list[CopilotDiagramElement] = Field(
         default_factory=list, max_length=40
     )
+    voice: bool = Field(
+        default=False,
+        description="Spoken turn: the reply is read aloud, so it stays short.",
+    )
 
 
 class CopilotResponse(BaseModel):

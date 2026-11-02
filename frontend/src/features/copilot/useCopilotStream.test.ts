@@ -68,6 +68,28 @@ describe("useCopilotStream", () => {
     expect(result.current.isPending).toBe(false);
   });
 
+  it("forwards the voice flag to the stream request", async () => {
+    const body =
+      `event: done\ndata: ${JSON.stringify({ response: copilotFixture })}\n\n`;
+    const post = vi
+      .spyOn(api, "postCopilotStream")
+      .mockResolvedValue(streamedResponse([body]));
+    const { result } = renderHook(() => useCopilotStream("p", "g", 1));
+    const calls = { onStatus: vi.fn(), onDone: vi.fn(), onError: vi.fn() };
+
+    let pending: Promise<void> | null = null;
+    act(() => {
+      pending = result.current.ask("hello", null, null, calls, null, [], true);
+    });
+    await act(async () => {
+      await pending;
+    });
+
+    expect(calls.onDone).toHaveBeenCalledOnce();
+    expect(post).toHaveBeenCalledOnce();
+    expect(post.mock.calls[0][9]).toBe(true);
+  });
+
   it("reports an error when the stream ends without done", async () => {
     vi.spyOn(api, "postCopilotStream").mockResolvedValue(streamedResponse([]));
     const { result } = renderHook(() => useCopilotStream("p", "g", 1));

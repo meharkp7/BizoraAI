@@ -51,6 +51,7 @@ class CopilotContext:
     list_figures: Callable[[], list[PaperFigure]] | None = None
     write_log: list[str] = field(default_factory=list)
     pack: DomainPack | None = None
+    voice: bool = False
 
     def revisions(self, version: int) -> MethodologyGraph | None:
         """Load one revision, defaulting to the current graph."""

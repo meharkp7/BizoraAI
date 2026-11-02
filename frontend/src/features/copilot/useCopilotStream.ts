@@ -59,6 +59,7 @@ export function useCopilotStream(projectId: string, graphId: string, version: nu
     callbacks: CopilotStreamCallbacks,
     threadId?: string | null,
     diagramElements?: CopilotDiagramElement[],
+    voice?: boolean,
   ): Promise<void> {
     if (abortRef.current) return;
     const controller = new AbortController();
@@ -76,6 +77,7 @@ export function useCopilotStream(projectId: string, graphId: string, version: nu
         controller.signal,
         threadId ?? null,
         diagramElements ?? [],
+        voice ?? false,
       );
       const reader = response.body?.getReader();
       if (!reader) throw new Error("The copilot stream had no body.");

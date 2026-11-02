@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import type { ReactNode } from "react";
@@ -311,6 +311,124 @@ describe("CopilotPanel", () => {
     }
   });
 
+  it("holds a hands-free voice turn and reads the answer aloud", async () => {
+    useWorkspaceSelection.setState({ selectedNodeIds: [], selectedEdgeIds: [] });
+    interface FakeEvent {
+      resultIndex: number;
+      results: Array<{ isFinal: boolean; 0: { transcript: string } }>;
+    }
+    const instances: Array<{
+      onresult: ((event: FakeEvent) => void) | null;
+      onend: (() => void) | null;
+      onspeechstart: (() => void) | null;
+      aborted: boolean;
+      abort: () => void;
+    }> = [];
+    class FakeRecognition {
+      lang = "";
+      continuous = false;
+      interimResults = false;
+      onresult: ((event: FakeEvent) => void) | null = null;
+      onerror: ((event: never) => void) | null = null;
+      onend: (() => void) | null = null;
+      onspeechstart: (() => void) | null = null;
+      aborted = false;
+      constructor() {
+        instances.push(this);
+      }
+      start(): void {}
+      stop(): void {}
+      abort(): void {
+        this.aborted = true;
+      }
+    }
+    class FakeUtterance {
+      text: string;
+      voice: unknown = null;
+      rate = 1;
+      onend: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      constructor(text: string) {
+        this.text = text;
+      }
+    }
+    const spoken: string[] = [];
+    const w = window as unknown as Record<string, unknown>;
+    w.SpeechRecognition = FakeRecognition;
+    w.SpeechSynthesisUtterance = FakeUtterance;
+    w.speechSynthesis = {
+      speak: (utterance: FakeUtterance) => {
+        spoken.push(utterance.text);
+        utterance.onend?.();
+      },
+      cancel: () => {},
+      getVoices: () => [{ name: "Test Voice", lang: "en-IN" }],
+    };
+    const bodies: Array<Record<string, unknown>> = [];
+    server.use(
+      http.post(
+        "/api/v1/graphs/:projectId/:graphId/revisions/:version/copilot/stream",
+        async ({ request }) => {
+          bodies.push((await request.json()) as Record<string, unknown>);
+          return new HttpResponse(
+            copilotStreamBody({
+              reply: "The bitcell holds one bit with six transistors.",
+              cards: [],
+              proposal: null,
+            }),
+            { headers: { "Content-Type": "text/event-stream" } },
+          );
+        },
+      ),
+    );
+    try {
+      const user = userEvent.setup();
+      render(
+        <CopilotPanel
+          projectId="project-1"
+          graph={graphFixture}
+          disabled={false}
+          view="methodology"
+          selection={null}
+          onSubmit={() => {}}
+        />,
+        { wrapper },
+      );
+
+      await user.click(screen.getByRole("button", { name: "Voice chat" }));
+      expect(await screen.findByText("Listening — just talk.")).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Dictate message" }),
+      ).not.toBeInTheDocument();
+
+      act(() => {
+        instances[0]?.onresult?.({
+          resultIndex: 0,
+          results: [{ isFinal: true, 0: { transcript: "what does the bitcell do" } }],
+        });
+      });
+
+      expect(await screen.findByText("what does the bitcell do")).toBeInTheDocument();
+      expect(
+        await screen.findByText("The bitcell holds one bit with six transistors."),
+      ).toBeInTheDocument();
+      expect(bodies).toHaveLength(1);
+      expect(bodies[0].voice).toBe(true);
+      expect(spoken).toEqual(["The bitcell holds one bit with six transistors."]);
+      expect(await screen.findByText("Listening — just talk.")).toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "End voice chat" }));
+      expect(instances[0]?.aborted).toBe(true);
+      expect(
+        screen.queryByText("Listening — just talk."),
+      ).not.toBeInTheDocument();
+    } finally {
+      delete w.SpeechRecognition;
+      delete w.SpeechSynthesisUtterance;
+      delete w.speechSynthesis;
+    }
+  });
+
   it("hides the microphone without speech support", () => {
     useWorkspaceSelection.setState({ selectedNodeIds: [], selectedEdgeIds: [] });
     render(
@@ -326,6 +444,7 @@ describe("CopilotPanel", () => {
     );
 
     expect(screen.queryByRole("button", { name: "Dictate message" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Voice chat" })).not.toBeInTheDocument();
   });
 
   it("offers follow-up chips that ask on click", async () => {

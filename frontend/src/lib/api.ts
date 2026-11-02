@@ -626,6 +626,7 @@ export const api = {
     signal?: AbortSignal,
     threadId?: string | null,
     diagramElements?: CopilotDiagramElement[],
+    voice?: boolean,
   ): Promise<Response> {
     const response = await send(
       `/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/revisions/${version}/copilot/stream`,
@@ -638,6 +639,7 @@ export const api = {
           diagram_context: diagramContext,
           thread_id: threadId ?? null,
           diagram_elements: diagramElements ?? [],
+          voice: voice ?? false,
         }),
         signal,
       },

@@ -37,7 +37,11 @@ from bizora.copilot.citations import (
     validate_citations,
 )
 from bizora.copilot.pack_tools import pack_tool_specs
-from bizora.copilot.prompts import FINAL_ANSWER_INSTRUCTION, SYSTEM_PROMPT
+from bizora.copilot.prompts import (
+    FINAL_ANSWER_INSTRUCTION,
+    SYSTEM_PROMPT,
+    VOICE_STYLE_INSTRUCTION,
+)
 from bizora.copilot.tools import TOOL_SPECS, CopilotContext, execute_tool
 from bizora.providers.copilot import (
     MAX_TOOL_ROUNDS,
@@ -476,8 +480,11 @@ def _loop_inputs(
     if context.memory_facts:
         joined = "; ".join(fact.strip() for fact in context.memory_facts[:10])
         question += f"\n\n[Memory: {joined[:2000]}]"
+    system_prompt = SYSTEM_PROMPT
+    if context.voice:
+        system_prompt += "\n\n" + VOICE_STYLE_INSTRUCTION
     history: list[CopilotMessage] = [
-        CopilotMessage(role="system", content=SYSTEM_PROMPT),
+        CopilotMessage(role="system", content=system_prompt),
         CopilotMessage(role="user", content=question),
     ]
     specs = list(TOOL_SPECS)

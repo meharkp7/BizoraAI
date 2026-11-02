@@ -1518,6 +1518,7 @@ def _copilot_context(
     memory = MemoryService.list_facts(session, project_id=project_id, limit=10)
     context = CopilotContext(
         graph=graph,
+        voice=request.voice,
         selected_node_id=request.selected_node_id,
         diagram_context=request.diagram_context,
         diagram_elements=tuple(request.diagram_elements),

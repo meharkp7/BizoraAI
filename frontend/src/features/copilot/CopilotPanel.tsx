@@ -7,6 +7,7 @@ import {
   useCreateCopilotThread,
 } from "../../app/queries.ts";
 import { useCopilotStream } from "./useCopilotStream.ts";
+import { useVoiceAgent, type VoiceAgentState } from "./useVoiceAgent.ts";
 import { useVoiceInput } from "./useVoiceInput.ts";
 import type { CanvasView } from "../../app/routeElements.tsx";
 import { NODE_KINDS } from "../../lib/constants.ts";
@@ -30,6 +31,15 @@ import { EvidenceCard } from "./EvidenceCard.tsx";
 function isNodeKind(value: string): value is NodeKind {
   return (NODE_KINDS as readonly string[]).includes(value);
 }
+
+const VOICE_ERROR_REPLY = "Sorry, I could not reach the copilot just now.";
+
+const VOICE_STATUS: Record<VoiceAgentState, string> = {
+  idle: "Voice chat is off.",
+  listening: "Listening — just talk.",
+  thinking: "Thinking…",
+  speaking: "Speaking — talk any time to interrupt.",
+};
 
 /** Follow-up chips derived from what the last answer actually contained. */
 function followUpsFor(turn: Turn): string[] {
@@ -205,6 +215,18 @@ export function CopilotPanel({
   );
   const [turns, setTurns] = useState<Turn[]>([]);
   const [dismissed, setDismissed] = useState<Set<number>>(new Set());
+  const [voiceMode, setVoiceMode] = useState(false);
+  const voiceModeRef = useRef(false);
+  const voiceGenRef = useRef(0);
+  const agent = useVoiceAgent("en-IN", {
+    // askVoice is hoisted, so the live transcript reuses the same path
+    // as typed follow-ups in voice mode. The agent refreshes its
+    // callbacks every render, so this always reaches the latest agent.
+    onUserTurn: (transcript) => askVoice(transcript),
+    onInterrupted: () => {
+      voiceGenRef.current += 1;
+    },
+  });
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeIds[0]) ?? null;
   const diagramContext = diagramContextFor(view, selection, selectedNode);
   const turnIdRef = useRef(0);
@@ -258,9 +280,15 @@ export function CopilotPanel({
     setThreadId(nextId === "" ? null : nextId);
   }
 
-  async function ask(message: string): Promise<void> {
+  async function ask(
+    message: string,
+    voiceOptions?: { onVoiceAnswer: (reply: string | null) => void },
+  ): Promise<void> {
+    const voiceTurn = voiceOptions !== undefined;
     const text = message.trim();
     if (text === "" || copilot.isPending || createThread.isPending || loadingThread) {
+      // null settles voice bookkeeping without speaking.
+      voiceOptions?.onVoiceAnswer(null);
       return;
     }
     touchedRef.current = true;
@@ -284,6 +312,7 @@ export function CopilotPanel({
               error instanceof Error ? error.message : "Could not start a conversation.",
           },
         ]);
+        voiceOptions?.onVoiceAnswer(VOICE_ERROR_REPLY);
         return;
       }
     }
@@ -310,6 +339,7 @@ export function CopilotPanel({
             ),
           );
           refreshThreads();
+          voiceOptions?.onVoiceAnswer(response.reply);
         },
         onError: (error) => {
           setTurns((current) =>
@@ -323,11 +353,40 @@ export function CopilotPanel({
                 : turn,
             ),
           );
+          voiceOptions?.onVoiceAnswer(VOICE_ERROR_REPLY);
         },
       },
       activeId,
       diagramElements,
+      voiceTurn,
     );
+  }
+
+  /** One hands-free turn: ask with the spoken style and read the answer aloud. */
+  function askVoice(message: string): void {
+    const generation = voiceGenRef.current;
+    agent.setThinking(true);
+    void ask(message, {
+      onVoiceAnswer: (reply) => {
+        if (!voiceModeRef.current || generation !== voiceGenRef.current) return;
+        agent.setThinking(false);
+        if (reply) agent.speak(reply);
+      },
+    });
+  }
+
+  function toggleVoiceMode(): void {
+    if (voiceMode) {
+      voiceModeRef.current = false;
+      voiceGenRef.current += 1;
+      setVoiceMode(false);
+      agent.stop();
+      return;
+    }
+    voice.stop();
+    voiceModeRef.current = true;
+    setVoiceMode(true);
+    agent.start();
   }
 
   return (
@@ -354,7 +413,28 @@ export function CopilotPanel({
         >
           New
         </button>
+        {agent.supported ? (
+          <button
+            type="button"
+            className={voiceMode ? styles.voiceActive : undefined}
+            aria-pressed={voiceMode}
+            onClick={toggleVoiceMode}
+          >
+            {voiceMode ? "End voice chat" : "Voice chat"}
+          </button>
+        ) : null}
       </div>
+      {voiceMode ? (
+        <p className={styles.voiceStatus} aria-live="polite">
+          {VOICE_STATUS[agent.state]}
+          {agent.interim ? ` “${agent.interim}”` : null}
+        </p>
+      ) : null}
+      {voiceMode && agent.error ? (
+        <p className={styles.error} role="alert">
+          {agent.error}
+        </p>
+      ) : null}
       <p className={styles.context}>
         {selection ? (
           <>
@@ -416,7 +496,10 @@ export function CopilotPanel({
                       key={chip}
                       type="button"
                       className={styles.chip}
-                      onClick={() => void ask(chip)}
+                      onClick={() => {
+                        if (voiceMode) askVoice(chip);
+                        else void ask(chip);
+                      }}
                     >
                       {chip}
                     </button>
@@ -432,6 +515,12 @@ export function CopilotPanel({
         aria-label="Ask the copilot"
         onSubmit={(event) => {
           event.preventDefault();
+          if (voiceMode) {
+            const text = input;
+            setInput("");
+            askVoice(text);
+            return;
+          }
           voice.stop();
           void ask(input);
         }}
@@ -444,7 +533,7 @@ export function CopilotPanel({
           spellCheck={false}
           aria-label="Copilot message"
         />
-        {voice.supported ? (
+        {voice.supported && !voiceMode ? (
           <button
             type="button"
             className={styles.voiceButton}

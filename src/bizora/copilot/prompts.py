@@ -43,3 +43,10 @@ CopilotAnswer schema, using ONLY evidence, runs, tables, figures, \
 and components observed in this conversation's tool results. If the \
 tools did not answer the question, set assumed to true, say "the \
 paper does not state this", and say what is missing."""
+
+VOICE_STYLE_INSTRUCTION = """This turn is SPOKEN aloud, so style the reply for the ear: \
+under 60 words, short sentences with one idea each, no markdown, \
+no lists, no code, no citations spoken aloud (citations still travel \
+in the card payload). Answer the question first, then at most one \
+brief follow-up question when it is natural. Never narrate tool \
+calls or say what you are doing — just answer."""

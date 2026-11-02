@@ -376,3 +376,67 @@ def test_orchestrator_sends_viewer_context_to_provider() -> None:
         )
 
     asyncio.run(run_test())
+
+
+def test_voice_turns_add_spoken_style_to_system_prompt() -> None:
+    """Voice turns keep grounding but style the reply for the ear."""
+
+    class RecordingProvider(ScriptedCopilotProvider):
+        def __init__(self, transcript: RecordedTranscript) -> None:
+            super().__init__(transcript)
+            self.seen: list[list[CopilotMessage]] = []
+
+        async def chat(
+            self,
+            messages: list[CopilotMessage],
+            tools: list[CopilotToolSpec],
+            *,
+            response_schema: dict[str, Any] | None = None,
+        ) -> CopilotAssistantTurn:
+            self.seen.append(messages)
+            return await super().chat(messages, tools, response_schema=response_schema)
+
+    async def run_test() -> None:
+        from bizora.copilot.prompts import VOICE_STYLE_INSTRUCTION
+
+        context = replace(make_eval_context(), voice=True)
+        provider = RecordingProvider(_evidence_script())
+        await answer_with_llm("What does this do?", context, provider)
+
+        assert provider.seen
+        system = provider.seen[0][0]
+        assert system.role == "system"
+        assert VOICE_STYLE_INSTRUCTION in system.content
+
+    asyncio.run(run_test())
+
+
+def test_text_turns_keep_plain_system_prompt() -> None:
+    """Non-voice turns carry no spoken-style instruction."""
+
+    class RecordingProvider(ScriptedCopilotProvider):
+        def __init__(self, transcript: RecordedTranscript) -> None:
+            super().__init__(transcript)
+            self.seen: list[list[CopilotMessage]] = []
+
+        async def chat(
+            self,
+            messages: list[CopilotMessage],
+            tools: list[CopilotToolSpec],
+            *,
+            response_schema: dict[str, Any] | None = None,
+        ) -> CopilotAssistantTurn:
+            self.seen.append(messages)
+            return await super().chat(messages, tools, response_schema=response_schema)
+
+    async def run_test() -> None:
+        from bizora.copilot.prompts import VOICE_STYLE_INSTRUCTION
+
+        context = make_eval_context()
+        provider = RecordingProvider(_evidence_script())
+        await answer_with_llm("What does this do?", context, provider)
+
+        assert provider.seen
+        assert VOICE_STYLE_INSTRUCTION not in provider.seen[0][0].content
+
+    asyncio.run(run_test())
