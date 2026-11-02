@@ -1305,6 +1305,7 @@ def _copilot_context(
         graph=graph,
         selected_node_id=request.selected_node_id,
         diagram_context=request.diagram_context,
+        diagram_elements=tuple(request.diagram_elements),
         load_revision=load_revision,
         list_runs=list_runs,
         get_run=get_run,

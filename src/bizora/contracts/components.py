@@ -183,6 +183,16 @@ class CopilotProposal(BaseModel):
     rationale: str = Field(min_length=1, max_length=1000)
 
 
+class CopilotDiagramRef(BaseModel):
+    """A validated pointer from a card to one diagram element."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    view: Literal["methodology", "schematic", "structure"] = "methodology"
+    element_id: str = Field(min_length=1, max_length=128)
+    label: str = Field(min_length=1, max_length=300)
+
+
 class CopilotCardSource(BaseModel):
     """A machine-readable pointer from a card to its paper passage."""
 
@@ -199,12 +209,13 @@ class CopilotCard(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    kind: Literal["component", "comparison", "proposal", "evidence", "info"]
+    kind: Literal["component", "comparison", "proposal", "evidence", "info", "diagram"]
     title: str = Field(min_length=1, max_length=300)
     body: str = Field(min_length=1, max_length=4000)
     component_ids: tuple[str, ...] = ()
     node_id: str | None = Field(default=None, max_length=128)
     source: CopilotCardSource | None = None
+    diagram_ref: CopilotDiagramRef | None = None
 
 
 class PreflightRequest(BaseModel):
@@ -216,6 +227,18 @@ class PreflightRequest(BaseModel):
     config: dict[str, Any] = Field(default_factory=dict)
 
 
+class CopilotDiagramElement(BaseModel):
+    """One diagram element visible in the viewer's current tab."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    view: Literal["methodology", "schematic", "structure"] = "methodology"
+    element_id: str = Field(min_length=1, max_length=128)
+    label: str = Field(min_length=1, max_length=300)
+    kind: str | None = Field(default=None, max_length=128)
+    detail: str | None = Field(default=None, max_length=2000)
+
+
 class CopilotRequest(BaseModel):
     """A conversational request scoped to one graph revision."""
 
@@ -225,6 +248,9 @@ class CopilotRequest(BaseModel):
     selected_node_id: str | None = Field(default=None, max_length=128)
     diagram_context: str | None = Field(default=None, max_length=280)
     thread_id: str | None = Field(default=None, max_length=128)
+    diagram_elements: list[CopilotDiagramElement] = Field(
+        default_factory=list, max_length=40
+    )
 
 
 class CopilotResponse(BaseModel):

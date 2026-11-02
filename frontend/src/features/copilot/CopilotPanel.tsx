@@ -12,6 +12,8 @@ import { NODE_KINDS } from "../../lib/constants.ts";
 import { useLibrarySelection, useWorkspaceSelection } from "../../lib/store.ts";
 import type {
   CopilotCard,
+  CopilotDiagramElement,
+  CopilotDiagramRef,
   CopilotProposal,
   GraphPatch,
   MethodologyGraph,
@@ -105,6 +107,7 @@ function CardView({
   dismissed,
   onApprove,
   onDismissProposal,
+  onSelectDiagram,
 }: {
   card: CopilotCard;
   graph: MethodologyGraph;
@@ -113,10 +116,31 @@ function CardView({
   dismissed: boolean;
   onApprove: (patches: GraphPatch[]) => void;
   onDismissProposal: () => void;
+  onSelectDiagram: ((ref: CopilotDiagramRef) => void) | null;
 }) {
   const { openComponent } = useLibrarySelection();
   if (card.kind === "evidence" || card.kind === "info") {
     return <EvidenceCard card={card} />;
+  }
+  if (card.kind === "diagram") {
+    return (
+      <div className={styles.card}>
+        <div className={styles.cardTitle}>{card.title}</div>
+        <p className={styles.cardBody}>{card.body}</p>
+        {card.diagram_ref && onSelectDiagram ? (
+          <div className={styles.cardLinks}>
+            <button
+              type="button"
+              onClick={() => {
+                if (card.diagram_ref) onSelectDiagram(card.diagram_ref);
+              }}
+            >
+              Show in diagram
+            </button>
+          </div>
+        ) : null}
+      </div>
+    );
   }
   return (
     <div className={styles.card}>
@@ -151,14 +175,18 @@ export function CopilotPanel({
   disabled,
   view,
   selection,
+  diagramElements = [],
   onSubmit,
+  onSelectDiagram = null,
 }: {
   projectId: string;
   graph: MethodologyGraph;
   disabled: boolean;
   view: CanvasView;
   selection: DiagramSelection | null;
+  diagramElements?: CopilotDiagramElement[];
   onSubmit: (patches: GraphPatch[]) => void;
+  onSelectDiagram?: ((ref: CopilotDiagramRef) => void) | null;
 }) {
   const copilot = useCopilotStream(projectId, graph.graph_id, graph.version);
   const queryClient = useQueryClient();
@@ -290,6 +318,7 @@ export function CopilotPanel({
         },
       },
       activeId,
+      diagramElements,
     );
   }
 
@@ -361,6 +390,7 @@ export function CopilotPanel({
                       onDismissProposal={() =>
                         setDismissed((current) => new Set(current).add(turn.id))
                       }
+                      onSelectDiagram={onSelectDiagram}
                     />
                   ))}
                 </>

@@ -640,13 +640,30 @@ export interface CopilotProposal {
   rationale: string;
 }
 
-export type CopilotCardKind = "component" | "comparison" | "proposal" | "evidence" | "info";
+export type CopilotCardKind =
+  | "component"
+  | "comparison"
+  | "proposal"
+  | "evidence"
+  | "info"
+  | "diagram";
 
 export interface CopilotCardSource {
   source_id: string;
   page: number | null;
   quote: string | null;
   figure_label: string | null;
+}
+
+export interface CopilotDiagramRef {
+  view: "methodology" | "schematic" | "structure";
+  element_id: string;
+  label: string;
+}
+
+export interface CopilotDiagramElement extends CopilotDiagramRef {
+  kind: string | null;
+  detail: string | null;
 }
 
 export interface CopilotCard {
@@ -656,6 +673,7 @@ export interface CopilotCard {
   component_ids: string[];
   node_id: string | null;
   source?: CopilotCardSource | null;
+  diagram_ref?: CopilotDiagramRef | null;
 }
 
 export interface PaperText {

@@ -52,7 +52,17 @@ class ComponentCitation(BaseModel):
     component_id: str = Field(min_length=1, max_length=128)
 
 
-Citation = EvidenceCitation | RunCitation | ComponentCitation
+class DiagramCitation(BaseModel):
+    """One citation to a diagram element from the viewer's roster."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    kind: Literal["diagram"] = "diagram"
+    view: Literal["methodology", "schematic", "structure"] = "methodology"
+    element_id: str = Field(min_length=1, max_length=128)
+
+
+Citation = EvidenceCitation | RunCitation | ComponentCitation | DiagramCitation
 
 
 class CopilotAnswer(BaseModel):
@@ -215,7 +225,7 @@ def validate_citations(
                     valid.append(citation)
             else:
                 valid.append(citation)
-        else:
+        elif isinstance(citation, ComponentCitation):
             if citation.component_id in component_ids:
                 valid.append(citation)
             else:
@@ -228,6 +238,31 @@ def validate_citations(
                         ),
                     )
                 )
+        elif isinstance(citation, DiagramCitation):
+            roster = {
+                (entry.view, entry.element_id) for entry in context.diagram_elements
+            }
+            if (citation.view, citation.element_id) in roster:
+                valid.append(citation)
+            else:
+                invalid.append(
+                    CitationFinding(
+                        index=index,
+                        reason=(
+                            f"Diagram element {citation.element_id!r} is not in "
+                            f"the visible {citation.view} roster."
+                        ),
+                    )
+                )
+        # Closed union today; the branch guards future citation kinds.
+        else:
+            kind = getattr(citation, "kind", "?")  # type: ignore[unreachable]
+            invalid.append(
+                CitationFinding(
+                    index=index,
+                    reason=f"Unknown citation kind {kind!r}.",
+                )
+            )
     return CitationReport(valid=tuple(valid), invalid=tuple(invalid))
 
 

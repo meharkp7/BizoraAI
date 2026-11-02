@@ -17,6 +17,8 @@ from typing import Any
 from bizora.contracts.components import (
     ComponentDetail,
     CopilotCard,
+    CopilotDiagramElement,
+    CopilotDiagramRef,
     CopilotProposal,
     CopilotResponse,
 )
@@ -57,6 +59,10 @@ EXPLAIN_PATTERN = re.compile(
 )
 FIND_PATTERN = re.compile(
     r"(?:find|search|show|list|looking\s+for|suggest|recommend)\s+(?P<terms>.+?)\s*$",
+    re.IGNORECASE,
+)
+SHOW_PATTERN = re.compile(
+    r"(?:show|find|locate|where\s+is)\s+(?P<ref>.+?)\s*\??\s*$",
     re.IGNORECASE,
 )
 
@@ -214,8 +220,86 @@ def _parse_value(raw: str) -> Any:
         return text
 
 
+def _diagram_tab_name(view: str) -> str:
+    """Name the viewer tab a roster view lives on."""
+    return "3D" if view == "structure" else view
+
+
+def _diagram_lookup_card(element: CopilotDiagramElement) -> CopilotCard:
+    """Build the jump-to-viewer card for one roster element."""
+    tab = _diagram_tab_name(element.view)
+    lines = [f"{element.element_id} — {element.label} ({tab} tab)"]
+    if element.detail:
+        lines.append(element.detail)
+    return CopilotCard(
+        kind="diagram",
+        title=f"Diagram element {element.element_id}",
+        body="\n".join(lines),
+        component_ids=(),
+        diagram_ref=CopilotDiagramRef(
+            view=element.view,
+            element_id=element.element_id,
+            label=element.label,
+        ),
+    )
+
+
+def _answer_diagram_lookup(
+    text: str, roster: tuple[CopilotDiagramElement, ...]
+) -> CopilotResponse | None:
+    """Answer locate commands against the visible roster, or fall through.
+
+    Returns None when the message is not a locate command or nothing in
+    the roster matches, so library search keeps working as before.
+    Ambiguous labels explain instead of guessing.
+    """
+    if not roster:
+        return None
+    match = SHOW_PATTERN.search(text)
+    if match is None:
+        return None
+    ref = match.group("ref").strip().strip("\"'").strip()
+    if not ref:
+        return None
+    lowered = ref.lower()
+    for entry in roster:
+        if entry.element_id.lower() == lowered:
+            card = _diagram_lookup_card(entry)
+            return CopilotResponse(
+                reply=(
+                    f"Found {entry.element_id} ({entry.label}) on the "
+                    f"{_diagram_tab_name(entry.view)} tab."
+                ),
+                cards=(card,),
+            )
+    hits = [entry for entry in roster if lowered in entry.label.lower()]
+    if len(hits) == 1:
+        card = _diagram_lookup_card(hits[0])
+        return CopilotResponse(
+            reply=(
+                f"Found {hits[0].element_id} ({hits[0].label}) on the "
+                f"{_diagram_tab_name(hits[0].view)} tab."
+            ),
+            cards=(card,),
+        )
+    if len(hits) > 1:
+        names = ", ".join(f"{entry.element_id} ({entry.label})" for entry in hits[:5])
+        return CopilotResponse(
+            reply=(
+                f"That matches several visible elements: {names}. "
+                "Name one element id to jump to it."
+            ),
+            cards=(),
+        )
+    return None
+
+
 def answer_copilot(
-    graph: MethodologyGraph, message: str, selected_node_id: str | None = None
+    graph: MethodologyGraph,
+    message: str,
+    selected_node_id: str | None = None,
+    *,
+    diagram_elements: tuple[CopilotDiagramElement, ...] = (),
 ) -> CopilotResponse:
     """Answer one copilot message against the catalog and graph state."""
     entities = resolve_graph(graph)
@@ -388,6 +472,10 @@ def answer_copilot(
             reply="Name a library component or a graph node to explain.", cards=()
         )
 
+    diagram_hit = _answer_diagram_lookup(text, diagram_elements)
+    if diagram_hit is not None:
+        return diagram_hit
+
     find_match = FIND_PATTERN.search(text)
     if find_match:
         terms = find_match.group("terms")
@@ -457,7 +545,11 @@ LLM_QUESTION_HINTS = (
 def wants_llm_answer(message: str) -> bool:
     """Return whether a message looks like a grounded question for the LLM."""
     lowered = message.strip().lower()
-    if SET_PATTERN.search(message) or REPLACE_PATTERN.search(message):
+    if (
+        SET_PATTERN.search(message)
+        or REPLACE_PATTERN.search(message)
+        or SHOW_PATTERN.search(message)
+    ):
         # Explicit commands stay on the deterministic fast path.
         return False
     return any(hint in lowered for hint in LLM_QUESTION_HINTS)
@@ -492,11 +584,13 @@ async def answer_copilot_async(
     use_llm = provider is not None and (
         mode == "llm" or (mode == "auto" and wants_llm_answer(message))
     )
-    if not use_llm or provider is None:
-        return answer_copilot(graph, message, selected_node_id)
     active_context = (
         context if context is not None else build_default_context(graph, selected_node_id)
     )
+    if not use_llm or provider is None:
+        return answer_copilot(
+            graph, message, selected_node_id, diagram_elements=active_context.diagram_elements
+        )
     if active_context.pack is None:
         active_context = replace(active_context, pack=pack_for_graph(active_context.graph))
     try:
@@ -504,7 +598,9 @@ async def answer_copilot_async(
     except Exception:
         if report is not None:
             report.fallback = True
-        return answer_copilot(graph, message, selected_node_id)
+        return answer_copilot(
+            graph, message, selected_node_id, diagram_elements=active_context.diagram_elements
+        )
 
 
 async def answer_copilot_stream(
@@ -527,13 +623,20 @@ async def answer_copilot_stream(
     use_llm = provider is not None and (
         mode == "llm" or (mode == "auto" and wants_llm_answer(message))
     )
-    if not use_llm or provider is None:
-        yield CopilotStatusEvent(message="Answering from the workspace graph…")
-        yield CopilotDoneEvent(response=answer_copilot(graph, message, selected_node_id))
-        return
     active_context = (
         context if context is not None else build_default_context(graph, selected_node_id)
     )
+    if not use_llm or provider is None:
+        yield CopilotStatusEvent(message="Answering from the workspace graph…")
+        yield CopilotDoneEvent(
+            response=answer_copilot(
+                graph,
+                message,
+                selected_node_id,
+                diagram_elements=active_context.diagram_elements,
+            )
+        )
+        return
     if active_context.pack is None:
         active_context = replace(active_context, pack=pack_for_graph(active_context.graph))
     try:
@@ -545,4 +648,11 @@ async def answer_copilot_stream(
         if report is not None:
             report.fallback = True
         yield CopilotStatusEvent(message="The model stumbled; answering directly…")
-        yield CopilotDoneEvent(response=answer_copilot(graph, message, selected_node_id))
+        yield CopilotDoneEvent(
+            response=answer_copilot(
+                graph,
+                message,
+                selected_node_id,
+                diagram_elements=active_context.diagram_elements,
+            )
+        )

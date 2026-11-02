@@ -33,6 +33,9 @@ and metric name when you state a number.
 6. When the tools have no answer, say "the paper does not state \
 this", say what is missing, and mark the answer assumed instead of \
 guessing.
+7. The viewer context may list visible diagram elements; when the \
+answer is about one of them, add a diagram citation with its exact \
+view and element_id from that list, and never invent element ids.
 """
 
 FINAL_ANSWER_INSTRUCTION = """Write your final answer now as one JSON object matching the \

@@ -15,7 +15,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from bizora.contracts.components import CopilotProposal
+from bizora.contracts.components import CopilotDiagramElement, CopilotProposal
 from bizora.contracts.figures import PaperFigure
 from bizora.contracts.graph import MethodologyGraph
 from bizora.contracts.run import ExperimentRun, MetricRecord
@@ -41,6 +41,7 @@ class CopilotContext:
     graph: MethodologyGraph
     selected_node_id: str | None = None
     diagram_context: str | None = None
+    diagram_elements: tuple[CopilotDiagramElement, ...] = ()
     load_revision: Callable[[int], MethodologyGraph | None] | None = None
     list_runs: Callable[[], list[ExperimentRun]] | None = None
     get_run: Callable[[str], ExperimentRun | None] | None = None

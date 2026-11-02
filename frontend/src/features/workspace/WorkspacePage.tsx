@@ -11,6 +11,7 @@ import { BizoraApiError } from "../../lib/api.ts";
 import type { CanvasView } from "../../app/routeElements.tsx";
 import { useLibrarySelection, useWorkspaceSelection } from "../../lib/store.ts";
 import type {
+  CopilotDiagramRef,
   GraphEdge,
   GraphEntities,
   GraphNode,
@@ -31,6 +32,7 @@ import { MethodologyDiagramView } from "../diagrams/MethodologyDiagramView.tsx";
 import { SchematicDiagramView } from "../diagrams/SchematicDiagramView.tsx";
 import { StructureDiagramView } from "../diagrams/StructureDiagramView.tsx";
 import { figureIdFromSource } from "../diagrams/provenance.ts";
+import { rosterFromDiagrams } from "../diagrams/diagramRoster.ts";
 import type { DiagramSelection } from "../diagrams/selection.ts";
 import { useRevisionHistory } from "./history.ts";
 import { InspectorPanel } from "./InspectorPanel.tsx";
@@ -447,6 +449,12 @@ function WorkspaceLoaded({
   // The canvas feeds solely from the paper's diagram IRs. The paper is
   // the graph's first source: figure ingest stores figures under it.
   const paperId = graph.source_ids[0] ?? null;
+  // Shared with the canvas below through the query cache: no second fetch.
+  const diagramsQuery = usePaperDiagrams(paperId);
+  const roster = useMemo(
+    () => rosterFromDiagrams(diagramsQuery.data, view),
+    [diagramsQuery.data, view],
+  );
   const [diagramSelection, setDiagramSelection] = useState<DiagramSelection | null>(null);
   // Any graph selection (index, figure overlay, ...) suppresses the
   // diagram selection, so the two can never disagree or go stale.
@@ -490,6 +498,27 @@ function WorkspaceLoaded({
     },
     [onSelectNodes],
   );
+
+  // Copilot answers jump back into the viewer: switch to the ref's tab,
+  // then select the element so the canvas and Inspector follow.
+  function handleSelectDiagram(ref: CopilotDiagramRef): void {
+    const tab: CanvasView = ref.view === "structure" ? "3d" : ref.view;
+    if (tab !== view) onViewChange(tab);
+    const match = rosterFromDiagrams(diagramsQuery.data, tab).find(
+      (entry) => entry.element_id === ref.element_id,
+    );
+    handleDiagramSelect({
+      view: ref.view,
+      elementId: ref.element_id,
+      label: match?.label ?? ref.label,
+      kind: match?.kind ?? null,
+      detail: match?.detail ?? null,
+      confidence: null,
+      provenance: "from-paper",
+      evidence: null,
+      extra: [],
+    });
+  }
 
   return (
     <div className={styles.page}>
@@ -639,7 +668,9 @@ function WorkspaceLoaded({
         disabled={mutating}
         view={view}
         selection={effectiveDiagram}
+        diagramElements={roster}
         onSubmit={onSubmit}
+        onSelectDiagram={handleSelectDiagram}
       />
 
       <ScenarioDrafts

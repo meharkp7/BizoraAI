@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "../../lib/api.ts";
 import { useLibrarySelection, useWorkspaceSelection } from "../../lib/store.ts";
-import type { CopilotThread, GraphPatch } from "../../lib/types.ts";
+import type { CopilotResponse, CopilotThread, GraphPatch } from "../../lib/types.ts";
 import {
   copilotFixture,
   copilotStreamBody,
@@ -358,6 +358,104 @@ describe("CopilotPanel threads", () => {
     await user.click(screen.getByRole("button", { name: "New" }));
     expect(screen.getByLabelText("Conversation")).toHaveValue("");
     expect(screen.queryByText("compare options")).not.toBeInTheDocument();
+  });
+
+  it("sends the diagram roster with each turn", async () => {
+    useWorkspaceSelection.setState({ selectedNodeIds: [], selectedEdgeIds: [] });
+    const bodies: Array<Record<string, unknown>> = [];
+    server.use(
+      http.post(
+        "/api/v1/graphs/:projectId/:graphId/revisions/:version/copilot/stream",
+        async ({ request }) => {
+          bodies.push((await request.json()) as Record<string, unknown>);
+          return new HttpResponse(copilotStreamBody(copilotFixture), {
+            headers: { "Content-Type": "text/event-stream" },
+          });
+        },
+      ),
+    );
+    const user = userEvent.setup();
+    render(
+      <CopilotPanel
+        projectId="project-1"
+        graph={graphFixture}
+        disabled={false}
+        view="schematic"
+        selection={null}
+        diagramElements={[
+          {
+            view: "schematic",
+            element_id: "m1",
+            label: "M1",
+            kind: "nmos",
+            detail: null,
+          },
+        ]}
+        onSubmit={() => {}}
+      />,
+      { wrapper },
+    );
+
+    await user.type(screen.getByLabelText("Copilot message"), "show m1");
+    await user.click(screen.getByRole("button", { name: "Ask" }));
+
+    expect(await screen.findByText(/Closest library matches/)).toBeInTheDocument();
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0].diagram_elements).toEqual([
+      { view: "schematic", element_id: "m1", label: "M1", kind: "nmos", detail: null },
+    ]);
+  });
+
+  it("jumps diagram cards back into the viewer", async () => {
+    useWorkspaceSelection.setState({ selectedNodeIds: [], selectedEdgeIds: [] });
+    const diagramAnswer: CopilotResponse = {
+      reply: "Found m1 (M1) on the schematic tab.",
+      cards: [
+        {
+          kind: "diagram",
+          title: "Diagram element m1",
+          body: "m1 — M1 (schematic tab)",
+          component_ids: [],
+          node_id: null,
+          diagram_ref: { view: "schematic", element_id: "m1", label: "M1" },
+        },
+      ],
+      proposal: null,
+    };
+    server.use(
+      http.post(
+        "/api/v1/graphs/:projectId/:graphId/revisions/:version/copilot/stream",
+        () =>
+          new HttpResponse(copilotStreamBody(diagramAnswer), {
+            headers: { "Content-Type": "text/event-stream" },
+          }),
+      ),
+    );
+    const onSelectDiagram = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <CopilotPanel
+        projectId="project-1"
+        graph={graphFixture}
+        disabled={false}
+        view="schematic"
+        selection={null}
+        onSubmit={() => {}}
+        onSelectDiagram={onSelectDiagram}
+      />,
+      { wrapper },
+    );
+
+    await user.type(screen.getByLabelText("Copilot message"), "show m1");
+    await user.click(screen.getByRole("button", { name: "Ask" }));
+
+    expect(await screen.findByText("Diagram element m1")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Show in diagram" }));
+    expect(onSelectDiagram).toHaveBeenCalledWith({
+      view: "schematic",
+      element_id: "m1",
+      label: "M1",
+    });
   });
 
   it("sends the active thread id with each turn", async () => {

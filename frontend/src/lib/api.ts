@@ -10,6 +10,7 @@ import type {
   CompatibilityPreflight,
   ComponentDetail,
   ComponentSummary,
+  CopilotDiagramElement,
   CopilotResponse,
   CopilotThread,
   CopilotThreadSummary,
@@ -452,6 +453,7 @@ export const api = {
     selectedNodeId: string | null,
     diagramContext: string | null,
     threadId?: string | null,
+    diagramElements?: CopilotDiagramElement[],
   ): Promise<CopilotResponse> {
     return request(
       `/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/revisions/${version}/copilot`,
@@ -462,6 +464,7 @@ export const api = {
           selected_node_id: selectedNodeId,
           diagram_context: diagramContext,
           thread_id: threadId ?? null,
+          diagram_elements: diagramElements ?? [],
         }),
       },
     );
@@ -510,6 +513,7 @@ export const api = {
     diagramContext: string | null,
     signal?: AbortSignal,
     threadId?: string | null,
+    diagramElements?: CopilotDiagramElement[],
   ): Promise<Response> {
     const response = await send(
       `/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/revisions/${version}/copilot/stream`,
@@ -521,6 +525,7 @@ export const api = {
           selected_node_id: selectedNodeId,
           diagram_context: diagramContext,
           thread_id: threadId ?? null,
+          diagram_elements: diagramElements ?? [],
         }),
         signal,
       },

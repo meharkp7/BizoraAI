@@ -22,6 +22,8 @@ from pydantic import ValidationError
 from bizora.contracts.components import (
     CopilotCard,
     CopilotCardSource,
+    CopilotDiagramElement,
+    CopilotDiagramRef,
     CopilotProposal,
     CopilotResponse,
 )
@@ -29,6 +31,7 @@ from bizora.contracts.run import RunState
 from bizora.copilot.citations import (
     ComponentCitation,
     CopilotAnswer,
+    DiagramCitation,
     EvidenceCitation,
     RunCitation,
     validate_citations,
@@ -58,7 +61,7 @@ COPILOT_ANSWER_OUTPUT_SCHEMA: dict[str, Any] = {
             "items": {
                 "type": "object",
                 "properties": {
-                    "kind": {"type": "string", "enum": ["evidence", "run", "component"]},
+                    "kind": {"type": "string", "enum": ["evidence", "run", "component", "diagram"]},
                     "source_id": {"type": ["string", "null"]},
                     "page": {"type": ["number", "null"]},
                     "quote": {"type": ["string", "null"]},
@@ -66,6 +69,8 @@ COPILOT_ANSWER_OUTPUT_SCHEMA: dict[str, Any] = {
                     "run_id": {"type": ["string", "null"]},
                     "metric_name": {"type": ["string", "null"]},
                     "component_id": {"type": ["string", "null"]},
+                    "view": {"type": ["string", "null"]},
+                    "element_id": {"type": ["string", "null"]},
                 },
                 "required": [
                     "kind",
@@ -76,6 +81,8 @@ COPILOT_ANSWER_OUTPUT_SCHEMA: dict[str, Any] = {
                     "run_id",
                     "metric_name",
                     "component_id",
+                    "view",
+                    "element_id",
                 ],
                 "additionalProperties": False,
             },
@@ -112,6 +119,7 @@ _CITATION_KEYS: dict[str, tuple[str, ...]] = {
     "evidence": ("source_id", "page", "quote", "figure_label"),
     "run": ("run_id", "metric_name"),
     "component": ("component_id",),
+    "diagram": ("view", "element_id"),
 }
 
 
@@ -231,6 +239,32 @@ def _component_card(citation: ComponentCitation) -> CopilotCard:
     )
 
 
+def _diagram_card(citation: DiagramCitation, context: CopilotContext) -> CopilotCard:
+    entry = next(
+        (
+            element
+            for element in context.diagram_elements
+            if element.view == citation.view and element.element_id == citation.element_id
+        ),
+        None,
+    )
+    label = entry.label if entry is not None else citation.element_id
+    lines = [f"{citation.element_id} — {label} ({citation.view} tab)"]
+    if entry is not None and entry.detail:
+        lines.append(entry.detail)
+    return CopilotCard(
+        kind="diagram",
+        title="Diagram element",
+        body="\n".join(lines),
+        component_ids=(),
+        diagram_ref=CopilotDiagramRef(
+            view=citation.view,
+            element_id=citation.element_id,
+            label=label,
+        ),
+    )
+
+
 def build_grounded_response(
     answer: CopilotAnswer,
     context: CopilotContext,
@@ -246,6 +280,8 @@ def build_grounded_response(
             cards.append(_run_card(citation, context))
         elif isinstance(citation, ComponentCitation):
             cards.append(_component_card(citation))
+        elif isinstance(citation, DiagramCitation):
+            cards.append(_diagram_card(citation, context))
     proposal: CopilotProposal | None = answer.proposal
     reply = answer.reply
     if proposal is not None:
@@ -416,6 +452,18 @@ async def _request_final_answer(
         raise CopilotProviderError(f"The model returned an invalid final answer ({exc}).") from exc
 
 
+def _roster_line(elements: tuple[CopilotDiagramElement, ...]) -> str:
+    """Format the visible diagram elements as one viewer-context line."""
+    by_view: dict[str, list[str]] = {}
+    for entry in elements:
+        by_view.setdefault(entry.view, []).append(f"{entry.element_id} ({entry.label})")
+    parts = [
+        f"{view}: {', '.join(ids)}" for view, ids in sorted(by_view.items())
+    ]
+    line = "Visible diagram elements — " + "; ".join(parts)
+    return line if len(line) <= 800 else line[:799] + "…"
+
+
 def _loop_inputs(
     message: str, context: CopilotContext
 ) -> tuple[list[CopilotMessage], list[Any]]:
@@ -423,6 +471,8 @@ def _loop_inputs(
     question = message.strip()[:8000] or "(empty question)"
     if context.diagram_context:
         question += f"\n\n[Viewer context: {context.diagram_context.strip()[:280]}]"
+    if context.diagram_elements:
+        question += f"\n\n[Viewer context: {_roster_line(context.diagram_elements)}]"
     history: list[CopilotMessage] = [
         CopilotMessage(role="system", content=SYSTEM_PROMPT),
         CopilotMessage(role="user", content=question),

@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { CanvasView } from "../../app/routeElements.tsx";
-import type { GraphPatch, MethodologyGraph } from "../../lib/types.ts";
+import type {
+  CopilotDiagramElement,
+  CopilotDiagramRef,
+  GraphPatch,
+  MethodologyGraph,
+} from "../../lib/types.ts";
 import type { DiagramSelection } from "../diagrams/selection.ts";
 import { CopilotPanel } from "./CopilotPanel.tsx";
 import styles from "./CopilotBot.module.css";
@@ -57,14 +62,18 @@ export function CopilotBot({
   disabled,
   view,
   selection,
+  diagramElements = [],
   onSubmit,
+  onSelectDiagram = null,
 }: {
   projectId: string;
   graph: MethodologyGraph;
   disabled: boolean;
   view: CanvasView;
   selection: DiagramSelection | null;
+  diagramElements?: CopilotDiagramElement[];
   onSubmit: (patches: GraphPatch[]) => void;
+  onSelectDiagram?: ((ref: CopilotDiagramRef) => void) | null;
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<Position | null>(() =>
@@ -179,7 +188,9 @@ export function CopilotBot({
             disabled={disabled}
             view={view}
             selection={selection}
+            diagramElements={diagramElements}
             onSubmit={onSubmit}
+            onSelectDiagram={onSelectDiagram}
           />
         </div>
       ) : null}

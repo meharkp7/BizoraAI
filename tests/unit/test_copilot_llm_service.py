@@ -334,7 +334,7 @@ def test_flat_output_schema_matches_answer_contract() -> None:
         CopilotAnswer.model_fields
     )
     item = COPILOT_ANSWER_OUTPUT_SCHEMA["properties"]["citations"]["items"]
-    assert set(item["properties"]["kind"]["enum"]) == {"evidence", "run", "component"}
+    assert set(item["properties"]["kind"]["enum"]) == {"evidence", "run", "component", "diagram"}
     assert "$defs" not in COPILOT_ANSWER_OUTPUT_SCHEMA
 
 
