@@ -285,3 +285,60 @@ def structure_drawable_boxes(structure: StructureIR) -> int:
         BlockKind.REGION,
     ) else 0
     return plate + len(kids)
+
+
+def first_array_cell(structure: StructureIR) -> StructureBlock | None:
+    """Return the first array's repeated cell, or None when absent.
+
+    Walks the whole tree (arrays nest under chips and boards); the
+    repeated cell is the array's first child of kind cell.
+    """
+    stack = [structure.root]
+    while stack:
+        block = stack.pop()
+        if block.kind == BlockKind.ARRAY:
+            for child in block.children:
+                if child.kind == BlockKind.CELL:
+                    return child
+            return None
+        stack.extend(reversed(block.children))
+    return None
+
+
+def _graft_children(block: StructureBlock, cell_id: str, children: tuple[StructureBlock, ...]) -> StructureBlock:
+    """Return a copy of block with cell_id's children replaced."""
+    if block.id == cell_id:
+        return block.model_copy(update={"children": children})
+    if not block.children:
+        return block
+    rebuilt = tuple(
+        _graft_children(child, cell_id, children) for child in block.children
+    )
+    if rebuilt == block.children:
+        return block
+    return block.model_copy(update={"children": rebuilt})
+
+
+def graft_cell_interior(
+    figure_structure: StructureIR, text_structure: StructureIR
+) -> StructureIR | None:
+    """Graft text-stated cell devices into a bare figure cell.
+
+    A die photo often shows the array but not what is inside one
+    cell, while the paper text names the cell's devices ("two pairs
+    of NMOS transistors"). When the figure's repeated cell has no
+    children and the text's repeated cell does, the text children —
+    with their own page/quote evidence — become the figure cell's
+    children, so the Cell interior view has something honest to show.
+    Returns None when no graft applies (figure cell already detailed
+    or text cell bare). Pure structural merge: first array's first
+    cell on both sides, no label matching.
+    """
+    figure_cell = first_array_cell(figure_structure)
+    if figure_cell is None or figure_cell.children:
+        return None
+    text_cell = first_array_cell(text_structure)
+    if text_cell is None or not text_cell.children:
+        return None
+    root = _graft_children(figure_structure.root, figure_cell.id, text_cell.children)
+    return figure_structure.model_copy(update={"root": root})

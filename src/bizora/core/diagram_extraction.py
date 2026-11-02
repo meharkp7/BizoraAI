@@ -43,6 +43,8 @@ from bizora.contracts.diagram_ir import (
 from bizora.contracts.figures import FigureAttachment, ResponseUsage
 from bizora.core.diagram_derivation import (
     ENGINE_MIN_BOXES,
+    first_array_cell,
+    graft_cell_interior,
     methodology_to_circuit,
     methodology_to_structure,
     structure_drawable_boxes,
@@ -65,7 +67,7 @@ from bizora.providers.muse import MuseMethodologyProvider, MuseProviderError
 # renderer orientation convention (MOSFET rot-0, inverter apex rule);
 # v3 captures stated per-step settings into methodology params so the
 # what-if editor has knobs to turn.
-PROMPT_VERSION = 3
+PROMPT_VERSION = 4
 
 FigureIRKind = Literal["circuit", "flow", "structure"]
 TextIRKind = Literal["methodology", "structure"]
@@ -692,13 +694,20 @@ async def extract_paper_diagrams(
             sources["structure"] = f"figure:{result.figure_id}"
             break
 
-    if (methodology is None or structure is None) and paper_text.strip():
+    figure_cell = first_array_cell(structure) if structure is not None else None
+    needs_interior = (
+        figure_cell is not None
+        and not figure_cell.children
+        and sources.get("structure", "").startswith("figure:")
+    )
+    text_structure: StructureIR | None = None
+    if (methodology is None or structure is None or needs_interior) and paper_text.strip():
         text_result = await extract_text_diagrams(
             provider,
             paper_text,
             paper_hash=paper_hash,
             want_methodology=methodology is None,
-            want_structure=structure is None,
+            want_structure=structure is None or needs_interior,
         )
         usage.extend(text_result.usage)
         if methodology is None and text_result.methodology is not None:
@@ -713,6 +722,26 @@ async def extract_paper_diagrams(
             sources["structure"] = "text"
         elif structure is None and text_result.structure_validation.errors:
             validation["structure"] = text_result.structure_validation
+        text_structure = text_result.structure
+
+    if needs_interior and text_structure is not None and structure is not None:
+        grafted = graft_cell_interior(structure, text_structure)
+        if grafted is not None:
+            graft_report = validate_diagram(grafted)
+            if not graft_report.errors:
+                structure = grafted
+                prior = validation.get("structure", DiagramValidationResult())
+                validation["structure"] = DiagramValidationResult(
+                    errors=prior.errors,
+                    warnings=prior.warnings
+                    + graft_report.warnings
+                    + (
+                        "Repeated-cell interior transcribed from the paper text "
+                        "(the figure shows the array but not the cell contents).",
+                    ),
+                    stats=dict(graft_report.stats),
+                )
+                sources["structure:cell-interior"] = "text"
 
     if not circuits and methodology is not None:
         derived_circuit = methodology_to_circuit(methodology, source_id=source_id)
@@ -899,9 +928,15 @@ _STRUCTURE_FIGURE_INSTRUCTIONS = (
     "{rows, cols} copied from printed dimensions such as '16x16'), "
     "optional dims {w, h, d, unit}, optional pos, part, tensor_shape, "
     "children, and confidence between 0 and 1. An array's first child "
-    "is the repeated cell. Never complete, fix, or extend the figure, "
-    "and never invent blocks, counts, or dimensions. Give low "
-    "confidence for uncertain readings. Set version to 1. Output ONLY "
+    "is the repeated cell. When the figure shows what is inside the "
+    "repeated cell (a cell layout, zoomed cell, or cross-section), "
+    "transcribe each visible device as a child of the cell with kind "
+    "part and part naming the device (nmos, pmos, resistor, capacitor, "
+    "inductor, diode, inverter, buffer, amp, comparator, or block when "
+    "the device kind is genuinely unclear). Never complete, fix, or "
+    "extend the figure, and never invent blocks, counts, dimensions, "
+    "or cell contents the figure does not show. Give low confidence "
+    "for uncertain readings. Set version to 1. Output ONLY "
     "the JSON object: no markdown, no commentary, no extra keys."
 )
 
@@ -936,9 +971,15 @@ _STRUCTURE_TEXT_INSTRUCTIONS = (
     "label, kind, optional count, dims, pos, part, tensor_shape, "
     "children, confidence between 0 and 1, and evidence with the page "
     "number from [Page N] markers and a short supporting quote. An "
-    "array's first child is the repeated cell. Never invent blocks, "
-    "counts, or dimensions. Set version to 1. Output ONLY the JSON "
-    "object: no markdown, no commentary, no extra keys."
+    "array's first child is the repeated cell. When the text states "
+    "what is inside the repeated cell (named devices or a device "
+    "count), transcribe each stated device as a child of the cell "
+    "with kind part and part naming the device (nmos, pmos, resistor, "
+    "capacitor, inductor, diode, inverter, buffer, amp, comparator, "
+    "or block when the device kind is genuinely unclear). Never "
+    "invent blocks, counts, dimensions, or cell contents. Set version "
+    "to 1. Output ONLY the JSON object: no markdown, no commentary, "
+    "no extra keys."
 )
 
 _REPAIR_INSTRUCTIONS = (

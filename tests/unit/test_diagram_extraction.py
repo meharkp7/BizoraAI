@@ -889,3 +889,78 @@ def test_figure_failure_does_not_sink_siblings(tmp_path: Any) -> None:
         asyncio.run(run_test())
     finally:
         del os.environ["BIZORA_CACHE_DIR"]
+
+
+def make_detailed_structure_payload() -> dict[str, Any]:
+    """Structure whose repeated cell names two text-stated devices."""
+    payload = make_structure_payload()
+    cell = payload["root"]["children"][0]["children"][0]
+    cell["children"] = [
+        {"id": "nmos-a", "label": "NMOS pair N1-N2", "kind": "part",
+         "part": "nmos", "confidence": 0.75},
+        {"id": "pmos-a", "label": "PMOS pull-up", "kind": "part",
+         "part": "pmos", "confidence": 0.7},
+    ]
+    return payload
+
+
+def test_bare_figure_cell_grafts_text_interior(tmp_path: Any) -> None:
+    import os
+
+    os.environ["BIZORA_CACHE_DIR"] = str(tmp_path)
+    try:
+        provider = ScriptedDiagramProvider()
+        provider.classifications["fig1"] = DiagramKind.STRUCTURE
+        provider.figure_payloads[("fig1", "structure")] = make_structure_payload()
+        provider.text_payloads["methodology"] = make_methodology_payload()
+        provider.text_payloads["structure"] = make_detailed_structure_payload()
+
+        async def run_test() -> None:
+            result = await extract_paper_diagrams(
+                provider,
+                [make_figure("fig1")],
+                "Two pairs of NMOS transistors sit in the cell.",
+                paper_hash="b" * 64,
+            )
+
+            assert isinstance(result.structure, StructureIR)
+            assert result.sources["structure"] == "figure:fig1"
+            assert result.sources["structure:cell-interior"] == "text"
+            cell = result.structure.root.children[0].children[0]
+            assert [child.id for child in cell.children] == ["nmos-a", "pmos-a"]
+            report = result.validation["structure"]
+            assert any("cell interior" in w for w in report.warnings)
+            assert provider.calls.get("text:structure") == 1
+
+        asyncio.run(run_test())
+    finally:
+        del os.environ["BIZORA_CACHE_DIR"]
+
+
+def test_detailed_figure_cell_skips_text_structure(tmp_path: Any) -> None:
+    import os
+
+    os.environ["BIZORA_CACHE_DIR"] = str(tmp_path)
+    try:
+        provider = ScriptedDiagramProvider()
+        provider.classifications["fig1"] = DiagramKind.STRUCTURE
+        provider.figure_payloads[("fig1", "structure")] = (
+            make_detailed_structure_payload()
+        )
+        provider.text_payloads["methodology"] = make_methodology_payload()
+
+        async def run_test() -> None:
+            result = await extract_paper_diagrams(
+                provider,
+                [make_figure("fig1")],
+                "Two pairs of NMOS transistors sit in the cell.",
+                paper_hash="c" * 64,
+            )
+
+            assert isinstance(result.structure, StructureIR)
+            assert "structure:cell-interior" not in result.sources
+            assert provider.calls.get("text:structure") is None
+
+        asyncio.run(run_test())
+    finally:
+        del os.environ["BIZORA_CACHE_DIR"]
