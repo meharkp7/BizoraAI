@@ -1,4 +1,11 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  copilotKeys,
+  useCopilotThread,
+  useCopilotThreads,
+  useCreateCopilotThread,
+} from "../../app/queries.ts";
 import { useCopilotStream } from "./useCopilotStream.ts";
 import type { CanvasView } from "../../app/routeElements.tsx";
 import { NODE_KINDS } from "../../lib/constants.ts";
@@ -6,24 +13,16 @@ import { useLibrarySelection, useWorkspaceSelection } from "../../lib/store.ts";
 import type {
   CopilotCard,
   CopilotProposal,
-  CopilotResponse,
   GraphPatch,
   MethodologyGraph,
   NodeKind,
 } from "../../lib/types.ts";
+import { turnsFromThread, type Turn } from "./copilotThreads.ts";
 import type { DiagramSelection } from "../diagrams/selection.ts";
 import { diagramContextFor, tabName } from "./copilotContext.ts";
 import { replaceNodePatch, updateConfigPatch } from "../workspace/patchBuilders.ts";
 import styles from "./CopilotPanel.module.css";
 import { EvidenceCard } from "./EvidenceCard.tsx";
-
-interface Turn {
-  id: number;
-  message: string;
-  response: CopilotResponse | null;
-  status: string | null;
-  error: string | null;
-}
 
 function isNodeKind(value: string): value is NodeKind {
   return (NODE_KINDS as readonly string[]).includes(value);
@@ -162,6 +161,10 @@ export function CopilotPanel({
   onSubmit: (patches: GraphPatch[]) => void;
 }) {
   const copilot = useCopilotStream(projectId, graph.graph_id, graph.version);
+  const queryClient = useQueryClient();
+  const threadsQuery = useCopilotThreads(projectId, graph.graph_id);
+  const createThread = useCreateCopilotThread(projectId, graph.graph_id);
+  const [threadId, setThreadId] = useState<string | null>(null);
   const { selectedNodeIds } = useWorkspaceSelection();
   const [input, setInput] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -169,10 +172,85 @@ export function CopilotPanel({
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeIds[0]) ?? null;
   const diagramContext = diagramContextFor(view, selection, selectedNode);
   const turnIdRef = useRef(0);
+  const touchedRef = useRef(false);
+  const threads = threadsQuery.data ?? [];
+  const threadQuery = useCopilotThread(projectId, graph.graph_id, threadId);
+  const loadingThread = threadId !== null && threadQuery.isLoading;
 
-  function ask(message: string): void {
+  // Resume the most recent conversation until the user picks or starts one.
+  useEffect(() => {
+    if (touchedRef.current || threadId !== null || turns.length > 0) return;
+    const listed = threadsQuery.data ?? [];
+    if (listed.length === 0) return;
+    setThreadId(listed[0].thread_id);
+  }, [threadsQuery.data, threadId, turns.length]);
+
+  // Hydrate the panel from the active thread once its turns arrive.
+  // Only an empty panel hydrates: a thread query resolving late must never
+  // overwrite turns the user already asked, streamed, or just completed.
+  useEffect(() => {
+    const thread = threadQuery.data;
+    if (threadId === null || !thread || thread.thread_id !== threadId) return;
+    if (turns.length > 0) return;
+    const hydrated = turnsFromThread(thread);
+    turnIdRef.current = hydrated.length;
+    setDismissed(new Set());
+    setTurns(hydrated);
+  }, [threadId, threadQuery.data, turns.length]);
+
+  function refreshThreads(): void {
+    void queryClient.invalidateQueries({
+      queryKey: copilotKeys.threads(projectId, graph.graph_id),
+    });
+  }
+
+  function startNewThread(): void {
+    if (copilot.isPending || createThread.isPending) return;
+    touchedRef.current = true;
+    turnIdRef.current = 0;
+    setDismissed(new Set());
+    setTurns([]);
+    setThreadId(null);
+  }
+
+  function switchThread(nextId: string): void {
+    if (copilot.isPending || nextId === (threadId ?? "")) return;
+    touchedRef.current = true;
+    turnIdRef.current = 0;
+    setDismissed(new Set());
+    setTurns([]);
+    setThreadId(nextId === "" ? null : nextId);
+  }
+
+  async function ask(message: string): Promise<void> {
     const text = message.trim();
-    if (text === "" || copilot.isPending) return;
+    if (text === "" || copilot.isPending || createThread.isPending || loadingThread) {
+      return;
+    }
+    touchedRef.current = true;
+    let activeId = threadId;
+    if (activeId === null) {
+      try {
+        const created = await createThread.mutateAsync(null);
+        activeId = created.thread_id;
+        setThreadId(activeId);
+      } catch (error) {
+        turnIdRef.current += 1;
+        const id = turnIdRef.current;
+        setTurns((current) => [
+          ...current,
+          {
+            id,
+            message: text,
+            response: null,
+            status: null,
+            error:
+              error instanceof Error ? error.message : "Could not start a conversation.",
+          },
+        ]);
+        return;
+      }
+    }
     turnIdRef.current += 1;
     const id = turnIdRef.current;
     setTurns((current) => [
@@ -180,35 +258,66 @@ export function CopilotPanel({
       { id, message: text, response: null, status: null, error: null },
     ]);
     setInput("");
-    void copilot.ask(text, selectedNode?.id ?? null, diagramContext, {
-      onStatus: (status) =>
-        setTurns((current) =>
-          current.map((turn) => (turn.id === id ? { ...turn, status } : turn)),
-        ),
-      onDone: (response) =>
-        setTurns((current) =>
-          current.map((turn) =>
-            turn.id === id ? { ...turn, response, status: null } : turn,
+    await copilot.ask(
+      text,
+      selectedNode?.id ?? null,
+      diagramContext,
+      {
+        onStatus: (status) =>
+          setTurns((current) =>
+            current.map((turn) => (turn.id === id ? { ...turn, status } : turn)),
           ),
-        ),
-      onError: (error) =>
-        setTurns((current) =>
-          current.map((turn) =>
-            turn.id === id
-              ? {
-                  ...turn,
-                  status: null,
-                  error: error instanceof Error ? error.message : "The copilot failed.",
-                }
-              : turn,
-          ),
-        ),
-    });
+        onDone: (response) => {
+          setTurns((current) =>
+            current.map((turn) =>
+              turn.id === id ? { ...turn, response, status: null } : turn,
+            ),
+          );
+          refreshThreads();
+        },
+        onError: (error) => {
+          setTurns((current) =>
+            current.map((turn) =>
+              turn.id === id
+                ? {
+                    ...turn,
+                    status: null,
+                    error: error instanceof Error ? error.message : "The copilot failed.",
+                  }
+                : turn,
+            ),
+          );
+        },
+      },
+      activeId,
+    );
   }
 
   return (
     <section className={styles.panel} aria-label="Research copilot">
       <h2>Research copilot</h2>
+      <div className={styles.threadRow}>
+        <select
+          aria-label="Conversation"
+          value={threadId ?? ""}
+          disabled={copilot.isPending || createThread.isPending || threadsQuery.isLoading}
+          onChange={(event) => switchThread(event.target.value)}
+        >
+          <option value="">New conversation</option>
+          {threads.map((thread) => (
+            <option key={thread.thread_id} value={thread.thread_id}>
+              {thread.title}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          disabled={copilot.isPending || createThread.isPending}
+          onClick={startNewThread}
+        >
+          New
+        </button>
+      </div>
       <p className={styles.context}>
         {selection ? (
           <>
@@ -226,9 +335,9 @@ export function CopilotPanel({
       <div className={styles.turns} aria-live="polite">
         {turns.length === 0 ? (
           <p className={styles.hint}>
-            Ask to find, compare, or replace components — for example, “compare NF4 vs FP16” —
-            or ask what the paper or the runs say. Answers cite their evidence, and proposals
-            wait for your approval.
+            {loadingThread
+              ? "Loading conversation…"
+              : "Ask to find, compare, or replace components — for example, “compare NF4 vs FP16” — or ask what the paper or the runs say. Answers cite their evidence, and proposals wait for your approval."}
           </p>
         ) : null}
         {turns.map((turn, turnIndex) => {
@@ -269,7 +378,7 @@ export function CopilotPanel({
                       key={chip}
                       type="button"
                       className={styles.chip}
-                      onClick={() => ask(chip)}
+                      onClick={() => void ask(chip)}
                     >
                       {chip}
                     </button>
@@ -285,7 +394,7 @@ export function CopilotPanel({
         aria-label="Ask the copilot"
         onSubmit={(event) => {
           event.preventDefault();
-          ask(input);
+          void ask(input);
         }}
       >
         <input
@@ -296,8 +405,16 @@ export function CopilotPanel({
           spellCheck={false}
           aria-label="Copilot message"
         />
-        <button type="submit" disabled={copilot.isPending || input.trim() === ""}>
-          {copilot.isPending ? "…" : "Ask"}
+        <button
+          type="submit"
+          disabled={
+            copilot.isPending ||
+            createThread.isPending ||
+            loadingThread ||
+            input.trim() === ""
+          }
+        >
+          {copilot.isPending || createThread.isPending ? "…" : "Ask"}
         </button>
       </form>
     </section>

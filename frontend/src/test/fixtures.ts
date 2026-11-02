@@ -7,6 +7,8 @@ import type {
   ComponentDetail,
   ComponentSummary,
   CopilotResponse,
+  CopilotThread,
+  CopilotThreadSummary,
   ExperimentRun,
   ExtractedTable,
   GraphEntities,
@@ -567,6 +569,27 @@ export const copilotFixture: CopilotResponse = {
     },
   ],
   proposal: null,
+};
+
+export const copilotThreadFixture: CopilotThreadSummary = {
+  thread_id: "thread-1",
+  title: "Earlier chat",
+  turn_count: 2,
+  updated_at: "2026-10-01T00:00:00+00:00",
+};
+
+export const copilotThreadDetailFixture: CopilotThread = {
+  thread_id: "thread-1",
+  title: "Earlier chat",
+  turns: [
+    { seq: 0, role: "user", message: "find NPN transistor", response: null },
+    {
+      seq: 1,
+      role: "assistant",
+      message: "Closest library matches: 2N3904 NPN transistor.",
+      response: copilotFixture,
+    },
+  ],
 };
 
 /** Encode one copilot turn as SSE frames, mirroring the backend stream. */

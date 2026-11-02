@@ -11,6 +11,7 @@ filtering; the UI labels them as such and points at the datasheet or
 reference for authoritative limits.
 """
 
+from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -211,6 +212,7 @@ class CopilotRequest(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
     selected_node_id: str | None = Field(default=None, max_length=128)
     diagram_context: str | None = Field(default=None, max_length=280)
+    thread_id: str | None = Field(default=None, max_length=128)
 
 
 class CopilotResponse(BaseModel):
@@ -221,3 +223,43 @@ class CopilotResponse(BaseModel):
     reply: str = Field(min_length=1, max_length=6000)
     cards: tuple[CopilotCard, ...] = ()
     proposal: CopilotProposal | None = None
+
+
+class CopilotThreadCreate(BaseModel):
+    """Start one persisted copilot conversation on a graph."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: str | None = Field(default=None, max_length=200)
+
+
+class CopilotThreadSummary(BaseModel):
+    """One thread row for the conversation picker."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    thread_id: str = Field(min_length=1, max_length=128)
+    title: str = Field(max_length=200)
+    turn_count: int = Field(ge=0)
+    updated_at: datetime
+
+
+class CopilotTurn(BaseModel):
+    """One stored turn: a user message or an assistant answer."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    seq: int = Field(ge=0)
+    role: Literal["user", "assistant"] = "user"
+    message: str = Field(min_length=1)
+    response: CopilotResponse | None = None
+
+
+class CopilotThread(BaseModel):
+    """One conversation with its turns, oldest first."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    thread_id: str = Field(min_length=1, max_length=128)
+    title: str = Field(max_length=200)
+    turns: tuple[CopilotTurn, ...] = ()

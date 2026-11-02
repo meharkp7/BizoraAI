@@ -120,6 +120,18 @@ describe("api client", () => {
     expect(response.proposal).toBeNull();
   });
 
+  it("creates, lists, and reads copilot threads", async () => {
+    const created = await api.createCopilotThread("project-1", "graph-1", null);
+    expect(created.thread_id).toBe("thread-1");
+
+    const threads = await api.listCopilotThreads("project-1", "graph-1");
+    expect(threads).toEqual([]);
+
+    const thread = await api.getCopilotThread("project-1", "graph-1", "thread-1");
+    expect(thread.thread_id).toBe("thread-1");
+    expect(thread.turns).toEqual([]);
+  });
+
   it("lists execution adapters", async () => {
     const adapters = await api.listAdapters();
     expect(adapters[0]?.adapter_id).toBe("bizora.deterministic-test");

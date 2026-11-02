@@ -36,6 +36,9 @@ from bizora.contracts.components import (
     ComponentSummary,
     CopilotRequest,
     CopilotResponse,
+    CopilotThread,
+    CopilotThreadCreate,
+    CopilotThreadSummary,
     PreflightRequest,
     RemovalPreflight,
 )
@@ -88,6 +91,7 @@ from bizora.core.component_catalog import get_component, search_components
 from bizora.core.component_service import preflight_removal, preflight_replacement
 from bizora.core.config import Settings, get_settings
 from bizora.core.copilot_service import answer_copilot_async, answer_copilot_stream
+from bizora.core.copilot_threads import CopilotThreadService
 from bizora.core.diagram_extraction import (
     MuseDiagramProvider,
     extract_paper_diagrams,
@@ -1353,6 +1357,10 @@ async def ask_copilot(
 ) -> CopilotResponse:
     """Answer one copilot message against the catalog and graph state."""
     graph, context = _copilot_context(session, project_id, graph_id, version, request)
+    if request.thread_id is not None:
+        CopilotThreadService.require_thread(
+            session, project_id=project_id, graph_id=graph_id, thread_id=request.thread_id
+        )
     settings = _copilot_settings_or_503()
     check_spend_caps(session, settings, now=datetime.now(UTC))
     report = CopilotRunReport(provider_name="unknown")
@@ -1366,6 +1374,15 @@ async def ask_copilot(
         report=report,
     )
     _record_copilot_usage(session, settings, project_id, graph_id, report)
+    if request.thread_id is not None:
+        CopilotThreadService.record_turn(
+            session,
+            project_id=project_id,
+            graph_id=graph_id,
+            thread_id=request.thread_id,
+            message=request.message,
+            response=response,
+        )
     return response
 
 
@@ -1382,12 +1399,17 @@ async def stream_copilot(
 ) -> StreamingResponse:
     """Stream one copilot turn: progress statuses, then the final response."""
     graph, context = _copilot_context(session, project_id, graph_id, version, request)
+    if request.thread_id is not None:
+        CopilotThreadService.require_thread(
+            session, project_id=project_id, graph_id=graph_id, thread_id=request.thread_id
+        )
     settings = _copilot_settings_or_503()
     check_spend_caps(session, settings, now=datetime.now(UTC))
     provider = _copilot_provider_or_none()
     report = CopilotRunReport(provider_name="unknown")
 
     async def generate() -> AsyncIterator[str]:
+        final_response: CopilotResponse | None = None
         async for event in answer_copilot_stream(
             graph,
             request.message,
@@ -1400,12 +1422,88 @@ async def stream_copilot(
             if isinstance(event, CopilotStatusEvent):
                 yield _copilot_frame("status", {"message": event.message})
             elif isinstance(event, CopilotDoneEvent):
+                final_response = event.response
                 yield _copilot_frame(
                     "done", {"response": event.response.model_dump(mode="json")}
                 )
         _record_copilot_usage(session, settings, project_id, graph_id, report)
+        if request.thread_id is not None and final_response is not None:
+            CopilotThreadService.record_turn(
+                session,
+                project_id=project_id,
+                graph_id=graph_id,
+                thread_id=request.thread_id,
+                message=request.message,
+                response=final_response,
+            )
 
     return StreamingResponse(generate(), media_type="text/event-stream")
+
+
+def _graph_or_404(session: Session, project_id: str, graph_id: str) -> None:
+    """Reject thread calls against graphs that were never persisted."""
+    latest = get_latest_graph_revision(
+        session, project_id=project_id, graph_id=graph_id
+    )
+    if latest is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Graph not found.",
+        )
+
+
+@router.post(
+    "/api/v1/graphs/{project_id}/{graph_id}/copilot/threads",
+    response_model=CopilotThreadSummary,
+    status_code=status.HTTP_201_CREATED,
+    tags=["graphs"],
+)
+def create_copilot_thread(
+    project_id: str,
+    graph_id: str,
+    payload: CopilotThreadCreate,
+    session: Session = DB_SESSION_DEPENDENCY,
+) -> CopilotThreadSummary:
+    """Start one persisted copilot conversation on a graph."""
+    _graph_or_404(session, project_id, graph_id)
+    return CopilotThreadService.create_thread(
+        session, project_id=project_id, graph_id=graph_id, title=payload.title
+    )
+
+
+@router.get(
+    "/api/v1/graphs/{project_id}/{graph_id}/copilot/threads",
+    response_model=list[CopilotThreadSummary],
+    tags=["graphs"],
+)
+def list_copilot_threads(
+    project_id: str,
+    graph_id: str,
+    session: Session = DB_SESSION_DEPENDENCY,
+) -> list[CopilotThreadSummary]:
+    """List one graph's copilot threads, most recently active first."""
+    _graph_or_404(session, project_id, graph_id)
+    return CopilotThreadService.list_threads(
+        session, project_id=project_id, graph_id=graph_id
+    )
+
+
+@router.get(
+    "/api/v1/graphs/{project_id}/{graph_id}/copilot/threads/{thread_id}",
+    response_model=CopilotThread,
+    tags=["graphs"],
+)
+def get_copilot_thread(
+    project_id: str,
+    graph_id: str,
+    thread_id: str,
+    session: Session = DB_SESSION_DEPENDENCY,
+) -> CopilotThread:
+    """Load one copilot thread with its turns, oldest first."""
+    _graph_or_404(session, project_id, graph_id)
+    return CopilotThreadService.get_thread(
+        session, project_id=project_id, graph_id=graph_id, thread_id=thread_id
+    )
 
 
 @router.get(

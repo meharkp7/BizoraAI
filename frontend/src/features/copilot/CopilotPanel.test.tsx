@@ -6,12 +6,19 @@ import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "../../lib/api.ts";
 import { useLibrarySelection, useWorkspaceSelection } from "../../lib/store.ts";
-import type { GraphPatch } from "../../lib/types.ts";
-import { copilotFixture, copilotStreamBody, graphFixture } from "../../test/fixtures.ts";
+import type { CopilotThread, GraphPatch } from "../../lib/types.ts";
+import {
+  copilotFixture,
+  copilotStreamBody,
+  copilotThreadDetailFixture,
+  copilotThreadFixture,
+  graphFixture,
+} from "../../test/fixtures.ts";
 import { server } from "../../test/server.ts";
 import type { DiagramSelection } from "../diagrams/selection.ts";
 import { CopilotPanel } from "./CopilotPanel.tsx";
 import { diagramContextFor } from "./copilotContext.ts";
+import { turnsFromThread } from "./copilotThreads.ts";
 
 const n1Selection: DiagramSelection = {
   view: "schematic",
@@ -272,6 +279,132 @@ describe("CopilotPanel", () => {
     expect(
       screen.getByRole("button", { name: "Compare the top two options" }),
     ).toBeInTheDocument();
+  });
+});
+
+describe("CopilotPanel threads", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function renderPanel() {
+    return render(
+      <CopilotPanel
+        projectId="project-1"
+        graph={graphFixture}
+        disabled={false}
+        view="methodology"
+        selection={null}
+        onSubmit={() => {}}
+      />,
+      { wrapper },
+    );
+  }
+
+  it("resumes the most recent conversation on load", async () => {
+    useWorkspaceSelection.setState({ selectedNodeIds: [], selectedEdgeIds: [] });
+    server.use(
+      http.get("/api/v1/graphs/:projectId/:graphId/copilot/threads", () =>
+        HttpResponse.json([copilotThreadFixture]),
+      ),
+      http.get("/api/v1/graphs/:projectId/:graphId/copilot/threads/:threadId", () =>
+        HttpResponse.json(copilotThreadDetailFixture),
+      ),
+    );
+    renderPanel();
+
+    expect(await screen.findByText("find NPN transistor")).toBeInTheDocument();
+    expect(await screen.findByText(/Closest library matches/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Conversation")).toHaveValue("thread-1");
+  });
+
+  it("switches conversations and starts new ones", async () => {
+    useWorkspaceSelection.setState({ selectedNodeIds: [], selectedEdgeIds: [] });
+    const second = { ...copilotThreadFixture, thread_id: "thread-2", title: "Second chat" };
+    const secondDetail = {
+      thread_id: "thread-2",
+      title: "Second chat",
+      turns: [
+        { seq: 0, role: "user", message: "compare options", response: null },
+        {
+          seq: 1,
+          role: "assistant",
+          message: "Here is the comparison.",
+          response: { ...copilotFixture, reply: "Here is the comparison." },
+        },
+      ],
+    };
+    server.use(
+      http.get("/api/v1/graphs/:projectId/:graphId/copilot/threads", () =>
+        HttpResponse.json([copilotThreadFixture, second]),
+      ),
+      http.get(
+        "/api/v1/graphs/:projectId/:graphId/copilot/threads/:threadId",
+        ({ params }) =>
+          HttpResponse.json(
+            params.threadId === "thread-2" ? secondDetail : copilotThreadDetailFixture,
+          ),
+      ),
+    );
+    const user = userEvent.setup();
+    renderPanel();
+
+    expect(await screen.findByText("find NPN transistor")).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Conversation"), "thread-2");
+
+    expect(await screen.findByText("compare options")).toBeInTheDocument();
+    expect(screen.queryByText("find NPN transistor")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "New" }));
+    expect(screen.getByLabelText("Conversation")).toHaveValue("");
+    expect(screen.queryByText("compare options")).not.toBeInTheDocument();
+  });
+
+  it("sends the active thread id with each turn", async () => {
+    useWorkspaceSelection.setState({ selectedNodeIds: [], selectedEdgeIds: [] });
+    const bodies: Array<Record<string, unknown>> = [];
+    server.use(
+      http.post(
+        "/api/v1/graphs/:projectId/:graphId/revisions/:version/copilot/stream",
+        async ({ request }) => {
+          bodies.push((await request.json()) as Record<string, unknown>);
+          return new HttpResponse(copilotStreamBody(copilotFixture), {
+            headers: { "Content-Type": "text/event-stream" },
+          });
+        },
+      ),
+    );
+    const user = userEvent.setup();
+    renderPanel();
+
+    await user.type(screen.getByLabelText("Copilot message"), "hello");
+    await user.click(screen.getByRole("button", { name: "Ask" }));
+
+    expect(await screen.findByText(/Closest library matches/)).toBeInTheDocument();
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0].thread_id).toBe("thread-1");
+  });
+});
+
+describe("turnsFromThread", () => {
+  it("pairs stored turns oldest-first and drops stray assistant turns", () => {
+    const thread: CopilotThread = {
+      ...copilotThreadDetailFixture,
+      turns: [
+        ...copilotThreadDetailFixture.turns,
+        { seq: 2, role: "user", message: "and then?", response: null },
+        { seq: 3, role: "assistant", message: "stray", response: copilotFixture },
+        { seq: 4, role: "assistant", message: "really stray", response: copilotFixture },
+      ],
+    };
+    const turns = turnsFromThread(thread);
+
+    expect(turns).toHaveLength(2);
+    expect(turns[0].message).toBe("find NPN transistor");
+    expect(turns[0].response?.reply).toMatch(/Closest library matches/);
+    expect(turns[1].message).toBe("and then?");
+    expect(turns[1].response?.reply).toBe(copilotFixture.reply);
+    expect(turns.map((turn) => turn.id)).toEqual([1, 2]);
   });
 });
 

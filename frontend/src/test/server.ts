@@ -9,6 +9,8 @@ import {
   componentSummaryFixture,
   copilotFixture,
   copilotStreamBody,
+  copilotThreadDetailFixture,
+  copilotThreadFixture,
   diagramsFixture,
   diffFixture,
   entitiesFixture,
@@ -231,6 +233,18 @@ export const handlers = [
 
   http.post("/api/v1/graphs/:projectId/:graphId/revisions/:version/copilot", () =>
     HttpResponse.json(copilotFixture),
+  ),
+
+  http.get("/api/v1/graphs/:projectId/:graphId/copilot/threads", () =>
+    HttpResponse.json([]),
+  ),
+
+  http.post("/api/v1/graphs/:projectId/:graphId/copilot/threads", () =>
+    HttpResponse.json(copilotThreadFixture, { status: 201 }),
+  ),
+
+  http.get("/api/v1/graphs/:projectId/:graphId/copilot/threads/:threadId", () =>
+    HttpResponse.json({ ...copilotThreadDetailFixture, turns: [] }),
   ),
 
   http.post(

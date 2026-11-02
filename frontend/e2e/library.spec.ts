@@ -177,21 +177,45 @@ test.beforeEach(async ({ page }) => {
   await page.route("**/nodes/*/preflight", async (route) => {
     await route.fulfill({ json: preflight });
   });
-  await page.route("**/revisions/*/copilot", async (route) => {
+  await page.route("**/graph-1/copilot/threads", async (route) => {
+    if (route.request().method() === "POST") {
+      await route.fulfill({
+        status: 201,
+        json: {
+          thread_id: "thread-1",
+          title: "New conversation",
+          turn_count: 0,
+          updated_at: "2026-11-02T00:00:00+00:00",
+        },
+      });
+      return;
+    }
+    await route.fulfill({ json: [] });
+  });
+  await page.route("**/graph-1/copilot/threads/*", async (route) => {
     await route.fulfill({
-      json: {
-        reply: "Closest library matches: 2N3904 NPN transistor.",
-        cards: [
-          {
-            kind: "component",
-            title: "2N3904 NPN transistor",
-            body: "Exact part 2N3904 (onsemi)",
-            component_ids: ["npn-2n3904"],
-            node_id: null,
-          },
-        ],
-        proposal: null,
-      },
+      json: { thread_id: "thread-1", title: "New conversation", turns: [] },
+    });
+  });
+  await page.route("**/revisions/*/copilot/stream", async (route) => {
+    const response = {
+      reply: "Closest library matches: 2N3904 NPN transistor.",
+      cards: [
+        {
+          kind: "component",
+          title: "2N3904 NPN transistor",
+          body: "Exact part 2N3904 (onsemi)",
+          component_ids: ["npn-2n3904"],
+          node_id: null,
+        },
+      ],
+      proposal: null,
+    };
+    await route.fulfill({
+      contentType: "text/event-stream",
+      body:
+        `event: status\ndata: {"message":"Answering from the workspace graph…"}\n\n` +
+        `event: done\ndata: ${JSON.stringify({ response })}\n\n`,
     });
   });
   await page.route("**/api/v1/experiments/adapters", async (route) => {

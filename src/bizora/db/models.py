@@ -304,6 +304,68 @@ class PaperTextRecord(Base):
     )
 
 
+class CopilotThreadRecord(Base):
+    """One persisted copilot conversation scoped to a project graph.
+
+    Threads outlive revisions: the same conversation keeps working as the
+    graph gains revisions, and every turn answers against the revision the
+    request names.
+    """
+
+    __tablename__ = "copilot_threads"
+    __table_args__ = (
+        UniqueConstraint("thread_id", name="uq_copilot_thread_thread_id"),
+        Index("ix_copilot_thread_project_graph", "project_id", "graph_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    thread_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    project_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    graph_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+
+class CopilotTurnRecord(Base):
+    """One stored turn (user message or assistant answer) in a thread."""
+
+    __tablename__ = "copilot_turns"
+    __table_args__ = (
+        UniqueConstraint(
+            "thread_id",
+            "seq",
+            name="uq_copilot_turn_thread_seq",
+        ),
+        Index("ix_copilot_turn_thread", "thread_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    thread_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    seq: Mapped[int] = mapped_column(Integer, nullable=False)
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    response_payload: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+
 class UsageRecordRow(Base):
     """One metered (or explicitly unmetered) model or execution call.
 

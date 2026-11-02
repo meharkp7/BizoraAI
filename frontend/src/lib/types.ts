@@ -656,6 +656,26 @@ export interface CopilotResponse {
   proposal: CopilotProposal | null;
 }
 
+export interface CopilotThreadSummary {
+  thread_id: string;
+  title: string;
+  turn_count: number;
+  updated_at: string;
+}
+
+export interface CopilotTurn {
+  seq: number;
+  role: "user" | "assistant";
+  message: string;
+  response: CopilotResponse | null;
+}
+
+export interface CopilotThread {
+  thread_id: string;
+  title: string;
+  turns: CopilotTurn[];
+}
+
 export interface AdapterSummary {
   adapter_id: string;
   adapter_version: string;

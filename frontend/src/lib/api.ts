@@ -11,6 +11,8 @@ import type {
   ComponentDetail,
   ComponentSummary,
   CopilotResponse,
+  CopilotThread,
+  CopilotThreadSummary,
   ExperimentConfig,
   ExperimentRun,
   ExtractedTable,
@@ -448,6 +450,7 @@ export const api = {
     message: string,
     selectedNodeId: string | null,
     diagramContext: string | null,
+    threadId?: string | null,
   ): Promise<CopilotResponse> {
     return request(
       `/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/revisions/${version}/copilot`,
@@ -457,8 +460,39 @@ export const api = {
           message,
           selected_node_id: selectedNodeId,
           diagram_context: diagramContext,
+          thread_id: threadId ?? null,
         }),
       },
+    );
+  },
+
+  listCopilotThreads(projectId: string, graphId: string): Promise<CopilotThreadSummary[]> {
+    return request(
+      `/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/copilot/threads`,
+    );
+  },
+
+  createCopilotThread(
+    projectId: string,
+    graphId: string,
+    title?: string | null,
+  ): Promise<CopilotThreadSummary> {
+    return request(
+      `/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/copilot/threads`,
+      {
+        method: "POST",
+        body: JSON.stringify({ title: title ?? null }),
+      },
+    );
+  },
+
+  getCopilotThread(
+    projectId: string,
+    graphId: string,
+    threadId: string,
+  ): Promise<CopilotThread> {
+    return request(
+      `/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/copilot/threads/${encode(threadId)}`,
     );
   },
 
@@ -470,6 +504,7 @@ export const api = {
     selectedNodeId: string | null,
     diagramContext: string | null,
     signal?: AbortSignal,
+    threadId?: string | null,
   ): Promise<Response> {
     const response = await send(
       `/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/revisions/${version}/copilot/stream`,
@@ -480,6 +515,7 @@ export const api = {
           message,
           selected_node_id: selectedNodeId,
           diagram_context: diagramContext,
+          thread_id: threadId ?? null,
         }),
         signal,
       },

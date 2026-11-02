@@ -6,7 +6,7 @@ import json
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -25,6 +25,8 @@ from bizora.contracts.table import ExtractedTable
 from bizora.core.errors import BizoraError, ErrorCode
 from bizora.db.models import (
     ArtifactRecordRow,
+    CopilotThreadRecord,
+    CopilotTurnRecord,
     ExperimentRunRecord,
     ExtractedTableRecord,
     GraphLayoutRecord,
@@ -850,3 +852,117 @@ def get_paper_text(session: Session, *, source_id: str) -> str | None:
     )
     record = session.scalars(statement).first()
     return record.text if record is not None else None
+
+
+def save_copilot_thread(
+    session: Session,
+    *,
+    thread_id: str,
+    project_id: str,
+    graph_id: str,
+    title: str,
+    now: datetime,
+) -> CopilotThreadRecord:
+    """Persist one copilot thread header."""
+    record = CopilotThreadRecord(
+        thread_id=thread_id,
+        project_id=project_id,
+        graph_id=graph_id,
+        title=title,
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(record)
+    try:
+        session.flush()
+    except IntegrityError as exc:
+        session.rollback()
+        raise BizoraError(
+            ErrorCode.RESOURCE_CONFLICT,
+            "The copilot thread conflicts with an existing database record.",
+            details={"thread_id": thread_id},
+        ) from exc
+    return record
+
+
+def get_copilot_thread(
+    session: Session, *, thread_id: str
+) -> CopilotThreadRecord | None:
+    """Retrieve one copilot thread header by id."""
+    statement = select(CopilotThreadRecord).where(
+        CopilotThreadRecord.thread_id == thread_id
+    )
+    return session.scalar(statement)
+
+
+def list_copilot_threads(
+    session: Session, *, project_id: str, graph_id: str
+) -> list[CopilotThreadRecord]:
+    """Retrieve one graph's threads, most recently active first."""
+    statement = (
+        select(CopilotThreadRecord)
+        .where(
+            CopilotThreadRecord.project_id == project_id,
+            CopilotThreadRecord.graph_id == graph_id,
+        )
+        .order_by(CopilotThreadRecord.updated_at.desc())
+    )
+    return list(session.scalars(statement))
+
+
+def count_copilot_turns(
+    session: Session, *, thread_ids: list[str]
+) -> dict[str, int]:
+    """Count stored turns per thread id in one query."""
+    if not thread_ids:
+        return {}
+    statement = (
+        select(CopilotTurnRecord.thread_id, func.count(CopilotTurnRecord.id))
+        .where(CopilotTurnRecord.thread_id.in_(thread_ids))
+        .group_by(CopilotTurnRecord.thread_id)
+    )
+    return {thread_id: count for thread_id, count in session.execute(statement)}
+
+
+def list_copilot_turns(
+    session: Session, *, thread_id: str
+) -> list[CopilotTurnRecord]:
+    """Retrieve one thread's turns, oldest first."""
+    statement = (
+        select(CopilotTurnRecord)
+        .where(CopilotTurnRecord.thread_id == thread_id)
+        .order_by(CopilotTurnRecord.seq.asc())
+    )
+    return list(session.scalars(statement))
+
+
+def save_copilot_turn(
+    session: Session,
+    *,
+    thread_id: str,
+    seq: int,
+    role: str,
+    message: str,
+    response_payload: dict[str, Any] | None,
+    now: datetime,
+) -> CopilotTurnRecord:
+    """Persist one turn at its sequence position."""
+    record = CopilotTurnRecord(
+        thread_id=thread_id,
+        seq=seq,
+        role=role,
+        message=message,
+        response_payload=response_payload,
+        created_at=now,
+    )
+    session.add(record)
+    try:
+        session.flush()
+    except IntegrityError as exc:
+        session.rollback()
+        raise BizoraError(
+            ErrorCode.RESOURCE_CONFLICT,
+            "The copilot turn conflicts with an existing database record.",
+            details={"thread_id": thread_id, "seq": seq},
+        ) from exc
+    return record

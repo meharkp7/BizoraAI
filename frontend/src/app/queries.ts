@@ -350,6 +350,42 @@ export function useCopilot(projectId: string, graphId: string, version: number) 
   });
 }
 
+export const copilotKeys = {
+  threads: (projectId: string, graphId: string) =>
+    ["graph", projectId, graphId, "copilot", "threads"] as const,
+  thread: (projectId: string, graphId: string, threadId: string) =>
+    ["graph", projectId, graphId, "copilot", "threads", threadId] as const,
+};
+
+export function useCopilotThreads(projectId: string, graphId: string) {
+  return useQuery({
+    queryKey: copilotKeys.threads(projectId, graphId),
+    queryFn: () => api.listCopilotThreads(projectId, graphId),
+  });
+}
+
+export function useCopilotThread(
+  projectId: string,
+  graphId: string,
+  threadId: string | null,
+) {
+  return useQuery({
+    queryKey: copilotKeys.thread(projectId, graphId, threadId ?? ""),
+    queryFn: () => api.getCopilotThread(projectId, graphId, threadId ?? ""),
+    enabled: threadId !== null,
+  });
+}
+
+export function useCreateCopilotThread(projectId: string, graphId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (title: string | null) => api.createCopilotThread(projectId, graphId, title),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: copilotKeys.threads(projectId, graphId) });
+    },
+  });
+}
+
 export function useRenderSpecs(
   projectId: string,
   graphId: string,
