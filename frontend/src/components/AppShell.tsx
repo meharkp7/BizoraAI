@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, NavLink, Outlet, useNavigate, useParams } from "react-router";
 import { accountKeys, useMe } from "../app/queries.ts";
+import { SiteAgent } from "../features/copilot/SiteAgent.tsx";
 import { useSession, useTheme } from "../lib/store.ts";
 import styles from "./AppShell.module.css";
 
@@ -126,6 +127,7 @@ export function AppShell() {
       <main className={styles.main}>
         <Outlet />
       </main>
+      <SiteAgent />
     </div>
   );
 }

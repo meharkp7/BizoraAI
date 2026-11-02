@@ -83,56 +83,11 @@ test("workspace shows the replication checklist and tracks progress", async ({ p
   await expect(panel.getByText("1 of 1 steps done")).toBeVisible();
 });
 
-test("narrate build fetches the spoken guide", async ({ page }) => {
-  let narrationRequested = false;
-  await page.addInitScript(() => {
-    const spoken: string[] = [];
-    (globalThis as unknown as Record<string, unknown>)["__spoken"] = spoken;
-    class FakeUtterance {
-      text: string;
-      onend: (() => void) | null = null;
-      onerror: (() => void) | null = null;
-      constructor(text: string) {
-        this.text = text;
-      }
-    }
-    (globalThis as unknown as Record<string, unknown>)["SpeechSynthesisUtterance"] =
-      FakeUtterance;
-    (globalThis as unknown as Record<string, unknown>)["speechSynthesis"] = {
-      speak: (utterance: FakeUtterance) => {
-        spoken.push(utterance.text);
-        utterance.onend?.();
-      },
-      cancel: () => {},
-    };
-  });
-  await page.route("**/api/v1/projects/*/graphs/*/replication-plan/narration", async (route) => {
-    narrationRequested = true;
-    await route.fulfill({
-      json: {
-        project_id: "project-1",
-        graph_id: "graph-1",
-        version: 2,
-        intro: "Replication guide: 1 step.",
-        lines: [
-          { seq: 1, node_id: "input", text: "Step 1 of 1. Provide input." },
-        ],
-      },
-    });
-  });
+test("replication plan points at the agent voice chat", async ({ page }) => {
   await page.goto("/g/project-1/graph-1?v=2");
 
   const panel = page.getByRole("region", { name: "Replication plan" });
-  const narrate = panel.getByRole("button", { name: "Narrate build" });
-  await expect(narrate).toBeVisible();
-  await narrate.click();
-
-  await expect
-    .poll(() => narrationRequested, { message: "narration endpoint requested" })
-    .toBe(true);
-  await expect(panel.getByText("1 of 1 steps done")).toBeVisible();
-  const spoken = await page.evaluate(
-    () => (globalThis as unknown as Record<string, string[]>)["__spoken"],
-  );
-  expect(spoken).toEqual(["Replication guide: 1 step.", "Step 1 of 1. Provide input."]);
+  await expect(panel.getByText("0 of 1 steps done")).toBeVisible();
+  await expect(panel.getByText(/Talk through this build hands-free/)).toBeVisible();
+  await expect(panel.getByRole("button", { name: "Narrate build" })).toBeHidden();
 });

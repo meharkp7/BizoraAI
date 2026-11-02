@@ -52,7 +52,7 @@ function RobotFace(): ReactNode {
   );
 }
 
-/** Floating research copilot: a draggable robot that opens the chat in
+/** Floating Bizora agent: a draggable robot that opens the chat in
  *  an overlay. The conversation itself is the existing CopilotPanel,
  *  so turns, evidence cards, and approval-gated proposals work
  *  unchanged; only the entry point floats. */
@@ -65,6 +65,7 @@ export function CopilotBot({
   diagramElements = [],
   onSubmit,
   onSelectDiagram = null,
+  detached = false,
 }: {
   projectId: string;
   graph: MethodologyGraph;
@@ -74,6 +75,7 @@ export function CopilotBot({
   diagramElements?: CopilotDiagramElement[];
   onSubmit: (patches: GraphPatch[]) => void;
   onSelectDiagram?: ((ref: CopilotDiagramRef) => void) | null;
+  detached?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<Position | null>(() =>
@@ -115,9 +117,9 @@ export function CopilotBot({
         type="button"
         className={styles.bot}
         style={pos ? { left: pos.x, top: pos.y, right: "auto", bottom: "auto" } : undefined}
-        aria-label={open ? "Close research copilot" : "Open research copilot"}
+        aria-label={open ? "Close Bizora agent" : "Open Bizora agent"}
         aria-expanded={open}
-        title="Research copilot (drag to move)"
+        title="Bizora agent (drag to move)"
         onPointerDown={(event) => {
           const rect = event.currentTarget.getBoundingClientRect();
           drag.current = {
@@ -173,11 +175,11 @@ export function CopilotBot({
         <RobotFace />
       </button>
       {open ? (
-        <div className={styles.overlay} role="dialog" aria-label="Research copilot chat">
+        <div className={styles.overlay} role="dialog" aria-label="Bizora agent chat">
           <button
             type="button"
             className={styles.close}
-            aria-label="Close copilot chat"
+            aria-label="Close agent chat"
             onClick={() => setOpen(false)}
           >
             ×
@@ -191,6 +193,7 @@ export function CopilotBot({
             diagramElements={diagramElements}
             onSubmit={onSubmit}
             onSelectDiagram={onSelectDiagram}
+            detached={detached}
           />
         </div>
       ) : null}

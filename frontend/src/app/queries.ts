@@ -110,10 +110,11 @@ export function useRevisionDiff(
   });
 }
 
-export function useRevisionList(projectId: string, graphId: string) {
+export function useRevisionList(projectId: string, graphId: string, enabled = true) {
   return useQuery({
     queryKey: graphKeys.revisionList(projectId, graphId),
     queryFn: () => api.listRevisions(projectId, graphId),
+    enabled,
   });
 }
 

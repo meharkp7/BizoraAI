@@ -1,9 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import type { ReactNode } from "react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { server } from "../../test/server.ts";
 import { ReplicationPlanPanel } from "./ReplicationPlanPanel.tsx";
 
@@ -88,97 +87,16 @@ describe("ReplicationPlanPanel", () => {
     ).toBeInTheDocument();
   });
 
-  it("says plainly when speech is unsupported", async () => {
+  it("points at the agent instead of a narrate button", async () => {
     render(<ReplicationPlanPanel projectId="project-1" graphId="graph-1" />, { wrapper });
 
     expect(await screen.findByText(/0 of 2 steps done/)).toBeInTheDocument();
     expect(
-      screen.getByText("Spoken narration needs a browser with speech support."),
+      screen.getByText(/Talk through this build hands-free/),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Narrate build" })).not.toBeInTheDocument();
-  });
-});
-
-class FakeUtterance {
-  text: string;
-  onend: (() => void) | null = null;
-  onerror: (() => void) | null = null;
-  constructor(text: string) {
-    this.text = text;
-  }
-}
-
-describe("ReplicationPlanPanel narration", () => {
-  const spoken: FakeUtterance[] = [];
-  let autoEnd = true;
-
-  beforeEach(() => {
-    window.localStorage.clear();
-    spoken.length = 0;
-    autoEnd = true;
-    server.use(
-      http.get("/api/v1/projects/:projectId/graphs/:graphId/replication-plan", () =>
-        HttpResponse.json(PLAN),
-      ),
-      http.get(
-        "/api/v1/projects/:projectId/graphs/:graphId/replication-plan/narration",
-        () =>
-          HttpResponse.json({
-            project_id: "project-1",
-            graph_id: "graph-1",
-            version: 2,
-            intro: "Replication guide: 2 steps.",
-            lines: [
-              { seq: 1, node_id: "input", text: "Step 1 of 2. Provide input." },
-              { seq: 2, node_id: "vit", text: "Step 2 of 2. Build model." },
-            ],
-          }),
-      ),
-    );
-    const w = window as unknown as Record<string, unknown>;
-    w["SpeechSynthesisUtterance"] = FakeUtterance;
-    w["speechSynthesis"] = {
-      speak: (utterance: FakeUtterance) => {
-        spoken.push(utterance);
-        if (autoEnd) utterance.onend?.();
-      },
-      cancel: () => {},
-    };
-  });
-
-  afterEach(() => {
-    const w = window as unknown as Record<string, unknown>;
-    delete w["SpeechSynthesisUtterance"];
-    delete w["speechSynthesis"];
-  });
-
-  it("reads the guide and checks steps off", async () => {
-    const user = userEvent.setup();
-    render(<ReplicationPlanPanel projectId="project-1" graphId="graph-1" />, { wrapper });
-
-    await user.click(await screen.findByRole("button", { name: "Narrate build" }));
-
-    expect(await screen.findByText(/2 of 2 steps done/)).toBeInTheDocument();
-    expect(spoken.map((utterance) => utterance.text)).toEqual([
-      "Replication guide: 2 steps.",
-      "Step 1 of 2. Provide input.",
-      "Step 2 of 2. Build model.",
-    ]);
-    // Narration finished: the button is back and nothing stays current.
-    expect(await screen.findByRole("button", { name: "Narrate build" })).toBeInTheDocument();
-  });
-
-  it("stops mid-narration", async () => {
-    autoEnd = false;
-    const user = userEvent.setup();
-    render(<ReplicationPlanPanel projectId="project-1" graphId="graph-1" />, { wrapper });
-
-    await user.click(await screen.findByRole("button", { name: "Narrate build" }));
-    await user.click(await screen.findByRole("button", { name: "Stop narration" }));
-
-    expect(await screen.findByRole("button", { name: "Narrate build" })).toBeInTheDocument();
-    expect(spoken.map((utterance) => utterance.text)).toEqual([
-      "Replication guide: 2 steps.",
-    ]);
+    expect(
+      screen.queryByRole("button", { name: "Stop narration" }),
+    ).not.toBeInTheDocument();
   });
 });

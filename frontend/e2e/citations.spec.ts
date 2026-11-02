@@ -113,10 +113,10 @@ async function mockWorkspace(page: Page) {
 test("evidence cards open the cited paper passage", async ({ page }) => {
   await mockWorkspace(page);
   await page.goto(WORKSPACE_URL);
-  await page.getByRole("button", { name: "Open research copilot" }).click();
+  await page.getByRole("button", { name: "Open Bizora agent" }).click();
 
-  const chat = page.getByRole("dialog", { name: "Research copilot chat" });
-  await chat.getByLabel("Copilot message").fill("what did the paper say about the filter?");
+  const chat = page.getByRole("dialog", { name: "Bizora agent chat" });
+  await chat.getByLabel("Agent message").fill("what did the paper say about the filter?");
   await chat.getByRole("button", { name: "Ask" }).click();
 
   await expect(chat.getByText("Paper evidence")).toBeVisible();

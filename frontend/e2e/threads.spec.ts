@@ -130,9 +130,9 @@ async function mockWorkspace(page: Page) {
 test("copilot resumes the most recent conversation and switches", async ({ page }) => {
   await mockWorkspace(page);
   await page.goto(WORKSPACE_URL);
-  await page.getByRole("button", { name: "Open research copilot" }).click();
+  await page.getByRole("button", { name: "Open Bizora agent" }).click();
 
-  const chat = page.getByRole("dialog", { name: "Research copilot chat" });
+  const chat = page.getByRole("dialog", { name: "Bizora agent chat" });
   await expect(chat.getByText("find NPN transistor")).toBeVisible();
   await expect(chat.getByText(/Closest library matches/)).toBeVisible();
   await expect(chat.getByLabel("Conversation")).toHaveValue("thread-1");

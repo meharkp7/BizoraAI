@@ -116,12 +116,12 @@ test.beforeEach(async ({ page }) => {
 
 test("dictation fills an editable message that asks normally", async ({ page }) => {
   await page.goto("/g/project-1/graph-1");
-  await page.getByRole("button", { name: "Open research copilot" }).click();
+  await page.getByRole("button", { name: "Open Bizora agent" }).click();
 
-  const chat = page.getByRole("dialog", { name: "Research copilot chat" });
+  const chat = page.getByRole("dialog", { name: "Bizora agent chat" });
   await chat.getByRole("button", { name: "Dictate message" }).click();
 
-  const input = chat.getByLabel("Copilot message");
+  const input = chat.getByLabel("Agent message");
   await expect(input).toHaveValue("find NPN transistor");
 
   await input.fill("find NPN transistor edited");
@@ -146,9 +146,9 @@ test("voice chat asks hands-free and reads the answer aloud", async ({ page }) =
   });
 
   await page.goto("/g/project-1/graph-1");
-  await page.getByRole("button", { name: "Open research copilot" }).click();
+  await page.getByRole("button", { name: "Open Bizora agent" }).click();
 
-  const chat = page.getByRole("dialog", { name: "Research copilot chat" });
+  const chat = page.getByRole("dialog", { name: "Bizora agent chat" });
   await chat.getByRole("button", { name: "Voice chat" }).click();
 
   // The fake recognizer emits its transcript on start: no typing needed.

@@ -80,7 +80,7 @@ export function useCopilotStream(projectId: string, graphId: string, version: nu
         voice ?? false,
       );
       const reader = response.body?.getReader();
-      if (!reader) throw new Error("The copilot stream had no body.");
+      if (!reader) throw new Error("The agent stream had no body.");
       const decoder = new TextDecoder();
       let buffer = "";
       for (;;) {
@@ -104,10 +104,10 @@ export function useCopilotStream(projectId: string, graphId: string, version: nu
           cut = buffer.indexOf("\n\n");
         }
       }
-      if (!sawDone) throw new Error("The copilot stream ended without an answer.");
+      if (!sawDone) throw new Error("The agent stream ended without an answer.");
     } catch (error) {
       if (controller.signal.aborted) return;
-      callbacks.onError(error instanceof Error ? error : new Error("The copilot failed."));
+      callbacks.onError(error instanceof Error ? error : new Error("The agent failed."));
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
       setIsPending(false);

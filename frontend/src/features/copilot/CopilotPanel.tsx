@@ -32,7 +32,7 @@ function isNodeKind(value: string): value is NodeKind {
   return (NODE_KINDS as readonly string[]).includes(value);
 }
 
-const VOICE_ERROR_REPLY = "Sorry, I could not reach the copilot just now.";
+const VOICE_ERROR_REPLY = "Sorry, I could not reach the agent just now.";
 
 const VOICE_STATUS: Record<VoiceAgentState, string> = {
   idle: "Voice chat is off.",
@@ -63,6 +63,7 @@ function ProposalActions({
   proposal,
   graph,
   disabled,
+  detached,
   dismissed,
   onApprove,
   onDismiss,
@@ -70,6 +71,7 @@ function ProposalActions({
   proposal: CopilotProposal;
   graph: MethodologyGraph;
   disabled: boolean;
+  detached: boolean;
   dismissed: boolean;
   onApprove: (patches: GraphPatch[]) => void;
   onDismiss: () => void;
@@ -77,6 +79,18 @@ function ProposalActions({
   if (dismissed) return <p className={styles.dismissed}>Proposal dismissed.</p>;
   const node = graph.nodes.find((candidate) => candidate.id === proposal.node_id);
   if (!node) return <p className={styles.dismissed}>The proposed node is no longer here.</p>;
+  if (detached) {
+    return (
+      <>
+        <p className={styles.gateNote}>Open the workspace to apply this proposal.</p>
+        <div className={styles.proposalActions}>
+          <button type="button" className={styles.secondary} onClick={onDismiss}>
+            Dismiss
+          </button>
+        </div>
+      </>
+    );
+  }
   return (
     <>
     <p className={styles.gateNote}>Nothing is applied until you approve.</p>
@@ -114,6 +128,7 @@ function CardView({
   card,
   graph,
   disabled,
+  detached,
   proposal,
   dismissed,
   onApprove,
@@ -123,6 +138,7 @@ function CardView({
   card: CopilotCard;
   graph: MethodologyGraph;
   disabled: boolean;
+  detached: boolean;
   proposal: CopilotProposal | null;
   dismissed: boolean;
   onApprove: (patches: GraphPatch[]) => void;
@@ -171,6 +187,7 @@ function CardView({
           proposal={proposal}
           graph={graph}
           disabled={disabled}
+          detached={detached}
           dismissed={dismissed}
           onApprove={onApprove}
           onDismiss={onDismissProposal}
@@ -189,6 +206,7 @@ export function CopilotPanel({
   diagramElements = [],
   onSubmit,
   onSelectDiagram = null,
+  detached = false,
 }: {
   projectId: string;
   graph: MethodologyGraph;
@@ -198,6 +216,12 @@ export function CopilotPanel({
   diagramElements?: CopilotDiagramElement[];
   onSubmit: (patches: GraphPatch[]) => void;
   onSelectDiagram?: ((ref: CopilotDiagramRef) => void) | null;
+  /**
+   * Site-wide mode: chatting about a graph from outside the workspace.
+   * Workspace selection is ignored (it belongs to another page) and
+   * proposals stay visible but apply from the workspace.
+   */
+  detached?: boolean;
 }) {
   const copilot = useCopilotStream(projectId, graph.graph_id, graph.version);
   const queryClient = useQueryClient();
@@ -227,7 +251,8 @@ export function CopilotPanel({
       voiceGenRef.current += 1;
     },
   });
-  const selectedNode = graph.nodes.find((node) => node.id === selectedNodeIds[0]) ?? null;
+  const selectedNode =
+    detached ? null : (graph.nodes.find((node) => node.id === selectedNodeIds[0]) ?? null);
   const diagramContext = diagramContextFor(view, selection, selectedNode);
   const turnIdRef = useRef(0);
   const touchedRef = useRef(false);
@@ -348,7 +373,7 @@ export function CopilotPanel({
                 ? {
                     ...turn,
                     status: null,
-                    error: error instanceof Error ? error.message : "The copilot failed.",
+                    error: error instanceof Error ? error.message : "The agent failed.",
                   }
                 : turn,
             ),
@@ -390,8 +415,8 @@ export function CopilotPanel({
   }
 
   return (
-    <section className={styles.panel} aria-label="Research copilot">
-      <h2>Research copilot</h2>
+    <section className={styles.panel} aria-label="Bizora agent">
+      <h2>Bizora agent</h2>
       <div className={styles.threadRow}>
         <select
           aria-label="Conversation"
@@ -445,8 +470,13 @@ export function CopilotPanel({
           <>
             Talking about <strong>{selectedNode.label}</strong> ({tabName(view)} tab)
           </>
+        ) : detached ? (
+          <>
+            Chatting about <strong>{graph.title}</strong> — open the workspace to
+            apply proposals.
+          </>
         ) : (
-          <>Viewing the {tabName(view)} tab — select a node to discuss it with the copilot.</>
+          <>Viewing the {tabName(view)} tab — select a node to discuss it with the agent.</>
         )}
       </p>
       <div className={styles.turns} aria-live="polite">
@@ -472,6 +502,7 @@ export function CopilotPanel({
                       card={card}
                       graph={graph}
                       disabled={disabled}
+                      detached={detached}
                       proposal={turn.response?.proposal ?? null}
                       dismissed={dismissed.has(turn.id)}
                       onApprove={onSubmit}
@@ -512,7 +543,7 @@ export function CopilotPanel({
       </div>
       <form
         className={styles.form}
-        aria-label="Ask the copilot"
+        aria-label="Ask the agent"
         onSubmit={(event) => {
           event.preventDefault();
           if (voiceMode) {
@@ -531,7 +562,7 @@ export function CopilotPanel({
           placeholder="Find, compare, or replace a component…"
           autoComplete="off"
           spellCheck={false}
-          aria-label="Copilot message"
+          aria-label="Agent message"
         />
         {voice.supported && !voiceMode ? (
           <button

@@ -121,9 +121,9 @@ test("copilot locates a diagram element and jumps the viewer to it", async ({ pa
   await page.goto("/g/project-1/graph-1");
   await expect(page.getByRole("heading", { name: "Vision transformer" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Open research copilot" }).click();
-  const chat = page.getByRole("dialog", { name: "Research copilot chat" });
-  await chat.getByLabel("Copilot message").fill("show m-encode");
+  await page.getByRole("button", { name: "Open Bizora agent" }).click();
+  const chat = page.getByRole("dialog", { name: "Bizora agent chat" });
+  await chat.getByLabel("Agent message").fill("show m-encode");
   await chat.getByRole("button", { name: "Ask" }).click();
 
   await expect(chat.getByText("Diagram element m-encode")).toBeVisible();

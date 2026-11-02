@@ -169,7 +169,7 @@ describe("CopilotPanel grounding", () => {
       { wrapper },
     );
 
-    await user.type(screen.getByLabelText("Copilot message"), "What does the paper say?");
+    await user.type(screen.getByLabelText("Agent message"), "What does the paper say?");
     await user.click(screen.getByRole("button", { name: "Ask" }));
 
     expect(await screen.findByText("Grounded in paper")).toBeInTheDocument();

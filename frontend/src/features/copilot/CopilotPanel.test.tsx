@@ -77,7 +77,7 @@ describe("CopilotPanel", () => {
       { wrapper },
     );
 
-    await user.type(screen.getByLabelText("Copilot message"), "why is this slow?");
+    await user.type(screen.getByLabelText("Agent message"), "why is this slow?");
     await user.click(screen.getByRole("button", { name: "Ask" }));
 
     expect(await screen.findByText("Thinking (round 1)…")).toBeInTheDocument();
@@ -101,7 +101,7 @@ describe("CopilotPanel", () => {
       { wrapper },
     );
 
-    await user.type(screen.getByLabelText("Copilot message"), "find NPN transistor");
+    await user.type(screen.getByLabelText("Agent message"), "find NPN transistor");
     await user.click(screen.getByRole("button", { name: "Ask" }));
 
     expect(await screen.findByText(/Closest library matches/)).toBeInTheDocument();
@@ -151,7 +151,7 @@ describe("CopilotPanel", () => {
       { wrapper },
     );
 
-    await user.type(screen.getByLabelText("Copilot message"), "replace encoder with 2N3904");
+    await user.type(screen.getByLabelText("Agent message"), "replace encoder with 2N3904");
     await user.click(screen.getByRole("button", { name: "Ask" }));
 
     expect(await screen.findByText(/is compatible with/)).toBeInTheDocument();
@@ -204,7 +204,7 @@ describe("CopilotPanel", () => {
       { wrapper },
     );
 
-    await user.type(screen.getByLabelText("Copilot message"), "set layers to 24");
+    await user.type(screen.getByLabelText("Agent message"), "set layers to 24");
     await user.click(screen.getByRole("button", { name: "Ask" }));
 
     expect(await screen.findByText("Ready to set layers.")).toBeInTheDocument();
@@ -214,6 +214,63 @@ describe("CopilotPanel", () => {
     const [[patches]] = onSubmit.mock.calls as [[GraphPatch[]]];
     expect(patches[0].operation).toBe("update_node_config");
     expect(patches[0].payload["config"]).toEqual({ layers: 24 });
+  });
+
+  it("keeps detached proposals apply-gated behind the workspace", async () => {
+    useWorkspaceSelection.setState({ selectedNodeIds: ["encoder"], selectedEdgeIds: [] });
+    server.use(
+      http.post("/api/v1/graphs/:projectId/:graphId/revisions/:version/copilot/stream", () =>
+        new HttpResponse(copilotStreamBody({
+          reply: "2N3904 NPN transistor is compatible with Transformer encoder.",
+          cards: [
+            {
+              kind: "proposal",
+              title: "Replace Transformer encoder with 2N3904 NPN transistor",
+              body: "All known interfaces are preserved.",
+              component_ids: ["npn-2n3904"],
+              node_id: "encoder",
+            },
+          ],
+          proposal: {
+            node_id: "encoder",
+            component_id: "npn-2n3904",
+            kind: "component",
+            label: "2N3904 NPN transistor",
+            description: "NPN transistor.",
+            config: { part: "2N3904" },
+            rationale: "Test proposal.",
+          },
+        }), { headers: { "Content-Type": "text/event-stream" } }),
+      ),
+    );
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <CopilotPanel
+        projectId="project-1"
+        graph={graphFixture}
+        disabled
+        view="methodology"
+        selection={null}
+        onSubmit={onSubmit}
+        detached
+      />,
+      { wrapper },
+    );
+
+    // Stale workspace selection never leaks into detached context.
+    expect(screen.getByText(/Chatting about/)).toHaveTextContent("Vision transformer");
+    await user.type(screen.getByLabelText("Agent message"), "replace encoder with 2N3904");
+    await user.click(screen.getByRole("button", { name: "Ask" }));
+
+    expect(await screen.findByText(/is compatible with/)).toBeInTheDocument();
+    expect(
+      screen.getByText("Open the workspace to apply this proposal."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Approve and apply" }),
+    ).not.toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 
   it("sends the diagram tab and selection as viewer context", async () => {
@@ -242,7 +299,7 @@ describe("CopilotPanel", () => {
     );
 
     expect(screen.getByText(/Talking about/)).toHaveTextContent("N1");
-    await user.type(screen.getByLabelText("Copilot message"), "What does this do?");
+    await user.type(screen.getByLabelText("Agent message"), "What does this do?");
     await user.click(screen.getByRole("button", { name: "Ask" }));
 
     expect(await screen.findByText(/Closest library matches/)).toBeInTheDocument();
@@ -302,7 +359,7 @@ describe("CopilotPanel", () => {
           results: [{ isFinal: true, 0: { transcript: "find NPN transistor" } }],
         });
       });
-      expect(screen.getByLabelText("Copilot message")).toHaveValue("find NPN transistor");
+      expect(screen.getByLabelText("Agent message")).toHaveValue("find NPN transistor");
 
       await user.click(screen.getByRole("button", { name: "Ask" }));
       expect(await screen.findByText(/Closest library matches/)).toBeInTheDocument();
@@ -462,7 +519,7 @@ describe("CopilotPanel", () => {
       { wrapper },
     );
 
-    await user.type(screen.getByLabelText("Copilot message"), "find NPN transistor");
+    await user.type(screen.getByLabelText("Agent message"), "find NPN transistor");
     await user.click(screen.getByRole("button", { name: "Ask" }));
 
     expect(
@@ -591,7 +648,7 @@ describe("CopilotPanel threads", () => {
       { wrapper },
     );
 
-    await user.type(screen.getByLabelText("Copilot message"), "show m1");
+    await user.type(screen.getByLabelText("Agent message"), "show m1");
     await user.click(screen.getByRole("button", { name: "Ask" }));
 
     expect(await screen.findByText(/Closest library matches/)).toBeInTheDocument();
@@ -641,7 +698,7 @@ describe("CopilotPanel threads", () => {
       { wrapper },
     );
 
-    await user.type(screen.getByLabelText("Copilot message"), "show m1");
+    await user.type(screen.getByLabelText("Agent message"), "show m1");
     await user.click(screen.getByRole("button", { name: "Ask" }));
 
     expect(await screen.findByText("Diagram element m1")).toBeInTheDocument();
@@ -670,7 +727,7 @@ describe("CopilotPanel threads", () => {
     const user = userEvent.setup();
     renderPanel();
 
-    await user.type(screen.getByLabelText("Copilot message"), "hello");
+    await user.type(screen.getByLabelText("Agent message"), "hello");
     await user.click(screen.getByRole("button", { name: "Ask" }));
 
     expect(await screen.findByText(/Closest library matches/)).toBeInTheDocument();
