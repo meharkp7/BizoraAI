@@ -235,6 +235,16 @@ test("palette adds a library component as a new node", async ({ page }) => {
   await expect(page).toHaveURL(/v=3/);
 });
 
+test("library offers the method-pipeline domain", async ({ page }) => {
+  await page.goto(WORKSPACE_URL);
+  await page.getByRole("tab", { name: "Library" }).click();
+
+  const domain = page.getByLabel("Domain");
+  await expect(domain.getByRole("option", { name: "Method pipeline" })).toBeAttached();
+  await domain.selectOption("method-pipeline");
+  await expect(domain).toHaveValue("method-pipeline");
+});
+
 test("run panel names unavailable adapters", async ({ page }) => {
   await page.route("**/api/v1/experiments/adapters", async (route) => {
     await route.fulfill({

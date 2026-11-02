@@ -5,6 +5,7 @@ from bizora.packs import (
     distributed_systems,
     electronics,
     iot,
+    method_pipeline,
     quantization,
     signal_processing,
 )
@@ -25,6 +26,8 @@ def default_registry() -> PackRegistry:
             signal_processing.pack,
             distributed_systems.pack,
             deep_learning.pack,
+            # Generic fallback: ties always resolve to a specialized pack.
+            method_pipeline.pack,
         ]
     )
 

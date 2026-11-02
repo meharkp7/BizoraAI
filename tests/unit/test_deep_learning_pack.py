@@ -47,6 +47,7 @@ def test_routing_tie_order_is_preserved() -> None:
         "signal-processing",
         "distributed-systems",
         "deep-learning",
+        "method-pipeline",
     )
     assert isinstance(registry, PackRegistry)
 

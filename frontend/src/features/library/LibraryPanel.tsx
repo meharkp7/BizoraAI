@@ -7,7 +7,7 @@ import { SymbolGlyph } from "../canvas/SymbolGlyph.tsx";
 import { categoryLabel, domainLabel } from "../canvas/graph3d.ts";
 import styles from "./LibraryPanel.module.css";
 
-const DOMAINS = ["electronics", "iot", "quantization", "signal-processing", "distributed-systems"];
+const DOMAINS = ["electronics", "iot", "quantization", "signal-processing", "distributed-systems", "deep-learning", "method-pipeline"];
 
 const CATEGORIES = [
   "package",
@@ -21,6 +21,8 @@ const CATEGORIES = [
   "signal",
   "service",
   "storage",
+  "layer",
+  "process",
   "generic",
 ];
 

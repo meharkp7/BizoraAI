@@ -183,6 +183,7 @@ export const DOMAIN_LABELS: Record<string, string> = {
   "signal-processing": "Signal processing",
   "distributed-systems": "Distributed system",
   "deep-learning": "Deep learning",
+  "method-pipeline": "Method pipeline",
   generic: "Generic",
 };
 

@@ -21,6 +21,10 @@ EXPECTED_NON_PHYSICAL = {
     ("deep-learning", "optimizer"),
     ("deep-learning", "dataloader"),
     ("deep-learning", "model-evaluator"),
+    ("method-pipeline", "pipeline-dataset"),
+    ("method-pipeline", "pipeline-stage"),
+    ("method-pipeline", "pipeline-model"),
+    ("method-pipeline", "pipeline-evaluator"),
 }
 
 
@@ -38,7 +42,7 @@ def test_every_entity_type_declares_symbol_and_physicality() -> None:
     """No type renders by accident: symbol and physicality are explicit."""
     indexed = _entity_types()
 
-    assert len(indexed) == 42
+    assert len(indexed) == 46
     for key, entity in indexed.items():
         assert entity.symbol, key
         assert isinstance(entity.physical, bool), key
@@ -77,6 +81,6 @@ def test_every_pack_exposes_unmapped_telemetry() -> None:
     """The telemetry slot exists on all packs and stays unmapped for now."""
     packs = list(REGISTRY.packs)
 
-    assert len(packs) == 6
+    assert len(packs) == 7
     for pack in packs:
         assert pack.telemetry_mapping() is None, pack.pack_id

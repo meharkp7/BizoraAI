@@ -66,6 +66,7 @@ def test_default_registry_routes_each_pack_by_tags() -> None:
         "signal-processing",
         "distributed-systems",
         "deep-learning",
+        "method-pipeline",
     )
     cases = {
         "electronics": ("sram", "leakage"),
@@ -74,6 +75,7 @@ def test_default_registry_routes_each_pack_by_tags() -> None:
         "signal-processing": ("qam", "ofdm"),
         "distributed-systems": ("raft", "quorum"),
         "deep-learning": ("backprop", "pretrain"),
+        "method-pipeline": ("dataset", "preprocessing"),
     }
     for pack_id, labels in cases.items():
         routed = registry.route(tuple(DomainTag(label=label) for label in labels))
@@ -255,8 +257,8 @@ def test_check_patch_clears_compatible_and_non_replace_edits() -> None:
 
 
 def test_moved_catalog_preserves_every_part() -> None:
-    """All 58 catalog entries survive the move from core to packs."""
-    assert len(CATALOG) == 58
+    """All 58 moved entries survive, plus the 6 method-pipeline generics."""
+    assert len(CATALOG) == 64
     assert Counter(detail.domain for detail in CATALOG.values()) == Counter(
         {
             "electronics": 21,
@@ -264,6 +266,7 @@ def test_moved_catalog_preserves_every_part() -> None:
             "quantization": 9,
             "signal-processing": 8,
             "distributed-systems": 7,
+            "method-pipeline": 6,
         }
     )
     for component_id in (
