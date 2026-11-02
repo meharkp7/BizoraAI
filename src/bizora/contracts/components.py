@@ -183,6 +183,17 @@ class CopilotProposal(BaseModel):
     rationale: str = Field(min_length=1, max_length=1000)
 
 
+class CopilotCardSource(BaseModel):
+    """A machine-readable pointer from a card to its paper passage."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source_id: str = Field(min_length=1, max_length=128)
+    page: int | None = Field(default=None, ge=1)
+    quote: str | None = Field(default=None, min_length=1, max_length=2000)
+    figure_label: str | None = Field(default=None, max_length=128)
+
+
 class CopilotCard(BaseModel):
     """One structured attachment on a copilot reply."""
 
@@ -193,6 +204,7 @@ class CopilotCard(BaseModel):
     body: str = Field(min_length=1, max_length=4000)
     component_ids: tuple[str, ...] = ()
     node_id: str | None = Field(default=None, max_length=128)
+    source: CopilotCardSource | None = None
 
 
 class PreflightRequest(BaseModel):

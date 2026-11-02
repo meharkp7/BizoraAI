@@ -24,6 +24,7 @@ import {
   notFound,
   paperExtractionFixture,
   paperImportFixture,
+  paperTextFixture,
   parsedPaperFixture,
   qualitySummaryFixture,
   pendingRun,
@@ -246,6 +247,8 @@ export const handlers = [
   http.get("/api/v1/graphs/:projectId/:graphId/copilot/threads/:threadId", () =>
     HttpResponse.json({ ...copilotThreadDetailFixture, turns: [] }),
   ),
+
+  http.get("/api/v1/papers/:sourceId/text", () => HttpResponse.json(paperTextFixture)),
 
   http.post(
     "/api/v1/graphs/:projectId/:graphId/revisions/:version/copilot/stream",

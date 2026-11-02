@@ -120,6 +120,13 @@ describe("api client", () => {
     expect(response.proposal).toBeNull();
   });
 
+  it("fetches one paper's extracted text", async () => {
+    const paper = await api.getPaperText("paper-1");
+    expect(paper.source_id).toBe("paper-1");
+    expect(paper.page_count).toBe(2);
+    expect(paper.text).toContain("[Page 2]");
+  });
+
   it("creates, lists, and reads copilot threads", async () => {
     const created = await api.createCopilotThread("project-1", "graph-1", null);
     expect(created.thread_id).toBe("thread-1");

@@ -34,6 +34,7 @@ import type {
   PaperImportRequest,
   PaperImportResponse,
   PaperReportedMetric,
+  PaperText,
   PaperUpload,
   PaperWhatIfParse,
   PaperWhatIfResponse,
@@ -494,6 +495,10 @@ export const api = {
     return request(
       `/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/copilot/threads/${encode(threadId)}`,
     );
+  },
+
+  getPaperText(sourceId: string): Promise<PaperText> {
+    return request(`/api/v1/papers/${encode(sourceId)}/text`);
   },
 
   async postCopilotStream(

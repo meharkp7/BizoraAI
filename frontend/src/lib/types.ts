@@ -642,12 +642,27 @@ export interface CopilotProposal {
 
 export type CopilotCardKind = "component" | "comparison" | "proposal" | "evidence" | "info";
 
+export interface CopilotCardSource {
+  source_id: string;
+  page: number | null;
+  quote: string | null;
+  figure_label: string | null;
+}
+
 export interface CopilotCard {
   kind: CopilotCardKind;
   title: string;
   body: string;
   component_ids: string[];
   node_id: string | null;
+  source?: CopilotCardSource | null;
+}
+
+export interface PaperText {
+  source_id: string;
+  page_count: number | null;
+  sha256: string | null;
+  text: string;
 }
 
 export interface CopilotResponse {

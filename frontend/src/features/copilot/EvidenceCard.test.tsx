@@ -65,6 +65,53 @@ describe("EvidenceCard", () => {
     expect(screen.getByText("Not measured")).toBeInTheDocument();
     expect(screen.queryByText("Measured")).not.toBeInTheDocument();
   });
+
+  it("opens the cited passage from the paper", async () => {
+    const user = userEvent.setup();
+    render(
+      <EvidenceCard
+        card={{
+          kind: "evidence",
+          title: "Paper evidence",
+          body: "Source: paper-1 · Page 2",
+          component_ids: [],
+          node_id: "encoder",
+          source: {
+            source_id: "paper-1",
+            page: 2,
+            quote: "The filter corner is 4 kHz per the paper",
+            figure_label: null,
+          },
+        }}
+      />,
+      { wrapper },
+    );
+
+    await user.click(screen.getByRole("button", { name: "Open in paper" }));
+
+    expect(await screen.findByText("Page 2 of paper-1")).toBeInTheDocument();
+    const mark = await screen.findByText("The filter corner is 4 kHz per the paper");
+    expect(mark.tagName).toBe("MARK");
+
+    await user.click(screen.getByRole("button", { name: "Close paper passage" }));
+    expect(screen.queryByText("Page 2 of paper-1")).not.toBeInTheDocument();
+  });
+
+  it("hides the paper link without a structured source", () => {
+    render(
+      <EvidenceCard
+        card={{
+          kind: "evidence",
+          title: "Paper evidence",
+          body: "Source: paper-1 · Page 3",
+          component_ids: [],
+          node_id: "encoder",
+        }}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Open in paper" })).not.toBeInTheDocument();
+  });
 });
 
 describe("CopilotPanel grounding", () => {

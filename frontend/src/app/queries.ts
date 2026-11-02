@@ -376,6 +376,16 @@ export function useCopilotThread(
   });
 }
 
+export function usePaperText(sourceId: string, enabled = true) {
+  return useQuery({
+    queryKey: ["papers", sourceId, "text"] as const,
+    queryFn: () => api.getPaperText(sourceId),
+    enabled,
+    retry: false,
+    staleTime: Infinity,
+  });
+}
+
 export function useCreateCopilotThread(projectId: string, graphId: string) {
   const queryClient = useQueryClient();
   return useMutation({

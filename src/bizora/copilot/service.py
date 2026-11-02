@@ -21,6 +21,7 @@ from pydantic import ValidationError
 
 from bizora.contracts.components import (
     CopilotCard,
+    CopilotCardSource,
     CopilotProposal,
     CopilotResponse,
 )
@@ -186,6 +187,12 @@ def _evidence_card(citation: EvidenceCitation) -> CopilotCard:
         body="\n".join(lines),
         component_ids=(),
         node_id=citation.target_id,
+        source=CopilotCardSource(
+            source_id=citation.source_id,
+            page=citation.page,
+            quote=citation.quote,
+            figure_label=citation.figure_label,
+        ),
     )
 
 

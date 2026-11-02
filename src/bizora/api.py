@@ -75,6 +75,7 @@ from bizora.contracts.table import (
     PaperExtractionResponse,
     PaperImportRequest,
     PaperImportResponse,
+    PaperTextResponse,
     ParsedPaper,
     SamplePaper,
     SuggestedIds,
@@ -155,6 +156,7 @@ from bizora.db.repository import (
     get_latest_graph_revision,
     get_paper_figure,
     get_paper_text,
+    get_paper_text_record,
     graph_revision_summary_from_record,
     list_artifacts_for_run,
     list_experiment_runs,
@@ -580,6 +582,31 @@ async def _extract_from_pdf(
         warnings=warnings,
         page_count=pdf.page_count,
         truncated=pdf.truncated,
+    )
+
+
+@router.get(
+    "/api/v1/papers/{source_id}/text",
+    response_model=PaperTextResponse,
+    tags=["papers"],
+)
+def read_paper_text(
+    source_id: str,
+    session: Session = DB_SESSION_DEPENDENCY,
+) -> PaperTextResponse:
+    """Return one paper's extracted text for citation passage lookup."""
+    record = get_paper_text_record(session, source_id=source_id)
+    if record is None:
+        raise BizoraError(
+            ErrorCode.RESOURCE_NOT_FOUND,
+            "The paper text was not found.",
+            details={"source_id": source_id},
+        )
+    return PaperTextResponse(
+        source_id=record.source_id,
+        page_count=record.page_count,
+        sha256=record.sha256,
+        text=record.text,
     )
 
 

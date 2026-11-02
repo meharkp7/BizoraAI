@@ -23,6 +23,7 @@ import type {
   PaperFigure,
   PaperNote,
   PaperReportedMetric,
+  PaperText,
   PaperWhatIfResponse,
   PaperImportResponse,
   ParsedPaper,
@@ -590,6 +591,13 @@ export const copilotThreadDetailFixture: CopilotThread = {
       response: copilotFixture,
     },
   ],
+};
+
+export const paperTextFixture: PaperText = {
+  source_id: "paper-1",
+  page_count: 2,
+  sha256: "0".repeat(64),
+  text: "[Page 1]\nIntro words about the design.\n[Page 2]\nThe filter corner is 4 kHz per the paper, measured at room temperature.",
 };
 
 /** Encode one copilot turn as SSE frames, mirroring the backend stream. */

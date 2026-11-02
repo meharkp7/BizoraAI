@@ -845,13 +845,20 @@ def save_paper_text(
 
 def get_paper_text(session: Session, *, source_id: str) -> str | None:
     """Fetch one paper's extracted page text, or None when absent."""
+    record = get_paper_text_record(session, source_id=source_id)
+    return record.text if record is not None else None
+
+
+def get_paper_text_record(
+    session: Session, *, source_id: str
+) -> PaperTextRecord | None:
+    """Fetch one paper's stored text record, or None when absent."""
     statement = (
         select(PaperTextRecord)
         .where(PaperTextRecord.source_id == source_id)
         .order_by(PaperTextRecord.id.desc())
     )
-    record = session.scalars(statement).first()
-    return record.text if record is not None else None
+    return session.scalars(statement).first()
 
 
 def save_copilot_thread(

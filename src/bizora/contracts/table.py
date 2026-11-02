@@ -93,6 +93,17 @@ class PaperImportRequest(BaseModel):
     max_tables: int = Field(default=10, ge=1, le=20)
 
 
+class PaperTextResponse(BaseModel):
+    """One paper's extracted text with [Page N] markers for passage lookup."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source_id: str = Field(min_length=1, max_length=128)
+    page_count: int | None = Field(default=None, ge=1)
+    sha256: str | None = Field(default=None, min_length=64, max_length=64)
+    text: str = Field(min_length=1)
+
+
 class PaperImportResponse(BaseModel):
     """The fetched paper's source facts plus its extraction result."""
 
