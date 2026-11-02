@@ -86,7 +86,7 @@ describe("StructureDiagramView", () => {
     ).toHaveAttribute("aria-pressed", "true");
     // Generic identity caption + shape legend for the dressed scene.
     expect(
-      screen.getByText(/Shapes follow the IR kind and plates name each part/),
+      screen.getByText(/Each part builds as its typed device/),
     ).toBeInTheDocument();
     expect(screen.getByRole("list", { name: "Part family legend" })).toBeInTheDocument();
   });
@@ -172,7 +172,7 @@ describe("StructureDiagramView", () => {
     expect(screen.getByText("3 from paper · 1 assumed")).toBeInTheDocument();
     expect(screen.queryByText("chip warning")).toBeNull();
     expect(
-      screen.getByText(/Shapes follow the IR kind and plates name each part/),
+      screen.getByText(/Each part builds as its typed device/),
     ).toBeInTheDocument();
     expect(screen.getByRole("list", { name: "Part family legend" })).toBeInTheDocument();
     fireEvent.click(toggle.getByRole("button", { name: "Full structure" }));

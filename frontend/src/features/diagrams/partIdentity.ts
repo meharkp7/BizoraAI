@@ -1,14 +1,13 @@
-/* Generic 3D part identity: shape by closed IR enum, plates from IR text.
+/* Honest fallback for unrecognized 3D parts: a labeled plate on a
+ * shape by closed IR enum.
  *
- * Every part gets a distinct form plus an engraved identity plate naming it,
- * so a database, a compute module and a plain block are spottable at a
- * glance without any per-paper or per-technology special-casing. The shape
- * reads ONLY the block's `kind`/`part` enum values (never the label: no
- * substring or keyword matching exists in this module), the body tint
- * groups the IR's closed kind/type vocabularies the way the engine's own
- * kind colors do, and the plate prints the IR's own label/kind/part
- * text. Anything unrecognized falls back to the slate box; unknown
+ * Recognized devices build as their true structures in
+ * componentModels; this module covers everything else with a shape
+ * from the block's `kind`/`part` enum values (stores read as steel
+ * canisters, modules as dark slabs), a categorical body tint, and an
+ * engraved plate printing the IR's own label/kind/part text. Unknown
  * technologies degrade to a labeled box, never to a wrong lookalike.
+ * This module also owns the floating-tag helpers used for every part.
  *
  * Unit footprint: x/z in [-0.5, 0.5], base at y = 0, height 0.5; the
  * canvas scales the group onto the engine box.

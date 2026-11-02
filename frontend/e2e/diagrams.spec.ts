@@ -483,7 +483,7 @@ test("3D circuit scene shows the schematic components with no board", async ({ p
   await expect(circuitView.locator("canvas")).toBeVisible();
   await expect(circuitView.getByText("M1")).toBeVisible();
   await expect(circuitView.getByText("R1")).toBeVisible();
-  await expect(page.getByText("Shapes follow the IR kind and plates name each part")).toBeVisible();
+  await expect(page.getByText("Each part builds as its typed device")).toBeVisible();
 });
 
 test("3D parts list spotlights a part into the Inspector", async ({ page }) => {

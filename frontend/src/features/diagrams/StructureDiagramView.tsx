@@ -15,6 +15,7 @@ import { renderStructureDiagram } from "./adapters.ts";
 import { CircuitPicker } from "./CircuitPicker.tsx";
 import { circuitToStructure } from "./circuitToStructure.ts";
 import { buildCircuitWires, wireHoverThreshold } from "./circuitWires.ts";
+import { buildComponentModel, modelKindForBlock } from "./componentModels.ts";
 import { buildPartIdentity, shortTagLabel } from "./partIdentity.ts";
 import { DiagramFallback } from "./DiagramFallback.tsx";
 import styles from "./DiagramView.module.css";
@@ -268,19 +269,22 @@ export function StructureDiagramView({
         </ul>
       )}
       <p className={styles.counts}>
-        Shapes follow the IR kind and plates name each part from the paper&apos;s own
-        text — click any part for its evidence. Arrangement, not dimensions.
+        Each part builds as its typed device from the paper&apos;s own IR —
+        transistors, passives, converters, stores — click any part for its
+        evidence. Unrecognized parts keep a labeled plate. Arrangement, not dimensions.
       </p>
     </div>
   );
 }
 
-/** Swap every engine box for its generic identity (shape by IR enum,
- *  engraved plate from IR text). The chip root keeps its box for the
- *  silicon finish below. Each part sits in an unscaled wrapper at the
- *  box's position carrying the box's id/label, so picking, hover,
- *  spotlight and disposal keep working unchanged; nested children
- *  (module members the engine never draws) lay out in a grid on top. */
+/** Swap every engine box for its true structure (a transistor builds
+ *  as a transistor, a store as a canister) or, for unrecognized
+ *  parts, the honest labeled fallback. The chip root keeps its box
+ *  for the silicon finish below. Each part sits in an unscaled
+ *  wrapper at the box's position carrying the box's id/label, so
+ *  picking, hover, spotlight and disposal keep working unchanged;
+ *  nested children (module members the engine never draws) lay out
+ *  in a grid on top. */
 function dressPartMeshes(group: THREE.Group, root: DiagramBlock): void {
   for (const child of [...group.children]) {
     if (!(child instanceof THREE.Mesh)) continue;
@@ -301,7 +305,10 @@ function dressPartMeshes(group: THREE.Group, root: DiagramBlock): void {
       child.position.z,
     );
     wrapper.userData = { ...child.userData };
-    const model = buildPartIdentity(block, params.width / Math.max(params.depth, 1e-6));
+    const kind = modelKindForBlock(block);
+    const model = kind
+      ? buildComponentModel(kind)
+      : buildPartIdentity(block, params.width / Math.max(params.depth, 1e-6));
     // Unit footprint (1x1, height 0.5) scaled onto the engine box.
     model.scale.set(params.width, params.height / 0.5, params.depth);
     wrapper.add(model);
@@ -327,10 +334,11 @@ function dressPartMeshes(group: THREE.Group, root: DiagramBlock): void {
 /** Lay a block's children in a grid on top of its dressed box. The
  *  engine draws only top-level boxes, so module members (and any other
  *  nesting) would otherwise stay invisible; this arrangement is
- *  illustrative — the caption says so — while shapes, tints and plates
- *  stay just as honest as top-level parts. Each child gets its own
- *  unscaled wrapper with its block id/label, so picking, hover and
- *  spotlight treat nested parts exactly like top-level ones. */
+ *  illustrative — the caption says so — while true structures and the
+ *  labeled fallback stay just as honest as top-level parts. Each
+ *  child gets its own unscaled wrapper with its block id/label, so
+ *  picking, hover and spotlight treat nested parts exactly like
+ *  top-level ones. */
 function layoutNestedParts(
   parent: THREE.Group,
   block: DiagramBlock,
@@ -355,7 +363,10 @@ function layoutNestedParts(
       -d / 2 + cellD * (row + 0.5),
     );
     wrapper.userData = { id: kid.id, label: kid.label };
-    const model = buildPartIdentity(kid, cellW / Math.max(cellD, 1e-6));
+    const kind = modelKindForBlock(kid);
+    const model = kind
+      ? buildComponentModel(kind)
+      : buildPartIdentity(kid, cellW / Math.max(cellD, 1e-6));
     model.scale.set(cellW * 0.9, childH / 0.5, cellD * 0.9);
     wrapper.add(model);
     parent.add(wrapper);
