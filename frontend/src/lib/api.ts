@@ -38,6 +38,9 @@ import type {
   PaperFigure,
   PaperImportRequest,
   PaperImportResponse,
+  ProjectInviteCreateResponse,
+  ProjectInviteRole,
+  ProjectInviteSummary,
   PaperReportedMetric,
   PaperText,
   PaperUpload,
@@ -218,6 +221,39 @@ export const api = {
     await request<null>(`/api/v1/projects/${encode(projectId)}/memory/${factId}`, {
       method: "DELETE",
     });
+  },
+
+  listInvites(projectId: string): Promise<ProjectInviteSummary[]> {
+    return request(`/api/v1/projects/${encode(projectId)}/invites`);
+  },
+
+  createInvite(
+    projectId: string,
+    email: string,
+    role: ProjectInviteRole,
+  ): Promise<ProjectInviteCreateResponse> {
+    return request(`/api/v1/projects/${encode(projectId)}/invites`, {
+      method: "POST",
+      body: JSON.stringify({ email, role }),
+    });
+  },
+
+  acceptInvite(
+    projectId: string,
+    inviteId: string,
+    token: string,
+  ): Promise<ProjectInviteSummary> {
+    return request(
+      `/api/v1/projects/${encode(projectId)}/invites/${encode(inviteId)}/accept`,
+      { method: "POST", body: JSON.stringify({ token }) },
+    );
+  },
+
+  revokeInvite(projectId: string, inviteId: string): Promise<ProjectInviteSummary> {
+    return request(
+      `/api/v1/projects/${encode(projectId)}/invites/${encode(inviteId)}`,
+      { method: "DELETE" },
+    );
   },
 
   listRevisions(projectId: string, graphId: string): Promise<GraphRevisionSummary[]> {

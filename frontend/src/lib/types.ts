@@ -295,6 +295,25 @@ export interface MemoryFact {
   created_at: string;
 }
 
+export type ProjectInviteRole = "viewer" | "editor" | "owner";
+export type ProjectInviteStatus = "pending" | "accepted" | "revoked";
+
+export interface ProjectInviteSummary {
+  invite_id: string;
+  project_id: string;
+  email: string;
+  role: ProjectInviteRole;
+  status: ProjectInviteStatus;
+  created_by: string;
+  created_at: string;
+  expires_at: string;
+}
+
+export interface ProjectInviteCreateResponse {
+  invite: ProjectInviteSummary;
+  token: string;
+}
+
 export interface GraphRevisionSummary {
   version: number;
   parent_version: number | null;

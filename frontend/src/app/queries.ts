@@ -9,6 +9,7 @@ import type {
   GraphPatchBatch,
   PaperImportRequest,
   PaperUpload,
+  ProjectInviteRole,
 } from "../lib/types.ts";
 
 export const graphKeys = {
@@ -412,6 +413,50 @@ export function useDeleteMemoryFact(projectId: string) {
     mutationFn: (factId: number) => api.deleteMemoryFact(projectId, factId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: memoryKeys.facts(projectId) });
+    },
+  });
+}
+
+export const inviteKeys = {
+  list: (projectId: string) => ["projects", projectId, "invites"] as const,
+};
+
+export function useProjectInvites(projectId: string | null, enabled = true) {
+  return useQuery({
+    queryKey: inviteKeys.list(projectId ?? ""),
+    queryFn: () => api.listInvites(projectId ?? ""),
+    enabled: projectId !== null && enabled,
+  });
+}
+
+export function useCreateInvite(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ email, role }: { email: string; role: ProjectInviteRole }) =>
+      api.createInvite(projectId, email, role),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: inviteKeys.list(projectId) });
+    },
+  });
+}
+
+export function useAcceptInvite(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ inviteId, token }: { inviteId: string; token: string }) =>
+      api.acceptInvite(projectId, inviteId, token),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: inviteKeys.list(projectId) });
+    },
+  });
+}
+
+export function useRevokeInvite(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (inviteId: string) => api.revokeInvite(projectId, inviteId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: inviteKeys.list(projectId) });
     },
   });
 }
