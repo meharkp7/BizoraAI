@@ -80,3 +80,8 @@ tests/gold/.cache/
 
 # Parallel-phase git worktrees (scratch checkouts, never committed)
 .worktrees/
+
+# Local-only archives and generated art (never committed)
+# The diagram engine's source of truth is frontend/src/diagram-engine/.
+/bizora-diagram-engine.zip
+/generated_images/

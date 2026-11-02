@@ -63,7 +63,9 @@ npx playwright install chromium
 - `src/components/` — app shell, theme toggle, loading/error/empty states
 - `src/features/` — home, workspace (revision viewer, inspector, evidence,
   diff), diagrams (Methodology/Schematic/3D views), runs, comparison
-- `src/diagram-engine/` — vendored renderer (byte-identical to
-  `bizora-diagram-engine.zip`); checked under `tsconfig.engine.json`
+- `src/diagram-engine/` — vendored renderer (the repo-local
+  `bizora-diagram-engine.zip` at the workspace root is an optional local
+  archive of the same code, never committed); checked under
+  `tsconfig.engine.json`
 - `src/test/` — MSW handlers/fixtures shared by unit tests
 - `e2e/` — Playwright smoke specs (network-stubbed; seeded-API E2E is Phase I)
