@@ -27,6 +27,7 @@ import {
   preflightFixture,
   renderSpecsFixture,
   reportedMetricsFixture,
+  revisionHistoryFixture,
   runUsageFixture,
   samplePaperFixture,
   simulationPreviewFixture,
@@ -76,6 +77,26 @@ export const handlers = [
   }),
 
   http.get("/api/v1/graphs/:projectId/:graphId/diff", () => HttpResponse.json(diffFixture)),
+
+  http.get("/api/v1/graphs/:projectId/:graphId/revisions", ({ params }) => {
+    if (params["projectId"] === "project-1" && params["graphId"] === "graph-1") {
+      return HttpResponse.json(revisionHistoryFixture);
+    }
+    return notFound("RESOURCE_NOT_FOUND", "Graph not found.");
+  }),
+
+  http.post(
+    "/api/v1/graphs/:projectId/:graphId/revisions/:version/restore",
+    ({ params }) => {
+      if (params["projectId"] === "project-1" && params["graphId"] === "graph-1") {
+        return HttpResponse.json(
+          { ...graphFixture, version: 3, parent_version: 2, created_by: "workspace-ui" },
+          { status: 201 },
+        );
+      }
+      return notFound("RESOURCE_NOT_FOUND", "Graph revision not found.");
+    },
+  ),
 
   http.get(
     "/api/v1/graphs/:projectId/:graphId/revisions/:version/entities",

@@ -47,7 +47,11 @@ from bizora.contracts.figures import (
     PaperFigure,
     ResponseUsage,
 )
-from bizora.contracts.graph import MethodologyGraph
+from bizora.contracts.graph import (
+    GraphRestoreRequest,
+    GraphRevisionSummary,
+    MethodologyGraph,
+)
 from bizora.contracts.layout import GraphLayout
 from bizora.contracts.packs import SimulationPreview
 from bizora.contracts.patches import GraphPatch, GraphPatchBatch
@@ -136,9 +140,11 @@ from bizora.db.repository import (
     get_latest_graph_revision,
     get_paper_figure,
     get_paper_text,
+    graph_revision_summary_from_record,
     list_artifacts_for_run,
     list_experiment_runs,
     list_extracted_tables,
+    list_graph_revisions,
     list_metrics_for_run,
     metric_record_from_row,
 )
@@ -863,6 +869,101 @@ def apply_graph_patch_batch(
         edges=patched_graph.edges,
         source_ids=patched_graph.source_ids,
         title=patched_graph.title,
+    )
+
+    return MethodologyGraph.model_validate(record.graph_payload)
+
+
+@router.get(
+    "/api/v1/graphs/{project_id}/{graph_id}/revisions",
+    response_model=list[GraphRevisionSummary],
+    tags=["graphs"],
+)
+def list_revisions(
+    project_id: str,
+    graph_id: str,
+    session: Session = DB_SESSION_DEPENDENCY,
+) -> list[GraphRevisionSummary]:
+    """Return the version history of a graph, oldest first."""
+    records = list_graph_revisions(
+        session,
+        project_id=project_id,
+        graph_id=graph_id,
+    )
+
+    if not records:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Graph not found.",
+        )
+
+    return [graph_revision_summary_from_record(record) for record in records]
+
+
+@router.post(
+    "/api/v1/graphs/{project_id}/{graph_id}/revisions/{version}/restore",
+    response_model=MethodologyGraph,
+    status_code=status.HTTP_201_CREATED,
+    tags=["graphs"],
+)
+def restore_revision(
+    project_id: str,
+    graph_id: str,
+    version: int,
+    request: GraphRestoreRequest,
+    session: Session = DB_SESSION_DEPENDENCY,
+) -> MethodologyGraph:
+    """Append a new head revision carrying an older revision's content.
+
+    History is immutable: restore never rewrites or deletes revisions.
+    """
+    if version < 1:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Version must be a positive integer.",
+        )
+
+    target_record = get_graph_revision(
+        session,
+        project_id=project_id,
+        graph_id=graph_id,
+        version=version,
+    )
+
+    if target_record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Graph revision not found.",
+        )
+
+    latest = get_latest_graph_revision(
+        session,
+        project_id=project_id,
+        graph_id=graph_id,
+    )
+
+    if latest is None or target_record.version == latest.version:
+        raise BizoraError(
+            ErrorCode.RESOURCE_CONFLICT,
+            "The revision is already the latest; nothing to restore.",
+            details={
+                "project_id": project_id,
+                "graph_id": graph_id,
+                "version": version,
+            },
+        )
+
+    target_graph = MethodologyGraph.model_validate(target_record.graph_payload)
+    latest_graph = MethodologyGraph.model_validate(latest.graph_payload)
+
+    record = GraphPersistenceService.create_revision(
+        session,
+        latest_graph,
+        created_by=request.requested_by,
+        nodes=target_graph.nodes,
+        edges=target_graph.edges,
+        source_ids=target_graph.source_ids,
+        title=target_graph.title,
     )
 
     return MethodologyGraph.model_validate(record.graph_payload)

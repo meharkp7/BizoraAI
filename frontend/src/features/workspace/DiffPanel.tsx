@@ -8,15 +8,25 @@ export function DiffPanel({
   projectId,
   graphId,
   currentVersion,
+  compareRequest,
   onDiffChange,
 }: {
   projectId: string;
   graphId: string;
   currentVersion: number;
+  compareRequest?: { base: number; target: number } | null;
   onDiffChange?: (diff: GraphRevisionDiff | null) => void;
 }) {
   const [baseVersion, setBaseVersion] = useState(Math.max(1, currentVersion - 1));
   const [targetVersion, setTargetVersion] = useState(currentVersion);
+  const [appliedRequest, setAppliedRequest] = useState(compareRequest ?? null);
+  if (compareRequest !== appliedRequest) {
+    setAppliedRequest(compareRequest ?? null);
+    if (compareRequest) {
+      setBaseVersion(Math.max(1, compareRequest.base));
+      setTargetVersion(Math.max(1, compareRequest.target));
+    }
+  }
   const diff = useRevisionDiff(projectId, graphId, baseVersion, targetVersion);
 
   useEffect(() => {

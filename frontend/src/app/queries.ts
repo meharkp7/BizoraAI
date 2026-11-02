@@ -14,6 +14,8 @@ import type {
 export const graphKeys = {
   revision: (projectId: string, graphId: string, version: number) =>
     ["graph", projectId, graphId, "revisions", version] as const,
+  revisionList: (projectId: string, graphId: string) =>
+    ["graph", projectId, graphId, "revisions"] as const,
   layout: (projectId: string, graphId: string, version: number) =>
     ["graph", projectId, graphId, "revisions", version, "layout"] as const,
   diff: (projectId: string, graphId: string, baseVersion: number, targetVersion: number) =>
@@ -96,6 +98,28 @@ export function useRevisionDiff(
     queryKey: graphKeys.diff(projectId, graphId, baseVersion, targetVersion),
     queryFn: () => api.diffRevisions(projectId, graphId, baseVersion, targetVersion),
     enabled,
+  });
+}
+
+export function useRevisionList(projectId: string, graphId: string) {
+  return useQuery({
+    queryKey: graphKeys.revisionList(projectId, graphId),
+    queryFn: () => api.listRevisions(projectId, graphId),
+  });
+}
+
+export function useRestoreRevision(projectId: string, graphId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ version, requestedBy }: { version: number; requestedBy: string }) =>
+      api.restoreRevision(projectId, graphId, version, requestedBy),
+    onSuccess: (graph) => {
+      queryClient.setQueryData(
+        graphKeys.revision(projectId, graphId, graph.version),
+        graph,
+      );
+      queryClient.invalidateQueries({ queryKey: ["graph", projectId, graphId] });
+    },
   });
 }
 

@@ -40,6 +40,7 @@ import { EvidencePanel } from "./EvidencePanel.tsx";
 import { RunPanel } from "../runs/RunPanel.tsx";
 import { SimulationPreview } from "../runs/SimulationPreview.tsx";
 import { DiffPanel } from "./DiffPanel.tsx";
+import { VersionHistory } from "./VersionHistory.tsx";
 import styles from "./WorkspacePage.module.css";
 
 function formatShape(shape: (number | null)[] | null): string {
@@ -326,6 +327,7 @@ export function WorkspacePage({
       canRedo={history.canRedo}
       onOlder={() => history.go(version - 1)}
       onNewer={() => history.go(version + 1)}
+      onSelectVersion={(next) => history.go(next)}
       onUndo={history.undo}
       onRedo={history.redo}
       onSelectNodes={selectNodes}
@@ -375,6 +377,7 @@ function WorkspaceLoaded({
   canRedo,
   onOlder,
   onNewer,
+  onSelectVersion,
   onUndo,
   onRedo,
   onSelectNodes,
@@ -398,6 +401,7 @@ function WorkspaceLoaded({
   canRedo: boolean;
   onOlder: () => void;
   onNewer: () => void;
+  onSelectVersion: (version: number) => void;
   onUndo: () => void;
   onRedo: () => void;
   onSelectNodes: (nodeIds: string[]) => void;
@@ -425,6 +429,10 @@ function WorkspaceLoaded({
   const effectiveDiagram =
     selectedNodeIds.length === 0 && selectedEdgeIds.length === 0 ? diagramSelection : null;
   const [removalTarget, setRemovalTarget] = useState<string | null>(null);
+  const [compareRequest, setCompareRequest] = useState<{
+    base: number;
+    target: number;
+  } | null>(null);
   const removalPreflight = useRemovalPreflight(
     projectId,
     graph.graph_id,
@@ -597,10 +605,19 @@ function WorkspaceLoaded({
         onSubmit={onSubmit}
       />
 
+      <VersionHistory
+        projectId={projectId}
+        graphId={graph.graph_id}
+        currentVersion={graph.version}
+        onSelectVersion={onSelectVersion}
+        onCompare={(base) => setCompareRequest({ base, target: graph.version })}
+      />
+
       <DiffPanel
         projectId={projectId}
         graphId={graph.graph_id}
         currentVersion={graph.version}
+        compareRequest={compareRequest}
       />
     </div>
   );

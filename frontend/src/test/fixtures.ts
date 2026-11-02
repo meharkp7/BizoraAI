@@ -12,6 +12,7 @@ import type {
   GraphEntities,
   GraphLayout,
   GraphRevisionDiff,
+  GraphRevisionSummary,
   MethodologyGraph,
   MetricRecord,
   NodeRenderSpec,
@@ -251,6 +252,23 @@ export const reportedMetricsFixture: PaperReportedMetric[] = [
     page: 4,
     quote: "Ours: 0.89 (Accuracy)",
     locator: "Table table-1: column 'Accuracy' row 1 ('Ours')",
+  },
+];
+
+export const revisionHistoryFixture: GraphRevisionSummary[] = [
+  {
+    version: 1,
+    parent_version: null,
+    title: "Vision transformer",
+    created_by: "test",
+    created_at: "2026-01-01T00:00:00Z",
+  },
+  {
+    version: 2,
+    parent_version: 1,
+    title: "Vision transformer",
+    created_by: "test",
+    created_at: "2026-01-02T00:00:00Z",
   },
 ];
 

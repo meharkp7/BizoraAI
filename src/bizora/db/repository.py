@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from bizora.contracts.experiment import ExperimentConfig, ResultKind
 from bizora.contracts.figures import FigureRecord, FigureRegion, PaperFigure
-from bizora.contracts.graph import MethodologyGraph
+from bizora.contracts.graph import GraphRevisionSummary, MethodologyGraph
 from bizora.contracts.layout import GraphLayout
 from bizora.contracts.run import (
     TERMINAL_STATES,
@@ -122,6 +122,37 @@ def get_latest_graph_revision(
         .limit(1)
     )
     return session.scalar(statement)
+
+
+def list_graph_revisions(
+    session: Session,
+    *,
+    project_id: str,
+    graph_id: str,
+) -> list[GraphRevisionRecord]:
+    """Retrieve every persisted revision of a graph, oldest first."""
+    statement = (
+        select(GraphRevisionRecord)
+        .where(
+            GraphRevisionRecord.project_id == project_id,
+            GraphRevisionRecord.graph_id == graph_id,
+        )
+        .order_by(GraphRevisionRecord.version.asc())
+    )
+    return list(session.scalars(statement))
+
+
+def graph_revision_summary_from_record(
+    record: GraphRevisionRecord,
+) -> GraphRevisionSummary:
+    """Convert a persisted revision record into its payload-free summary."""
+    return GraphRevisionSummary(
+        version=record.version,
+        parent_version=record.parent_version,
+        title=record.title,
+        created_by=record.created_by,
+        created_at=_ensure_aware(record.created_at),
+    )
 
 
 def _ensure_aware(value: datetime) -> datetime:

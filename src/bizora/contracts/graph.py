@@ -4,7 +4,7 @@ from collections import defaultdict, deque
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
 from bizora.contracts.evidence import EvidenceRef, Provenance
 
@@ -121,6 +121,26 @@ class MethodologyGraph(BaseModel):
         if self.parent_version is not None and self.parent_version >= self.version:
             raise ValueError("parent_version must be lower than version")
         return self
+
+
+class GraphRevisionSummary(BaseModel):
+    """One payload-free row of a graph's version history."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    version: int = Field(ge=1)
+    parent_version: int | None = Field(default=None, ge=1)
+    title: str = Field(min_length=1, max_length=300)
+    created_by: str = Field(min_length=1, max_length=128)
+    created_at: AwareDatetime
+
+
+class GraphRestoreRequest(BaseModel):
+    """Request a new head revision carrying an older revision's content."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    requested_by: str = Field(min_length=1, max_length=128)
 
 
 def validate_graph(graph: MethodologyGraph, *, require_dag: bool = False) -> list[str]:

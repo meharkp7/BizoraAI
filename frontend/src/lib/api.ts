@@ -20,6 +20,7 @@ import type {
   GraphPatch,
   GraphPatchBatch,
   GraphRevisionDiff,
+  GraphRevisionSummary,
   LibraryPaper,
   MethodologyGraph,
   MetricRecord,
@@ -155,6 +156,25 @@ export const api = {
 
   getGraphRevision(projectId: string, graphId: string, version: number): Promise<MethodologyGraph> {
     return request(`/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/revisions/${version}`);
+  },
+
+  listRevisions(projectId: string, graphId: string): Promise<GraphRevisionSummary[]> {
+    return request(`/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/revisions`);
+  },
+
+  restoreRevision(
+    projectId: string,
+    graphId: string,
+    version: number,
+    requestedBy: string,
+  ): Promise<MethodologyGraph> {
+    return request(
+      `/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/revisions/${version}/restore`,
+      {
+        method: "POST",
+        body: JSON.stringify({ requested_by: requestedBy }),
+      },
+    );
   },
 
   applyPatch(projectId: string, graphId: string, patch: GraphPatch): Promise<MethodologyGraph> {
