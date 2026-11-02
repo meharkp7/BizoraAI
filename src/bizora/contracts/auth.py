@@ -48,3 +48,52 @@ class ProjectMembership(BaseModel):
     project_id: str = Field(min_length=1, max_length=128)
     user_id: str = Field(min_length=1, max_length=128)
     role: ProjectRole
+
+
+class InviteStatus(StrEnum):
+    """Lifecycle of a project invite, in transition order."""
+
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    REVOKED = "revoked"
+
+
+class InviteCreateRequest(BaseModel):
+    """Ask the project to invite one email address at a role."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(min_length=3, max_length=320)
+    role: ProjectRole = ProjectRole.VIEWER
+
+
+class InviteSummary(BaseModel):
+    """Public view of one invite. The bearer token is never listed."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    invite_id: str = Field(min_length=1, max_length=128)
+    project_id: str = Field(min_length=1, max_length=128)
+    email: str = Field(min_length=3, max_length=320)
+    role: ProjectRole
+    status: InviteStatus
+    created_by: str = Field(min_length=1, max_length=128)
+    created_at: AwareDatetime
+    expires_at: AwareDatetime
+
+
+class InviteCreateResponse(BaseModel):
+    """Creation response: the only time the bearer token is shown."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    invite: InviteSummary
+    token: str = Field(min_length=1)
+
+
+class InviteAcceptRequest(BaseModel):
+    """Accept an invite by presenting its bearer [REDACTED]"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    token: str = Field(min_length=1, max_length=2048)

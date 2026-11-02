@@ -388,6 +388,41 @@ class MemoryRecord(Base):
     )
 
 
+class ProjectInvite(Base):
+    """One emailed invite granting project membership on accept.
+
+    Only a SHA-256 hash of the bearer token is stored: the token
+    itself is shown once at creation and travels in the invite link.
+    The email is advisory (who the inviter meant); whoever presents
+    a valid token while authenticated joins as themselves.
+    """
+
+    __tablename__ = "project_invites"
+    __table_args__ = (
+        UniqueConstraint("token_hash", name="uq_project_invite_token"),
+        Index("ix_project_invite_project", "project_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    created_by: Mapped[str] = mapped_column(String(128), nullable=False)
+    accepted_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+
 class UsageRecordRow(Base):
     """One metered (or explicitly unmetered) model or execution call.
 

@@ -35,6 +35,7 @@ from bizora.db.models import (
     MetricRecordRow,
     PaperFigureRecord,
     PaperTextRecord,
+    ProjectInvite,
 )
 
 
@@ -1071,3 +1072,80 @@ def save_copilot_turn(
             details={"thread_id": thread_id, "seq": seq},
         ) from exc
     return record
+
+
+def save_project_invite(
+    session: Session,
+    *,
+    invite_id: str,
+    project_id: str,
+    email: str,
+    role: str,
+    token_hash: str,
+    created_by: str,
+    now: datetime,
+    expires_at: datetime,
+) -> ProjectInvite:
+    """Persist one project invite without committing."""
+    record = ProjectInvite(
+        id=invite_id,
+        project_id=project_id,
+        email=email,
+        role=role,
+        token_hash=token_hash,
+        status="pending",
+        created_by=created_by,
+        created_at=now,
+        expires_at=expires_at,
+    )
+    session.add(record)
+    session.flush()
+    return record
+
+
+def list_project_invites(
+    session: Session, *, project_id: str, limit: int = 50
+) -> list[ProjectInvite]:
+    """Retrieve one project's invites, newest first."""
+    statement = (
+        select(ProjectInvite)
+        .where(ProjectInvite.project_id == project_id)
+        .order_by(ProjectInvite.created_at.desc(), ProjectInvite.id.desc())
+        .limit(limit)
+    )
+    return list(session.scalars(statement))
+
+
+def get_project_invite(
+    session: Session, *, project_id: str, invite_id: str
+) -> ProjectInvite | None:
+    """Fetch one invite scoped to its project, or None when absent."""
+    statement = select(ProjectInvite).where(
+        ProjectInvite.project_id == project_id,
+        ProjectInvite.id == invite_id,
+    )
+    return session.scalar(statement)
+
+
+def get_project_invite_by_token_hash(
+    session: Session, *, token_hash: str
+) -> ProjectInvite | None:
+    """Fetch one invite by its token hash, or None when absent."""
+    statement = select(ProjectInvite).where(ProjectInvite.token_hash == token_hash)
+    return session.scalar(statement)
+
+
+def pending_invite_for_email(
+    session: Session, *, project_id: str, email: str
+) -> ProjectInvite | None:
+    """Fetch a pending invite for one email in a project, if any."""
+    statement = (
+        select(ProjectInvite)
+        .where(
+            ProjectInvite.project_id == project_id,
+            ProjectInvite.email == email,
+            ProjectInvite.status == "pending",
+        )
+        .order_by(ProjectInvite.created_at.desc())
+    )
+    return session.scalar(statement)

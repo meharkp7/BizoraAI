@@ -56,6 +56,15 @@ def _require_store() -> MembershipStore:
     return _configured_store
 
 
+def get_membership_store() -> MembershipStore:
+    """Return the configured membership store for services and routes.
+
+    Usable as a FastAPI dependency: fails closed with 500 when auth
+    was never configured.
+    """
+    return _require_store()
+
+
 async def get_current_principal(
     credentials: HTTPAuthorizationCredentials | None = BEARER_CREDENTIALS_DEPENDENCY,
 ) -> Principal:

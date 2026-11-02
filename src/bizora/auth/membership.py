@@ -20,6 +20,10 @@ class MembershipStore(Protocol):
         """Return a user's role in a project, or None when not a member."""
         ...
 
+    def add_member(self, membership: ProjectMembership) -> None:
+        """Record a user's membership in a project."""
+        ...
+
 
 class InMemoryMembershipStore:
     """CLEARLY-MARKED TEST FAKE: memberships held in process memory."""

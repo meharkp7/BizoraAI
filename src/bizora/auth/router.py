@@ -22,7 +22,9 @@ from sqlalchemy.orm import Session
 from bizora.auth.dependencies import (
     OPTIONAL_PRINCIPAL_DEPENDENCY,
     PRINCIPAL_DEPENDENCY,
+    get_membership_store,
 )
+from bizora.auth.membership import MembershipStore
 from bizora.auth.models import PaperNoteRow, UserPaperRow, UserRow
 from bizora.auth.passwords import hash_password, verify_password
 from bizora.auth.tokens import Hs256TokenVerifier, mint_hs256_token
@@ -36,14 +38,25 @@ from bizora.contracts.accounts import (
     SavePaperRequest,
     UserSummary,
 )
-from bizora.contracts.auth import Principal
+from bizora.contracts.auth import (
+    InviteAcceptRequest,
+    InviteCreateRequest,
+    InviteCreateResponse,
+    InviteStatus,
+    InviteSummary,
+    Principal,
+    ProjectRole,
+)
 from bizora.core.errors import BizoraError, ErrorCode
+from bizora.core.invites import InviteService
 from bizora.core.papers import is_valid_source_id
+from bizora.db.models import ProjectInvite
 from bizora.db.session import get_db_session
 
 router = APIRouter()
 
 DB_SESSION_DEPENDENCY = Depends(get_db_session)
+MEMBERSHIP_STORE_DEPENDENCY = Depends(get_membership_store)
 
 
 def _auth_secret() -> str:
@@ -369,6 +382,108 @@ def delete_paper_note(
         raise BizoraError(ErrorCode.RESOURCE_NOT_FOUND, "Note not found.")
     session.delete(row)
     session.commit()
+
+
+def _invite_summary(record: ProjectInvite) -> InviteSummary:
+    """Project one invite row onto its public summary (never the token)."""
+    return InviteSummary(
+        invite_id=record.id,
+        project_id=record.project_id,
+        email=record.email,
+        role=ProjectRole(record.role),
+        status=InviteStatus(record.status),
+        created_by=record.created_by,
+        created_at=_aware(record.created_at),
+        expires_at=_aware(record.expires_at),
+    )
+
+
+@router.post(
+    "/api/v1/projects/{project_id}/invites",
+    response_model=InviteCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["collab"],
+)
+def create_project_invite(
+    project_id: str,
+    request: InviteCreateRequest,
+    principal: Principal = PRINCIPAL_DEPENDENCY,
+    session: Session = DB_SESSION_DEPENDENCY,
+    store: MembershipStore = MEMBERSHIP_STORE_DEPENDENCY,
+) -> InviteCreateResponse:
+    """Invite one email address to the project at a role.
+
+    Any authenticated user may invite; the response carries the
+    one-time bearer token for the invite link.
+    """
+    service = InviteService(session, store, secret=_auth_secret())
+    record, token = service.create_invite(
+        project_id=project_id,
+        email=request.email,
+        role=request.role,
+        created_by=principal.user_id,
+    )
+    return InviteCreateResponse(invite=_invite_summary(record), token=token)
+
+
+@router.get(
+    "/api/v1/projects/{project_id}/invites",
+    response_model=list[InviteSummary],
+    tags=["collab"],
+)
+def list_project_invites(
+    project_id: str,
+    principal: Principal = PRINCIPAL_DEPENDENCY,
+    session: Session = DB_SESSION_DEPENDENCY,
+    store: MembershipStore = MEMBERSHIP_STORE_DEPENDENCY,
+) -> list[InviteSummary]:
+    """List the project's invites, newest first."""
+    del principal
+    service = InviteService(session, store, secret=_auth_secret())
+    return [_invite_summary(record) for record in service.list_invites(project_id=project_id)]
+
+
+@router.post(
+    "/api/v1/projects/{project_id}/invites/{invite_id}/accept",
+    response_model=InviteSummary,
+    tags=["collab"],
+)
+def accept_project_invite(
+    project_id: str,
+    invite_id: str,
+    request: InviteAcceptRequest,
+    principal: Principal = PRINCIPAL_DEPENDENCY,
+    session: Session = DB_SESSION_DEPENDENCY,
+    store: MembershipStore = MEMBERSHIP_STORE_DEPENDENCY,
+) -> InviteSummary:
+    """Accept an invite, joining the project as the caller."""
+    service = InviteService(session, store, secret=_auth_secret())
+    record = service.accept_invite(
+        project_id=project_id,
+        invite_id=invite_id,
+        token=request.token,
+        user_id=principal.user_id,
+    )
+    return _invite_summary(record)
+
+
+@router.delete(
+    "/api/v1/projects/{project_id}/invites/{invite_id}",
+    response_model=InviteSummary,
+    tags=["collab"],
+)
+def revoke_project_invite(
+    project_id: str,
+    invite_id: str,
+    principal: Principal = PRINCIPAL_DEPENDENCY,
+    session: Session = DB_SESSION_DEPENDENCY,
+    store: MembershipStore = MEMBERSHIP_STORE_DEPENDENCY,
+) -> InviteSummary:
+    """Revoke a pending invite."""
+    del principal
+    service = InviteService(session, store, secret=_auth_secret())
+    record = service.revoke_invite(project_id=project_id, invite_id=invite_id)
+    return _invite_summary(record)
 
 
 # Re-exported so route modules share one optional-auth dependency.
