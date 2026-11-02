@@ -1,9 +1,10 @@
 """Paper-figure overlay pipeline: ingest, describe, localize, persist.
 
-Embedded PDF images become viewer figures; a vision provider describes
-each figure and localizes graph nodes inside it as normalized regions.
-Only embedded raster bytes are read here; interpretation belongs to the
-provider, and every persisted link is validated against the live graph.
+Embedded PDF images plus page-render tiles (for vector-drawn figures)
+become viewer figures; a vision provider describes each figure and
+localizes graph nodes inside it as normalized regions. Only raster
+bytes are read here; interpretation belongs to the provider, and
+every persisted link is validated against the live graph.
 No domain, paper, or part knowledge lives in this module.
 """
 
@@ -30,11 +31,13 @@ from bizora.contracts.figures import (
 )
 from bizora.contracts.graph import MethodologyGraph
 from bizora.core.figure_ingest import (
+    MAX_FIGURES,
     FigureIngestResult,
     caption_candidates,
     extract_figures_from_pdf,
     find_figure_mentions,
 )
+from bizora.core.page_render import harvest_page_tiles
 from bizora.core.papers import is_valid_figure_id, suggest_figure_id
 from bizora.core.pdf import PdfPageText
 from bizora.db.repository import (
@@ -166,10 +169,17 @@ def persist_paper_figures(
         text=marked_text,
         page_count=len(page_texts) or None,
     )
-    if not ingest.figures:
+    pages = {page.page_number: page.text for page in page_texts}
+    embedded_pages = frozenset(raw.page for raw in ingest.figures)
+    tiles = harvest_page_tiles(
+        pdf_bytes,
+        pages,
+        embedded_pages,
+        budget=max(0, MAX_FIGURES - len(ingest.figures)),
+    )
+    if not ingest.figures and not tiles:
         session.commit()
         return (0, ingest.truncated, ingest.skipped)
-    pages = {page.page_number: page.text for page in page_texts}
     for raw in ingest.figures:
         figure_id = figure_id_for(source_id, raw.page, raw.index, raw.sha256[:8])
         page_text = pages.get(raw.page, "")
@@ -194,8 +204,32 @@ def persist_paper_figures(
             regions=(),
             image_bytes=raw.image_bytes,
         )
+    for tile in tiles:
+        figure_id = figure_id_for(source_id, tile.page, tile.index, tile.sha256[:8])
+        page_text = pages.get(tile.page, "")
+        mentions = find_figure_mentions(page_text)
+        candidates = caption_candidates(page_text)
+        save_paper_figure(
+            session,
+            project_id=project_id,
+            graph_id=graph_id,
+            source_id=source_id,
+            created_by=created_by,
+            figure=FigureRecord(
+                figure_id=figure_id,
+                page=tile.page,
+                label=", ".join(mentions)[:128] or None,
+                caption="\n---\n".join(candidates)[:4000] or None,
+                mime_type="image/png",
+                sha256=tile.sha256,
+                byte_size=len(tile.png_bytes),
+                context=page_text[:SURROUNDING_TEXT_CHARS] or None,
+            ),
+            regions=(),
+            image_bytes=tile.png_bytes,
+        )
     session.commit()
-    return (len(ingest.figures), ingest.truncated, ingest.skipped)
+    return (len(ingest.figures) + len(tiles), ingest.truncated, ingest.skipped)
 
 
 async def ingest_paper_figures(

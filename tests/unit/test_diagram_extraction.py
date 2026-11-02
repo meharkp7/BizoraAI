@@ -964,3 +964,37 @@ def test_detailed_figure_cell_skips_text_structure(tmp_path: Any) -> None:
         asyncio.run(run_test())
     finally:
         del os.environ["BIZORA_CACHE_DIR"]
+
+
+def test_empty_figure_circuit_is_set_aside(tmp_path: Any) -> None:
+    import os
+
+    os.environ["BIZORA_CACHE_DIR"] = str(tmp_path)
+    try:
+        provider = ScriptedDiagramProvider()
+        provider.classifications["fig1"] = DiagramKind.CIRCUIT
+        provider.classifications["fig2"] = DiagramKind.CIRCUIT
+        provider.figure_payloads[("fig1", "circuit")] = make_circuit_payload(
+            components=[]
+        )
+        provider.repair_payloads[("fig1", "circuit")] = make_circuit_payload(
+            components=[]
+        )
+        provider.figure_payloads[("fig2", "circuit")] = make_circuit_payload()
+
+        async def run_test() -> None:
+            result = await extract_paper_diagrams(
+                provider,
+                [make_figure("fig1"), make_figure("fig2")],
+                "",
+                paper_hash="d" * 64,
+            )
+
+            assert [circuit.title for circuit in result.circuits] == ["bitcell"]
+            assert "circuit:fig2" in result.sources
+            assert "circuit:fig1" not in result.sources
+            assert "circuit:figure:fig1" in result.sources
+
+        asyncio.run(run_test())
+    finally:
+        del os.environ["BIZORA_CACHE_DIR"]

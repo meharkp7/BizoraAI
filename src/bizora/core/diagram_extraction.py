@@ -658,6 +658,15 @@ async def extract_paper_diagrams(
     circuits: list[CircuitIR] = []
     for result in figure_results:
         if result.kind is DiagramKind.CIRCUIT and isinstance(result.ir, CircuitIR):
+            if not result.ir.components:
+                # A circuit with no components draws nothing: the
+                # classifier fired on text, not a schematic. Report is
+                # kept under a suffixed key; the figure is not served.
+                validation[f"circuit:figure:{result.figure_id}"] = result.validation
+                sources[f"circuit:figure:{result.figure_id}"] = (
+                    f"figure:{result.figure_id}"
+                )
+                continue
             circuits.append(result.ir)
             validation[f"circuit:{result.figure_id}"] = result.validation
             sources[f"circuit:{result.figure_id}"] = f"figure:{result.figure_id}"
@@ -665,7 +674,8 @@ async def extract_paper_diagrams(
     # Figure methodology/structure IRs that still carry validation
     # errors are set aside (report kept under a suffixed key) so the
     # text fallback below can serve a renderable IR instead. Circuits
-    # have no fallback and are always served with their report.
+    # have no fallback: non-empty ones are always served with their
+    # report, empty ones are set aside the same way.
     methodology: MethodologyIR | None = None
     for result in figure_results:
         if result.kind is DiagramKind.FLOW and isinstance(result.ir, MethodologyIR):
