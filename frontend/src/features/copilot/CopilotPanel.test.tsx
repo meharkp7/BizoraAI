@@ -252,6 +252,82 @@ describe("CopilotPanel", () => {
     );
   });
 
+  it("dictates an editable message with the microphone", async () => {
+    useWorkspaceSelection.setState({ selectedNodeIds: [], selectedEdgeIds: [] });
+    interface FakeEvent {
+      resultIndex: number;
+      results: Array<{ isFinal: boolean; 0: { transcript: string } }>;
+    }
+    const instances: Array<{
+      onresult: ((event: FakeEvent) => void) | null;
+      onend: (() => void) | null;
+    }> = [];
+    class FakeRecognition {
+      lang = "";
+      interimResults = false;
+      onresult: ((event: FakeEvent) => void) | null = null;
+      onerror: ((event: never) => void) | null = null;
+      onend: (() => void) | null = null;
+      constructor() {
+        instances.push(this);
+      }
+      start(): void {}
+      stop(): void {
+        this.onend?.();
+      }
+      abort(): void {}
+    }
+    (window as unknown as Record<string, unknown>).SpeechRecognition = FakeRecognition;
+    try {
+      const user = userEvent.setup();
+      render(
+        <CopilotPanel
+          projectId="project-1"
+          graph={graphFixture}
+          disabled={false}
+          view="methodology"
+          selection={null}
+          onSubmit={() => {}}
+        />,
+        { wrapper },
+      );
+
+      await user.click(screen.getByRole("button", { name: "Dictate message" }));
+      expect(await screen.findByText(/Listening/)).toBeInTheDocument();
+
+      const { act } = await import("@testing-library/react");
+      act(() => {
+        instances[0]?.onresult?.({
+          resultIndex: 0,
+          results: [{ isFinal: true, 0: { transcript: "find NPN transistor" } }],
+        });
+      });
+      expect(screen.getByLabelText("Copilot message")).toHaveValue("find NPN transistor");
+
+      await user.click(screen.getByRole("button", { name: "Ask" }));
+      expect(await screen.findByText(/Closest library matches/)).toBeInTheDocument();
+    } finally {
+      delete (window as unknown as Record<string, unknown>).SpeechRecognition;
+    }
+  });
+
+  it("hides the microphone without speech support", () => {
+    useWorkspaceSelection.setState({ selectedNodeIds: [], selectedEdgeIds: [] });
+    render(
+      <CopilotPanel
+        projectId="project-1"
+        graph={graphFixture}
+        disabled={false}
+        view="methodology"
+        selection={null}
+        onSubmit={() => {}}
+      />,
+      { wrapper },
+    );
+
+    expect(screen.queryByRole("button", { name: "Dictate message" })).not.toBeInTheDocument();
+  });
+
   it("offers follow-up chips that ask on click", async () => {
     useWorkspaceSelection.setState({ selectedNodeIds: ["encoder"], selectedEdgeIds: [] });
     const user = userEvent.setup();

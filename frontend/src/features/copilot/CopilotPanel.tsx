@@ -7,6 +7,7 @@ import {
   useCreateCopilotThread,
 } from "../../app/queries.ts";
 import { useCopilotStream } from "./useCopilotStream.ts";
+import { useVoiceInput } from "./useVoiceInput.ts";
 import type { CanvasView } from "../../app/routeElements.tsx";
 import { NODE_KINDS } from "../../lib/constants.ts";
 import { useLibrarySelection, useWorkspaceSelection } from "../../lib/store.ts";
@@ -195,6 +196,13 @@ export function CopilotPanel({
   const [threadId, setThreadId] = useState<string | null>(null);
   const { selectedNodeIds } = useWorkspaceSelection();
   const [input, setInput] = useState("");
+  const voice = useVoiceInput("en-IN", (transcript) =>
+    setInput((current) => {
+      const clean = transcript.trim();
+      if (!clean) return current;
+      return current.trim() === "" ? clean : `${current.trimEnd()} ${clean}`;
+    }),
+  );
   const [turns, setTurns] = useState<Turn[]>([]);
   const [dismissed, setDismissed] = useState<Set<number>>(new Set());
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeIds[0]) ?? null;
@@ -424,6 +432,7 @@ export function CopilotPanel({
         aria-label="Ask the copilot"
         onSubmit={(event) => {
           event.preventDefault();
+          voice.stop();
           void ask(input);
         }}
       >
@@ -435,6 +444,17 @@ export function CopilotPanel({
           spellCheck={false}
           aria-label="Copilot message"
         />
+        {voice.supported ? (
+          <button
+            type="button"
+            className={styles.voiceButton}
+            aria-label={voice.listening ? "Stop dictation" : "Dictate message"}
+            aria-pressed={voice.listening}
+            onClick={voice.toggle}
+          >
+            {voice.listening ? "Stop" : "Mic"}
+          </button>
+        ) : null}
         <button
           type="submit"
           disabled={
@@ -447,6 +467,16 @@ export function CopilotPanel({
           {copilot.isPending || createThread.isPending ? "…" : "Ask"}
         </button>
       </form>
+      {voice.listening ? (
+        <p className={styles.hint} aria-live="polite">
+          Listening… {voice.interim}
+        </p>
+      ) : null}
+      {voice.error && !voice.listening ? (
+        <p className={styles.error} role="alert">
+          {voice.error}
+        </p>
+      ) : null}
     </section>
   );
 }
