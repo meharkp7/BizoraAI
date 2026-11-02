@@ -98,5 +98,5 @@
 
 .error {
   font-size: 0.8125rem;
-  color: var(--color-error, #a93226);
+  color: var(--color-danger);
 }

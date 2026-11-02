@@ -26,8 +26,8 @@
   color: var(--color-ink-soft);
 }
 
-/* Part-shape swatches for the dressed scene. Colors match the body
-   tints in partIdentity.ts. */
+/* Part-shape swatches for the dressed scene. Colors mirror the
+   numeric body tints in ../../styles/palette.ts. */
 .layerLegend {
   display: flex;
   flex-wrap: wrap;
@@ -54,39 +54,39 @@
 }
 
 .swatch[data-shape="store"] {
-  background: #9aa4ae;
+  background: var(--color-part-store);
 }
 
 .swatch[data-shape="module"] {
-  background: #3a4250;
+  background: var(--color-part-module);
 }
 
 .swatch[data-shape="decision"] {
-  background: #9a6234;
+  background: var(--color-part-decision);
 }
 
 .swatch[data-shape="io"] {
-  background: #3f5a66;
+  background: var(--color-part-io);
 }
 
 .swatch[data-shape="transistor"] {
-  background: #4a6a8a;
+  background: var(--color-part-transistor);
 }
 
 .swatch[data-shape="passive"] {
-  background: #8a7350;
+  background: var(--color-part-passive);
 }
 
 .swatch[data-shape="logic"] {
-  background: #5f7052;
+  background: var(--color-part-logic);
 }
 
 .swatch[data-shape="power"] {
-  background: #2e343b;
+  background: var(--color-part-power);
 }
 
 .swatch[data-shape="part"] {
-  background: #5a6470;
+  background: var(--color-part-default);
 }
 
 .canvas {

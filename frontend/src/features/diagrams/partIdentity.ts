@@ -18,6 +18,13 @@
  * instances would leak highlight state across parts or double-dispose. */
 
 import * as THREE from "three";
+import {
+  PART_TINTS,
+  PLATE_COLORS,
+  SLAB_BODY,
+  SLATE_BODY,
+  STEEL_BODY,
+} from "../../styles/palette.ts";
 
 export type PartShape = "box" | "slab" | "cylinder";
 
@@ -30,29 +37,7 @@ const STORE_PARTS = new Set(["store", "dataset"]);
  *  (MethodologyNodeKind + ComponentType): transistors read steel-blue,
  *  passives sand, logic sage, power graphite. Exact, case-folded match
  *  only — a tint groups a kind, it never mimics anatomy — and anything
- *  absent here renders the default slate box. */
-const BODY_TINTS: Record<string, number> = {
-  decision: 0x9a6234,
-  input: 0x3f5a66,
-  output: 0x3f5a66,
-  nmos: 0x4a6a8a,
-  pmos: 0x4a6a8a,
-  resistor: 0x8a7350,
-  capacitor: 0x8a7350,
-  inductor: 0x8a7350,
-  diode: 0x8a7350,
-  inverter: 0x5f7052,
-  buffer: 0x5f7052,
-  amp: 0x2e343b,
-  comparator: 0x2e343b,
-  vsource: 0x2e343b,
-  isource: 0x2e343b,
-  ground: 0x2e343b,
-};
-
-const SLATE_BODY = 0x5a6470;
-const SLAB_BODY = 0x3a4250;
-const STEEL_BODY = 0x9aa4ae;
+ *  absent from the shared palette renders the default slate box. */
 
 export interface PartIdentity {
   kind: string;
@@ -71,7 +56,7 @@ export function partShapeFor(block: Pick<PartIdentity, "kind" | "part">): PartSh
 
 function bodyTint(block: Pick<PartIdentity, "kind" | "part">): number {
   const key = (block.part ?? block.kind).toLowerCase();
-  return BODY_TINTS[key] ?? SLATE_BODY;
+  return PART_TINTS[key] ?? SLATE_BODY;
 }
 
 export interface PlateLayout {
@@ -151,9 +136,10 @@ function plateTexture(
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
   const dark = plateDark();
-  const bg = dark ? "#222a33" : "#f3ead8";
-  const fg = dark ? "#f0e9d8" : "#2a2620";
-  const rule = dark ? "#8a94a0" : "#8a7d5f";
+  const plate = dark ? PLATE_COLORS.dark : PLATE_COLORS.light;
+  const bg = plate.bg;
+  const fg = plate.fg;
+  const rule = plate.rule;
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.strokeStyle = rule;

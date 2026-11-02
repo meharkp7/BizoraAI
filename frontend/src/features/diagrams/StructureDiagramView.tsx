@@ -31,6 +31,7 @@ import type {
 } from "./structureExport.ts";
 import { buildStructureSvg, structureFilename } from "./structureExport.ts";
 import { countProvenance } from "./provenance.ts";
+import { MESH_FALLBACK, SURFACE_FALLBACK } from "../../styles/palette.ts";
 import type { DiagramSelection } from "./selection.ts";
 import { findBlock, sceneIdToBlockId, structureSelection } from "./selection.ts";
 
@@ -40,7 +41,7 @@ function themeBackground(): string {
   const value = getComputedStyle(document.documentElement)
     .getPropertyValue("--color-surface")
     .trim();
-  return value === "" ? "#faf7ec" : value;
+  return value === "" ? SURFACE_FALLBACK : value;
 }
 
 /** Probe context creation directly: constructing WebGLRenderer when WebGL
@@ -374,7 +375,7 @@ function partColor(child: THREE.Object3D): string {
     const first = Array.isArray(material) ? material[0] : material;
     if (first?.color) found = `#${first.color.getHexString()}`;
   });
-  return found ?? "#999999";
+  return found ?? MESH_FALLBACK;
 }
 
 function downloadHref(filename: string, href: string): void {
