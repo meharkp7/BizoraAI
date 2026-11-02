@@ -132,3 +132,24 @@ reason, never a placeholder) are covered by unit tests and
   with a real grounded reply (paper evidence cards). Captured live
   against the user's own servers.
 - `structure-detail-inspector.png` — clicked NMOS pair with quote evidence.
+
+## Phase 6 addendum (prompt v4, true component geometry)
+
+- Structure prompts (figure + text) now ask for the repeated cell's
+  internal devices as children with typed `part`; prompt version
+  bumped 3 -> 4 (old cache entries stay valid under their own keys).
+- New graft: when a figure structure's repeated cell is bare but the
+  paper text states its devices, the text children (with their own
+  page/quote evidence) are grafted into the figure cell, disclosed
+  via `sources["structure:cell-interior"] = "text"` plus a validation
+  warning. SRAM serves 12 typed cell devices again (N1-N4, P1-P2,
+  S1-S3, K1-K2, coupling capacitor); the Cell interior tab is back.
+- Frontend: `componentModels.ts` restores the textbook NMOS/PMOS,
+  pair, inverter, R/C/L and ground builders and adds diode, sources,
+  buffer, QFP amp/comparator, ADC/DAC steps, finned sensor, banded
+  database, weight-layer stacks, I/O funnels, decision diamond, and
+  module slabs. Mapping is typed `part`/`kind` first, whole device
+  words only when the part is untyped; typed blocks keep the honest
+  labeled plate. Verified in headless Chrome against the real SRAM
+  payload (`/tmp/phase6-shots/`, uncommitted): full structure,
+  circuit 3D, cell interior, and a builder gallery from every angle.
