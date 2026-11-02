@@ -1,6 +1,7 @@
 import { HttpResponse } from "msw";
 import type {
   AdapterSummary,
+  ArenaComparison,
   AuthResponse,
   CompatibilityPreflight,
   LibraryPaper,
@@ -617,6 +618,35 @@ export const graphSummariesFixture = [
     created_at: "2026-01-01T00:00:00Z",
   },
 ];
+
+export const arenaFixture: ArenaComparison = {
+  a: {
+    project_id: "project-1",
+    graph_id: "graph-1",
+    version: 2,
+    title: "Vision transformer",
+  },
+  b: {
+    project_id: "project-2",
+    graph_id: "graph-2",
+    version: 1,
+    title: "SRAM PUF",
+  },
+  structure_a: { node_count: 2, edge_count: 1, kinds: { input: 1, model: 1 } },
+  structure_b: { node_count: 3, edge_count: 2, kinds: { input: 1, model: 2 } },
+  shared_labels: [
+    { label: "Transformer encoder", a_node_ids: ["encoder"], b_node_ids: ["enc"] },
+  ],
+  unique_a: [],
+  unique_b: [{ label: "Sense amp", node_ids: ["sense"] }],
+  metrics: [
+    {
+      name: "Ours — Accuracy",
+      a: { raw_value: "92%", value: 92, unit: "%" },
+      b: { raw_value: "0.88", value: 0.88, unit: null },
+    },
+  ],
+};
 
 export const paperTextFixture: PaperText = {
   source_id: "paper-1",

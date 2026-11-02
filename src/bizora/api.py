@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 from bizora.adapters.registry import adapter_availability, create_default_registry
 from bizora.auth.dependencies import OPTIONAL_PRINCIPAL_DEPENDENCY
 from bizora.auth.router import record_user_paper
+from bizora.contracts.arena import ArenaCompareRequest, ArenaComparison, ArenaSideRef
 from bizora.contracts.assets import NodeRenderSpec
 from bizora.contracts.auth import Principal
 from bizora.contracts.comparison import RunComparison
@@ -88,6 +89,7 @@ from bizora.copilot.service import (
     CopilotStatusEvent,
 )
 from bizora.copilot.tools import CopilotContext
+from bizora.core import arena
 from bizora.core.comparison_service import ComparisonService
 from bizora.core.component_catalog import get_component, search_components
 from bizora.core.component_service import preflight_removal, preflight_replacement
@@ -795,6 +797,33 @@ def list_graphs(
 
 
 @router.post(
+    "/api/v1/graphs/compare",
+    response_model=ArenaComparison,
+    tags=["graphs"],
+)
+def compare_graphs(
+    request: ArenaCompareRequest,
+    session: Session = DB_SESSION_DEPENDENCY,
+) -> ArenaComparison:
+    """Compare two graph revisions head-to-head for the arena."""
+    a_graph = _arena_side_or_404(session, request.a)
+    b_graph = _arena_side_or_404(session, request.b)
+    a_tables = [
+        extracted_table_from_record(record)
+        for record in list_extracted_tables(
+            session, project_id=a_graph.project_id, graph_id=a_graph.graph_id
+        )
+    ]
+    b_tables = [
+        extracted_table_from_record(record)
+        for record in list_extracted_tables(
+            session, project_id=b_graph.project_id, graph_id=b_graph.graph_id
+        )
+    ]
+    return arena.compare_graphs(a_graph, b_graph, a_tables, b_tables)
+
+
+@router.post(
     "/api/v1/graphs",
     response_model=MethodologyGraph,
     status_code=status.HTTP_201_CREATED,
@@ -1487,6 +1516,21 @@ async def stream_copilot(
             )
 
     return StreamingResponse(generate(), media_type="text/event-stream")
+
+
+def _arena_side_or_404(session: Session, side: ArenaSideRef) -> MethodologyGraph:
+    """Load one arena side's revision (pinned or latest)."""
+    if side.version is not None:
+        return _revision_or_404(session, side.project_id, side.graph_id, side.version)
+    record = get_latest_graph_revision(
+        session, project_id=side.project_id, graph_id=side.graph_id
+    )
+    if record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Graph revision not found.",
+        )
+    return MethodologyGraph.model_validate(record.graph_payload)
 
 
 def _graph_or_404(session: Session, project_id: str, graph_id: str) -> None:

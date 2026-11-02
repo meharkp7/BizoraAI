@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { useGraphs } from "../../app/queries.ts";
 import { EmptyState, ErrorState, LoadingState } from "../../components/states.tsx";
 import type { GraphSummary } from "../../lib/types.ts";
+import { ArenaPanel } from "./ArenaPanel.tsx";
 import styles from "./CrossPaperPage.module.css";
 import { loadTray, saveTray, trayKey, type TrayEntry } from "./tray.ts";
 
@@ -17,6 +18,7 @@ function entryOf(summary: GraphSummary): TrayEntry {
 export function CrossPaperPage() {
   const graphs = useGraphs();
   const [tray, setTray] = useState<TrayEntry[]>(() => loadTray());
+  const [tab, setTab] = useState<"tray" | "arena">("tray");
 
   useEffect(() => {
     saveTray(tray);
@@ -53,7 +55,30 @@ export function CrossPaperPage() {
         Collect graphs from different papers into a tray, then compare or combine them.
       </p>
 
-      <section className={styles.card} aria-label="Tray">
+      <div className={styles.tabs} role="tablist" aria-label="Cross-paper views">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "tray"}
+          onClick={() => setTab("tray")}
+        >
+          Tray
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "arena"}
+          onClick={() => setTab("arena")}
+        >
+          Arena
+        </button>
+      </div>
+
+      {tab === "arena" ? (
+        <ArenaPanel tray={tray} />
+      ) : (
+        <>
+          <section className={styles.card} aria-label="Tray">
         <h2>Tray ({tray.length})</h2>
         {tray.length === 0 ? (
           <EmptyState
@@ -112,6 +137,8 @@ export function CrossPaperPage() {
           </ul>
         )}
       </section>
+        </>
+      )}
     </div>
   );
 }

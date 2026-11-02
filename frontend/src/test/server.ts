@@ -2,6 +2,7 @@ import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import {
   adaptersFixture,
+  arenaFixture,
   authFixture,
   comparisonFixture,
   componentDetailFixture,
@@ -58,6 +59,8 @@ export const handlers = [
   http.get("/health", () => HttpResponse.json({ status: "ok" })),
 
   http.get("/api/v1/graphs", () => HttpResponse.json(graphSummariesFixture)),
+
+  http.post("/api/v1/graphs/compare", () => HttpResponse.json(arenaFixture)),
 
   http.get("/api/v1/graphs/:projectId/:graphId/revisions/:version", ({ params }) => {
     if (params["projectId"] === "project-1" && params["graphId"] === "graph-1") {

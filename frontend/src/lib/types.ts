@@ -215,6 +215,59 @@ export interface GraphSummary {
   created_at: string;
 }
 
+export interface ArenaSideRef {
+  project_id: string;
+  graph_id: string;
+  version?: number | null;
+}
+
+export interface ArenaSideSummary {
+  project_id: string;
+  graph_id: string;
+  version: number;
+  title: string;
+}
+
+export interface ArenaStructureSide {
+  node_count: number;
+  edge_count: number;
+  kinds: Record<string, number>;
+}
+
+export interface ArenaLabelOverlap {
+  label: string;
+  a_node_ids: string[];
+  b_node_ids: string[];
+}
+
+export interface ArenaUniqueLabel {
+  label: string;
+  node_ids: string[];
+}
+
+export interface ArenaMetricValue {
+  raw_value: string;
+  value: number | null;
+  unit: string | null;
+}
+
+export interface ArenaMetricRow {
+  name: string;
+  a: ArenaMetricValue | null;
+  b: ArenaMetricValue | null;
+}
+
+export interface ArenaComparison {
+  a: ArenaSideSummary;
+  b: ArenaSideSummary;
+  structure_a: ArenaStructureSide;
+  structure_b: ArenaStructureSide;
+  shared_labels: ArenaLabelOverlap[];
+  unique_a: ArenaUniqueLabel[];
+  unique_b: ArenaUniqueLabel[];
+  metrics: ArenaMetricRow[];
+}
+
 export interface GraphRevisionSummary {
   version: number;
   parent_version: number | null;

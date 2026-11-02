@@ -17,6 +17,16 @@ describe("api client", () => {
     expect(graphs[0]?.node_count).toBe(2);
   });
 
+  it("compares two graphs head-to-head", async () => {
+    const comparison = await api.compareGraphs(
+      { project_id: "project-1", graph_id: "graph-1" },
+      { project_id: "project-2", graph_id: "graph-2" },
+    );
+    expect(comparison.a.title).toBe("Vision transformer");
+    expect(comparison.shared_labels).toHaveLength(1);
+    expect(comparison.metrics[0]?.name).toBe("Ours — Accuracy");
+  });
+
   it("fetches a graph revision", async () => {
     const graph = await api.getGraphRevision("project-1", "graph-1", 2);
     expect(graph.title).toBe("Vision transformer");

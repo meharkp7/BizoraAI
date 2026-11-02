@@ -383,6 +383,18 @@ export function useGraphs(filters?: { project_id?: string; source_id?: string; l
   });
 }
 
+export function useArenaComparison(
+  a: { project_id: string; graph_id: string } | null,
+  b: { project_id: string; graph_id: string } | null,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: ["graphs", "compare", a, b] as const,
+    queryFn: () => api.compareGraphs(a ?? { project_id: "", graph_id: "" }, b ?? { project_id: "", graph_id: "" }),
+    enabled: enabled && a !== null && b !== null,
+  });
+}
+
 export function usePaperText(sourceId: string, enabled = true) {
   return useQuery({
     queryKey: ["papers", sourceId, "text"] as const,

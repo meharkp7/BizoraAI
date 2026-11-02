@@ -3,6 +3,8 @@
 import { getAuthToken } from "./authToken.ts";
 import type {
   AdapterSummary,
+  ArenaComparison,
+  ArenaSideRef,
   ArtifactRecord,
   AuthResponse,
   AuthUser,
@@ -171,6 +173,13 @@ export const api = {
     if (filters?.limit !== undefined) params.set("limit", String(filters.limit));
     const query = params.size > 0 ? `?${params.toString()}` : "";
     return request(`/api/v1/graphs${query}`);
+  },
+
+  compareGraphs(a: ArenaSideRef, b: ArenaSideRef): Promise<ArenaComparison> {
+    return request("/api/v1/graphs/compare", {
+      method: "POST",
+      body: JSON.stringify({ a, b }),
+    });
   },
 
   listRevisions(projectId: string, graphId: string): Promise<GraphRevisionSummary[]> {
