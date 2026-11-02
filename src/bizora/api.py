@@ -131,6 +131,7 @@ from bizora.core.usage_ledger import (
     summarize_run_usage,
     summarize_usage,
 )
+from bizora.core.whatif_nl import WhatIfParseError, parse_whatif_text
 from bizora.db.models import PaperFigureRecord
 from bizora.db.repository import (
     artifact_record_from_row,
@@ -1530,6 +1531,21 @@ class PaperWhatIfResponse(BaseModel):
     from_cache: bool = False
 
 
+class PaperWhatIfParseRequest(BaseModel):
+    """Plain-English what-if text plus the open step as fallback context."""
+
+    text: str = Field(min_length=1, max_length=2000)
+    node_id: str | None = Field(default=None, max_length=128)
+
+
+class PaperWhatIfParseResponse(BaseModel):
+    """One methodology step plus new settings, resolved without guessing."""
+
+    node_id: str
+    node_label: str
+    params: dict[str, str] = Field(default_factory=dict)
+
+
 def _paper_figures_hash(records: list[PaperFigureRecord]) -> str:
     """Hash one paper's figure bytes deterministically for the diagram cache."""
     digest = hashlib.sha256()
@@ -1640,29 +1656,12 @@ async def get_paper_diagrams(
     )
 
 
-@router.post(
-    "/api/v1/papers/{paper_id}/whatif",
-    response_model=PaperWhatIfResponse,
-    tags=["papers"],
-)
-@router.post(
-    "/papers/{paper_id}/whatif",
-    response_model=PaperWhatIfResponse,
-    tags=["papers"],
-    include_in_schema=False,
-)
-async def run_paper_whatif(
+async def _load_paper_methodology(
     paper_id: str,
-    request: PaperWhatIfRequest,
-    session: Session = DB_SESSION_DEPENDENCY,
-    provider: MuseDiagramProvider = DIAGRAM_PROVIDER_DEPENDENCY,
-) -> PaperWhatIfResponse:
-    """Estimate what changes when one methodology step runs with modified settings.
-
-    paper_id is the source id assigned when the paper was ingested.
-    The outcome is estimated from the paper's own text and numbers and
-    is always labeled an estimate, never a measurement.
-    """
+    session: Session,
+    provider: MuseDiagramProvider,
+) -> tuple[MethodologyIR, str, str]:
+    """Load one paper's methodology flow, figure hash, and text for what-ifs."""
     if not is_valid_source_id(paper_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -1708,6 +1707,35 @@ async def run_paper_whatif(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No methodology extracted for this paper.",
         )
+    return methodology, _paper_figures_hash(records), paper_text
+
+
+@router.post(
+    "/api/v1/papers/{paper_id}/whatif",
+    response_model=PaperWhatIfResponse,
+    tags=["papers"],
+)
+@router.post(
+    "/papers/{paper_id}/whatif",
+    response_model=PaperWhatIfResponse,
+    tags=["papers"],
+    include_in_schema=False,
+)
+async def run_paper_whatif(
+    paper_id: str,
+    request: PaperWhatIfRequest,
+    session: Session = DB_SESSION_DEPENDENCY,
+    provider: MuseDiagramProvider = DIAGRAM_PROVIDER_DEPENDENCY,
+) -> PaperWhatIfResponse:
+    """Estimate what changes when one methodology step runs with modified settings.
+
+    paper_id is the source id assigned when the paper was ingested.
+    The outcome is estimated from the paper's own text and numbers and
+    is always labeled an estimate, never a measurement.
+    """
+    methodology, paper_hash, paper_text = await _load_paper_methodology(
+        paper_id, session, provider
+    )
     node = next(
         (entry for entry in methodology.nodes if entry.id == request.node_id),
         None,
@@ -1720,7 +1748,7 @@ async def run_paper_whatif(
     try:
         result, from_cache = await run_what_if(
             provider,
-            _paper_figures_hash(records),
+            paper_hash,
             node,
             dict(request.params),
             paper_text,
@@ -1746,6 +1774,39 @@ async def run_paper_whatif(
         assumptions=list(result.assumptions),
         confidence=result.confidence,
         from_cache=from_cache,
+    )
+
+
+@router.post(
+    "/api/v1/papers/{paper_id}/whatif/parse",
+    response_model=PaperWhatIfParseResponse,
+    tags=["papers"],
+)
+async def parse_paper_whatif(
+    paper_id: str,
+    request: PaperWhatIfParseRequest,
+    session: Session = DB_SESSION_DEPENDENCY,
+    provider: MuseDiagramProvider = DIAGRAM_PROVIDER_DEPENDENCY,
+) -> PaperWhatIfParseResponse:
+    """Resolve plain-English what-if text to one step plus new settings.
+
+    Deterministic and provider-free in its matching: step labels and
+    setting names resolve literally, and anything ambiguous fails with
+    a message instead of a guess.
+    """
+    methodology, _, _ = await _load_paper_methodology(paper_id, session, provider)
+    try:
+        parsed = parse_whatif_text(
+            list(methodology.nodes),
+            request.text,
+            context_node_id=request.node_id,
+        )
+    except WhatIfParseError as exc:
+        raise BizoraError(ErrorCode.INVALID_REQUEST, str(exc)) from exc
+    return PaperWhatIfParseResponse(
+        node_id=parsed.node_id,
+        node_label=parsed.node_label,
+        params=dict(parsed.params),
     )
 
 

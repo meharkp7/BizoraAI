@@ -1,8 +1,10 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
+import { HttpResponse, http } from "msw";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import { useWhatIfScenario } from "../../lib/store.ts";
+import { server } from "../../test/server.ts";
 import { WhatIfEditor } from "./WhatIfEditor.tsx";
 
 function wrapper({ children }: { children: ReactNode }) {
@@ -42,6 +44,56 @@ describe("WhatIfEditor", () => {
     expect(screen.getByText(/p\. 3/)).toBeInTheDocument();
     expect(screen.getByText(/Yield holds/)).toBeInTheDocument();
     expect(screen.getByText(/Confidence 0\.62/)).toBeInTheDocument();
+  });
+
+  it("interprets plain English into the settings form", async () => {
+    renderEditor([{ label: "cell_count", value: "2000" }]);
+
+    fireEvent.change(screen.getByLabelText("Describe the change in plain English"), {
+      target: { value: "what if cell_count were 5000?" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Interpret" }));
+
+    expect(await screen.findByText(/Understood: cell_count → 5000/)).toBeInTheDocument();
+    expect(screen.getByLabelText("cell_count")).toHaveValue("5000");
+    expect(screen.getByRole("button", { name: "Run what-if" })).toBeEnabled();
+  });
+
+  it("says plainly when plain English names no known setting", async () => {
+    renderEditor([{ label: "cell_count", value: "2000" }]);
+
+    fireEvent.change(screen.getByLabelText("Describe the change in plain English"), {
+      target: { value: "make it bigger" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Interpret" }));
+
+    expect(
+      await screen.findByText("None of those settings belong to this step."),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("cell_count")).toHaveValue("2000");
+  });
+
+  it("points at the named step instead of filling the wrong form", async () => {
+    server.use(
+      http.post("/api/v1/papers/:paperId/whatif/parse", () =>
+        HttpResponse.json({
+          node_id: "sense",
+          node_label: "Sense array",
+          params: { threshold: "0.9" },
+        }),
+      ),
+    );
+    renderEditor([{ label: "cell_count", value: "2000" }]);
+
+    fireEvent.change(screen.getByLabelText("Describe the change in plain English"), {
+      target: { value: "sense threshold to 0.9" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Interpret" }));
+
+    expect(
+      await screen.findByText(/That reads as the Sense array step/),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("cell_count")).toHaveValue("2000");
   });
 
   it("resets values and clears the outcome", async () => {

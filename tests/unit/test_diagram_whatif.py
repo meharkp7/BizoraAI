@@ -305,3 +305,72 @@ def test_run_what_if_uses_cache(
 
     monkeypatch.setenv("BIZORA_CACHE_DIR", str(tmp_path))
     asyncio.run(run_test())
+
+
+def make_methodology_with_params() -> dict[str, Any]:
+    """Build a methodology flow whose train step exposes settings."""
+    payload = make_methodology_payload()
+    payload["nodes"][1]["params"] = {"epochs": 50, "batch": 32}
+    return payload
+
+
+def test_parse_plain_english_resolves_step_and_settings(
+    client: TestClient, stub_whatif: ScriptedDiagramProvider
+) -> None:
+    figure_ids = seed_paper_with_figures(client, "paper-9")
+    script_flow(stub_whatif, figure_ids, make_methodology_with_params())
+
+    response = client.post(
+        "/api/v1/papers/paper-9/whatif/parse",
+        json={"text": "what if train epochs were 100?"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "node_id": "n2",
+        "node_label": "train",
+        "params": {"epochs": "100"},
+    }
+
+
+def test_parse_uses_context_step_when_unnamed(
+    client: TestClient, stub_whatif: ScriptedDiagramProvider
+) -> None:
+    figure_ids = seed_paper_with_figures(client, "paper-9")
+    script_flow(stub_whatif, figure_ids, make_methodology_with_params())
+
+    response = client.post(
+        "/api/v1/papers/paper-9/whatif/parse",
+        json={"text": "epochs to 100 and batch to 64", "node_id": "n2"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["node_id"] == "n2"
+    assert body["params"] == {"epochs": "100", "batch": "64"}
+
+
+def test_parse_ambiguity_explains_instead_of_guessing(
+    client: TestClient, stub_whatif: ScriptedDiagramProvider
+) -> None:
+    figure_ids = seed_paper_with_figures(client, "paper-9")
+    script_flow(stub_whatif, figure_ids, make_methodology_with_params())
+
+    response = client.post(
+        "/api/v1/papers/paper-9/whatif/parse",
+        json={"text": "epochs to 100"},
+    )
+
+    assert response.status_code == 422
+    assert "Which step?" in response.json()["error"]["message"]
+
+
+def test_parse_unknown_paper_returns_404(
+    client: TestClient, stub_whatif: ScriptedDiagramProvider
+) -> None:
+    response = client.post(
+        "/api/v1/papers/paper-missing/whatif/parse",
+        json={"text": "epochs to 100", "node_id": "n2"},
+    )
+
+    assert response.status_code == 404

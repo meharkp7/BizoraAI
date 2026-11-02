@@ -33,6 +33,7 @@ import type {
   PaperImportResponse,
   PaperReportedMetric,
   PaperUpload,
+  PaperWhatIfParse,
   PaperWhatIfResponse,
   ParsedPaper,
   QualitySummary,
@@ -523,6 +524,17 @@ export const api = {
     return request(`/api/v1/papers/${encode(paperId)}/whatif`, {
       method: "POST",
       body: JSON.stringify({ node_id: nodeId, params }),
+    });
+  },
+
+  parsePaperWhatIf(
+    paperId: string,
+    text: string,
+    nodeId: string,
+  ): Promise<PaperWhatIfParse> {
+    return request(`/api/v1/papers/${encode(paperId)}/whatif/parse`, {
+      method: "POST",
+      body: JSON.stringify({ text, node_id: nodeId }),
     });
   },
 };

@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { usePaperWhatIf } from "../../app/queries.ts";
+import { usePaperWhatIf, usePaperWhatIfParse } from "../../app/queries.ts";
 import { useWhatIfScenario } from "../../lib/store.ts";
-import type { PaperWhatIfResponse } from "../../lib/types.ts";
+import type { PaperWhatIfParse, PaperWhatIfResponse } from "../../lib/types.ts";
 import styles from "./WhatIfEditor.module.css";
 
 interface PastRun {
@@ -49,6 +49,9 @@ export function WhatIfEditor({
     state.staged.some((entry) => entry.paperId === paperId && entry.nodeId === nodeId),
   );
   const whatif = usePaperWhatIf(paperId);
+  const parse = usePaperWhatIfParse(paperId);
+  const [plain, setPlain] = useState("");
+  const [parseNote, setParseNote] = useState<string | null>(null);
 
   if (params.length === 0) {
     return (
@@ -74,6 +77,37 @@ export function WhatIfEditor({
     setValues(Object.fromEntries(params.map((param) => [param.label, param.value])));
   }
 
+  function applyParsed(parsed: PaperWhatIfParse): void {
+    if (parsed.node_id !== nodeId) {
+      setParseNote(
+        `That reads as the ${parsed.node_label} step — open it to run these settings.`,
+      );
+      return;
+    }
+    const known = new Set(params.map((param) => param.label));
+    const matched = Object.fromEntries(
+      Object.entries(parsed.params).filter(([key]) => known.has(key)),
+    );
+    if (Object.keys(matched).length === 0) {
+      setParseNote("None of those settings belong to this step.");
+      return;
+    }
+    setValues((current) => ({ ...current, ...matched }));
+    setParseNote(
+      `Understood: ${Object.entries(matched)
+        .map(([key, value]) => `${key} → ${value}`)
+        .join(", ")}. Review and run.`,
+    );
+  }
+
+  function interpret(): void {
+    setParseNote(null);
+    parse.mutate(
+      { text: plain, nodeId },
+      { onSuccess: applyParsed },
+    );
+  }
+
   return (
     <>
       {params.map((param) => (
@@ -91,6 +125,33 @@ export function WhatIfEditor({
           </dd>
         </div>
       ))}
+      <div style={{ display: "contents" }}>
+        <dt>Plain English</dt>
+        <dd>
+          <div className={styles.plainRow}>
+            <input
+              className={styles.input}
+              aria-label="Describe the change in plain English"
+              value={plain}
+              placeholder="e.g. what if layers were 6?"
+              onChange={(event) => setPlain(event.target.value)}
+            />
+            <button
+              type="button"
+              disabled={plain.trim() === "" || parse.isPending}
+              onClick={interpret}
+            >
+              {parse.isPending ? "Interpreting…" : "Interpret"}
+            </button>
+          </div>
+          {parseNote ? <span className={styles.note}>{parseNote}</span> : null}
+          {parse.error ? (
+            <p className={styles.error} role="alert">
+              {parse.error instanceof Error ? parse.error.message : "Could not interpret that."}
+            </p>
+          ) : null}
+        </dd>
+      </div>
       <div style={{ display: "contents" }}>
         <dt>What-if</dt>
         <dd>

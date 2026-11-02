@@ -266,6 +266,23 @@ export const handlers = [
     });
   }),
 
+  http.post("/api/v1/papers/:paperId/whatif/parse", async ({ params, request }) => {
+    if (params["paperId"] !== "paper-1") {
+      return notFound("RESOURCE_NOT_FOUND", "Paper not found.");
+    }
+    const body = (await request.json()) as { text?: unknown; node_id?: unknown };
+    if (typeof body.text !== "string" || body.text.trim() === "") {
+      return HttpResponse.json({ detail: "Bad request." }, { status: 400 });
+    }
+    const nodeId = typeof body.node_id === "string" ? body.node_id : "fabricate";
+    const match = body.text.match(/cell_count\D*(\d+)/i);
+    return HttpResponse.json({
+      node_id: nodeId,
+      node_label: "Fabricate array",
+      params: match ? { cell_count: match[1] } : {},
+    });
+  }),
+
   http.post("/api/v1/auth/register", async ({ request }) => {
     const body = (await request.json()) as { email?: unknown; password?: unknown };
     if (typeof body.email !== "string" || typeof body.password !== "string") {

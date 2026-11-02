@@ -854,6 +854,12 @@ export interface WhatIfBasisJson {
   page: number | null;
 }
 
+export interface PaperWhatIfParse {
+  node_id: string;
+  node_label: string;
+  params: Record<string, string>;
+}
+
 export interface PaperWhatIfResponse {
   node_id: string;
   node_label: string;

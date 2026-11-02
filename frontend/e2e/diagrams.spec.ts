@@ -307,6 +307,43 @@ test("methodology tab renders the engine SVG and inspects a clicked node", async
   await expect(inspector).toContainText("from paper");
 });
 
+test("plain English fills a methodology what-if and runs it", async ({ page }) => {
+  await page.route("**/api/v1/papers/*/whatif/parse", async (route) => {
+    await route.fulfill({
+      json: { node_id: "m-encode", node_label: "Encode", params: { layers: "6" } },
+    });
+  });
+  await page.route("**/api/v1/papers/*/whatif", async (route) => {
+    await route.fulfill({
+      json: {
+        node_id: "m-encode",
+        node_label: "Encode",
+        params_previous: { layers: "12" },
+        params_applied: { layers: "6" },
+        outcome: "Estimated narrower encoding with 6 layers.",
+        basis: [],
+        assumptions: [],
+        confidence: 0.5,
+        from_cache: false,
+      },
+    });
+  });
+
+  await page.goto("/g/project-1/graph-1");
+  const canvas = page.getByRole("group", { name: "Methodology diagram" });
+  await canvas.locator('[data-node-id="m-encode"] text').first().click();
+
+  const inspector = page.getByRole("region", { name: "Inspector" });
+  await inspector
+    .getByLabel("Describe the change in plain English")
+    .fill("what if encode layers were 6?");
+  await inspector.getByRole("button", { name: "Interpret" }).click();
+  await expect(inspector.getByLabel("layers")).toHaveValue("6");
+
+  await inspector.getByRole("button", { name: "Run what-if" }).click();
+  await expect(inspector.getByText(/Estimated narrower encoding/)).toBeVisible();
+});
+
 test("schematic tab renders without page errors and inspects a component", async ({
   page,
 }) => {

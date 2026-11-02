@@ -423,6 +423,14 @@ export function usePaperWhatIf(paperId: string) {
   });
 }
 
+/** Plain-English what-if text resolved to one step plus new settings. */
+export function usePaperWhatIfParse(paperId: string) {
+  return useMutation({
+    mutationFn: (input: { text: string; nodeId: string }) =>
+      api.parsePaperWhatIf(paperId, input.text, input.nodeId),
+  });
+}
+
 /** Configured first-run paper, whether or not it has been seeded yet. */
 export function useSamplePaper() {
   return useQuery({
