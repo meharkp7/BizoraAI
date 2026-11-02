@@ -545,6 +545,16 @@ export function useReplicationPlan(projectId: string, graphId: string) {
   });
 }
 
+export function usePlanNarration(projectId: string, graphId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: [...graphKeys.replicationPlan(projectId, graphId), "narration"] as const,
+    queryFn: () => api.getPlanNarration(projectId, graphId),
+    enabled,
+    retry: false,
+    staleTime: Infinity,
+  });
+}
+
 export function useIngestGraphFigures(projectId: string, graphId: string) {
   const queryClient = useQueryClient();
   return useMutation({

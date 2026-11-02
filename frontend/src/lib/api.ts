@@ -48,6 +48,7 @@ import type {
   PaperWhatIfParse,
   PaperWhatIfResponse,
   ParsedPaper,
+  PlanNarration,
   QualitySummary,
   RemovalPreflight,
   ReplicationPlan,
@@ -181,6 +182,12 @@ export const api = {
   getReplicationPlan(projectId: string, graphId: string): Promise<ReplicationPlan> {
     return request(
       `/api/v1/projects/${encode(projectId)}/graphs/${encode(graphId)}/replication-plan`,
+    );
+  },
+
+  getPlanNarration(projectId: string, graphId: string): Promise<PlanNarration> {
+    return request(
+      `/api/v1/projects/${encode(projectId)}/graphs/${encode(graphId)}/replication-plan/narration`,
     );
   },
 

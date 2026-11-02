@@ -1,6 +1,7 @@
-import { useState } from "react";
-import { useReplicationPlan } from "../../app/queries.ts";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { usePlanNarration, useReplicationPlan } from "../../app/queries.ts";
 import styles from "./ReportedPanel.module.css";
+import { useNarration } from "./useNarration.ts";
 
 function storageKey(projectId: string, graphId: string, version: number): string {
   return `bizora.replication.${projectId}::${graphId}::v${version}`;
@@ -40,11 +41,8 @@ export function ReplicationPlanPanel({
     setChecked(loadChecked(key));
   }
 
-  function toggle(seq: number): void {
-    setChecked((current) => {
-      const next = new Set(current);
-      if (next.has(seq)) next.delete(seq);
-      else next.add(seq);
+  const persist = useCallback(
+    (next: Set<number>) => {
       try {
         window.localStorage.setItem(
           storageKey(projectId, graphId, version),
@@ -53,8 +51,54 @@ export function ReplicationPlanPanel({
       } catch {
         // Private mode: checkmarks still work for this session.
       }
+    },
+    [projectId, graphId, version],
+  );
+
+  function toggle(seq: number): void {
+    setChecked((current) => {
+      const next = new Set(current);
+      if (next.has(seq)) next.delete(seq);
+      else next.add(seq);
+      persist(next);
       return next;
     });
+  }
+
+  // Narration checks steps off as they are read; it never unchecks.
+  const markDone = useCallback(
+    (seq: number) => {
+      setChecked((current) => {
+        if (current.has(seq)) return current;
+        const next = new Set(current);
+        next.add(seq);
+        persist(next);
+        return next;
+      });
+    },
+    [persist],
+  );
+  const narrator = useNarration(markDone);
+  const [wantNarration, setWantNarration] = useState(false);
+  const narration = usePlanNarration(projectId, graphId, wantNarration);
+  const startedRef = useRef(false);
+
+  // Start reading once the narration lines arrive; each press plays once.
+  useEffect(() => {
+    if (!wantNarration || !narration.data || startedRef.current) return;
+    startedRef.current = true;
+    narrator.play(narration.data.intro, narration.data.lines);
+  }, [wantNarration, narration.data, narrator]);
+
+  function startNarration(): void {
+    startedRef.current = false;
+    setWantNarration(true);
+  }
+
+  function stopNarration(): void {
+    startedRef.current = false;
+    narrator.stop();
+    setWantNarration(false);
   }
 
   return (
@@ -71,9 +115,33 @@ export function ReplicationPlanPanel({
           <p className={styles.hint}>
             {checked.size} of {plan.data.steps.length} steps done · revision {plan.data.version}
           </p>
+          {narrator.supported ? (
+            narrator.narrating ? (
+              <button type="button" onClick={stopNarration}>
+                Stop narration
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={startNarration}
+                disabled={wantNarration && narration.isPending}
+              >
+                {wantNarration && narration.isPending ? "Loading guide…" : "Narrate build"}
+              </button>
+            )
+          ) : (
+            <p className={styles.hint}>Spoken narration needs a browser with speech support.</p>
+          )}
+          {narration.isError && (
+            <p className={styles.hint}>The narrated guide is unavailable for this graph.</p>
+          )}
           <ol className={styles.list}>
             {plan.data.steps.map((step) => (
-              <li key={step.seq} className={styles.item}>
+              <li
+                key={step.seq}
+                className={styles.item}
+                aria-current={narrator.activeSeq === step.seq ? "step" : undefined}
+              >
                 <label>
                   <input
                     type="checkbox"

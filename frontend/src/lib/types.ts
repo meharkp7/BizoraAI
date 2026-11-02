@@ -340,6 +340,20 @@ export interface ReplicationPlan {
   steps: ReplicationStep[];
 }
 
+export interface NarrationLine {
+  seq: number;
+  node_id: string;
+  text: string;
+}
+
+export interface PlanNarration {
+  project_id: string;
+  graph_id: string;
+  version: number;
+  intro: string;
+  lines: NarrationLine[];
+}
+
 export interface GraphRevisionSummary {
   version: number;
   parent_version: number | null;
