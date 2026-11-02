@@ -6,7 +6,7 @@ from tests.unit.test_entities_api import client, load_fixture_payload  # noqa: F
 __all__ = ["client"]
 
 from bizora.contracts.graph import MethodologyGraph
-from bizora.core.replication import build_replication_plan, order_nodes
+from bizora.core.replication import build_replication_plan, narrate_plan, order_nodes
 
 
 def _graph(name: str) -> MethodologyGraph:
@@ -90,3 +90,44 @@ def test_replication_plan_unknown_graph_is_404(client: TestClient) -> None:
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "RESOURCE_NOT_FOUND"
+
+
+def test_narration_reads_every_step_in_order() -> None:
+    """Each step gets one speakable line with its action and check."""
+    plan = build_replication_plan(_graph("quant"))
+    narration = narrate_plan(plan)
+
+    assert narration.version == plan.version
+    assert str(len(plan.steps)) in narration.intro
+    assert len(narration.lines) == len(plan.steps)
+    for line, step in zip(narration.lines, plan.steps, strict=True):
+        assert line.seq == step.seq
+        assert line.node_id == step.node_id
+        assert f"Step {step.seq} of {len(plan.steps)}" in line.text
+        assert step.action in line.text
+
+
+def test_narration_endpoint(client: TestClient) -> None:
+    """The endpoint serves the latest revision's build guide."""
+    assert (
+        client.post("/api/v1/graphs", json=load_fixture_payload("sram")).status_code == 201
+    )
+
+    response = client.get(
+        "/api/v1/projects/fixture-sram/graphs/main/replication-plan/narration"
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["project_id"] == "fixture-sram"
+    assert len(body["lines"]) == len(_graph("sram").nodes)
+    assert body["lines"][0]["text"].startswith("Step 1 of")
+
+
+def test_narration_unknown_graph_is_404(client: TestClient) -> None:
+    """Missing graphs fail instead of narrating nothing."""
+    response = client.get(
+        "/api/v1/projects/nope/graphs/nope/replication-plan/narration"
+    )
+
+    assert response.status_code == 404

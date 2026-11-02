@@ -31,3 +31,25 @@ class ReplicationPlan(BaseModel):
     graph_id: str = Field(min_length=1, max_length=128)
     version: int = Field(ge=1)
     steps: tuple[ReplicationStep, ...]
+
+
+class NarrationLine(BaseModel):
+    """One speakable line of the narrated build guide."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    seq: int = Field(ge=1)
+    node_id: str = Field(min_length=1, max_length=128)
+    text: str = Field(min_length=1, max_length=4000)
+
+
+class PlanNarration(BaseModel):
+    """The full narrated build guide for one graph revision."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    project_id: str = Field(min_length=1, max_length=128)
+    graph_id: str = Field(min_length=1, max_length=128)
+    version: int = Field(ge=1)
+    intro: str = Field(min_length=1, max_length=2000)
+    lines: tuple[NarrationLine, ...]

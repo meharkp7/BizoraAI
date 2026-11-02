@@ -12,7 +12,12 @@ from collections import defaultdict, deque
 from sqlalchemy.orm import Session
 
 from bizora.contracts.graph import GraphNode, MethodologyGraph, NodeKind
-from bizora.contracts.replication import ReplicationPlan, ReplicationStep
+from bizora.contracts.replication import (
+    NarrationLine,
+    PlanNarration,
+    ReplicationPlan,
+    ReplicationStep,
+)
 from bizora.core.errors import BizoraError, ErrorCode
 from bizora.db import repository
 
@@ -128,3 +133,33 @@ def plan_for_latest_revision(
     if record is None:
         raise BizoraError(ErrorCode.RESOURCE_NOT_FOUND, "Graph not found.")
     return build_replication_plan(MethodologyGraph.model_validate(record.graph_payload))
+
+
+def narrate_plan(plan: ReplicationPlan) -> PlanNarration:
+    """Turn a replication plan into speakable narration lines."""
+    total = len(plan.steps)
+    step_word = "step" if total == 1 else "steps"
+    intro = (
+        f"Replication guide for graph {plan.graph_id}, revision {plan.version}: "
+        f"{total} {step_word}. Follow along; each step is read aloud in order."
+    )
+    lines = []
+    for step in plan.steps:
+        text = f"Step {step.seq} of {total}. {step.action}"
+        if step.verify:
+            text += f" To verify: {step.verify[0]}"
+        lines.append(NarrationLine(seq=step.seq, node_id=step.node_id, text=text))
+    return PlanNarration(
+        project_id=plan.project_id,
+        graph_id=plan.graph_id,
+        version=plan.version,
+        intro=intro,
+        lines=tuple(lines),
+    )
+
+
+def narration_for_latest_revision(
+    session: Session, *, project_id: str, graph_id: str
+) -> PlanNarration:
+    """Build the narrated guide for a graph's latest revision."""
+    return narrate_plan(plan_for_latest_revision(session, project_id=project_id, graph_id=graph_id))
