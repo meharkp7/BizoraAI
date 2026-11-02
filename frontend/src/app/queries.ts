@@ -44,10 +44,16 @@ export const runKeys = {
     ["runs", runId, "reported-metrics", ...names] as const,
 };
 
-export function useGraphRevision(projectId: string, graphId: string, version: number) {
+export function useGraphRevision(
+  projectId: string,
+  graphId: string,
+  version: number,
+  enabled = true,
+) {
   return useQuery({
     queryKey: graphKeys.revision(projectId, graphId, version),
     queryFn: () => api.getGraphRevision(projectId, graphId, version),
+    enabled,
   });
 }
 

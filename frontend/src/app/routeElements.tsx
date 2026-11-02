@@ -1,5 +1,6 @@
 import { useParams, useSearchParams } from "react-router";
 import { CorrectionPage } from "../features/correction/CorrectionPage.tsx";
+import { NotebookPage } from "../features/notebook/NotebookPage.tsx";
 import { WorkspacePage } from "../features/workspace/WorkspacePage.tsx";
 import { RunDetailPage, RunsPage } from "../features/runs/RunsPage.tsx";
 import { TablesPage } from "../features/tables/TablesPage.tsx";
@@ -70,6 +71,11 @@ export function WorkspaceRoute() {
 export function RunsRoute() {
   const { projectId, graphId } = useGraphParams();
   return <RunsPage projectId={projectId} graphId={graphId} />;
+}
+
+export function NotebookRoute() {
+  const { projectId, graphId } = useGraphParams();
+  return <NotebookPage projectId={projectId} graphId={graphId} />;
 }
 
 export function RunDetailRoute() {

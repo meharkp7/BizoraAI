@@ -85,6 +85,12 @@ function WorkspaceNav() {
       >
         Tables
       </NavLink>
+      <NavLink
+        to={`${base}/notebook`}
+        className={({ isActive }) => (isActive ? styles.active : undefined)}
+      >
+        Notebook
+      </NavLink>
     </nav>
   );
 }
