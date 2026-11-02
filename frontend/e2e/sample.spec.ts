@@ -59,7 +59,7 @@ test("sample paper opens its seeded workspace", async ({ page }) => {
     });
   });
 
-  await page.goto("/");
+  await page.goto("/papers");
   const section = page.getByRole("region", { name: "Sample paper" });
   await section.getByRole("link", { name: /Vision transformer/ }).click();
 
@@ -81,7 +81,7 @@ test("sample paper explains an unseeded workspace", async ({ page }) => {
     });
   });
 
-  await page.goto("/");
+  await page.goto("/papers");
   const section = page.getByRole("region", { name: "Sample paper" });
   await expect(section.getByText(/not seeded yet/)).toBeVisible();
   await expect(section.getByText("scripts/seed_sample_paper.py")).toBeVisible();

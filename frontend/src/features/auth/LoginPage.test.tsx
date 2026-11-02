@@ -15,7 +15,7 @@ function wrapper({ children }: { children: ReactNode }) {
       <QueryClientProvider client={client}>
         <Routes>
           <Route path="/login" element={children} />
-          <Route path="/" element={<p>Homepage</p>} />
+          <Route path="/papers" element={<p>Papers</p>} />
         </Routes>
       </QueryClientProvider>
     </MemoryRouter>
@@ -28,7 +28,7 @@ describe("LoginPage", () => {
     useSession.setState({ token: null });
   });
 
-  it("logs in, stores the token, and lands on the homepage", async () => {
+  it("logs in, stores the token, and lands on papers", async () => {
     const user = userEvent.setup();
     render(<LoginPage />, { wrapper });
 
@@ -37,7 +37,7 @@ describe("LoginPage", () => {
     const form = screen.getByRole("form", { name: "Login form" });
     await user.click(within(form).getByRole("button", { name: "Log in" }));
 
-    expect(await screen.findByText("Homepage")).toBeInTheDocument();
+    expect(await screen.findByText("Papers")).toBeInTheDocument();
     expect(getAuthToken()).toBe("test-token");
   });
 
@@ -53,7 +53,7 @@ describe("LoginPage", () => {
     const form = screen.getByRole("form", { name: "Login form" });
     await user.click(within(form).getByRole("button", { name: "Create account" }));
 
-    expect(await screen.findByText("Homepage")).toBeInTheDocument();
+    expect(await screen.findByText("Papers")).toBeInTheDocument();
     expect(getAuthToken()).toBe("test-token");
   });
 

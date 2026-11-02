@@ -33,7 +33,7 @@ export function LoginPage() {
     setError(null);
     const done = (token: string): void => {
       setToken(token);
-      void navigate("/");
+      void navigate("/papers");
     };
     const failed = (cause: unknown): void => {
       clearToken();

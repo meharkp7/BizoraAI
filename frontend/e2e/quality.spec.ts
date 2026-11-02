@@ -45,7 +45,7 @@ test("quality dashboard shows last eval scores", async ({ page }) => {
     });
   });
 
-  await page.goto("/");
+  await page.goto("/papers");
   await page.getByRole("link", { name: "See the latest eval scores" }).click();
 
   await expect(page).toHaveURL(/\/quality$/);

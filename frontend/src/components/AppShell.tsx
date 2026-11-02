@@ -57,7 +57,7 @@ function WorkspaceNav() {
   const base = `/g/${projectId}/${graphId}`;
   return (
     <nav className={styles.subnav} aria-label="Workspace">
-      <Link to="/" className={styles.uploadAnother}>
+      <Link to="/papers" className={styles.uploadAnother}>
         Upload another
       </Link>
       <NavLink
@@ -99,6 +99,14 @@ export function AppShell() {
           </span>
           Bizora
         </Link>
+        <nav className={styles.mainnav} aria-label="Primary">
+          <NavLink
+            to="/papers"
+            className={({ isActive }) => (isActive ? styles.active : undefined)}
+          >
+            Papers
+          </NavLink>
+        </nav>
         <WorkspaceNav />
         <AuthArea />
         <ThemeToggle />

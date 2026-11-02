@@ -61,7 +61,7 @@ test("multi-file upload extracts each paper with progress", async ({ page }) => 
     });
   });
 
-  await page.goto("/");
+  await page.goto("/papers");
   await page
     .getByLabel("Paper (PDF)")
     .setInputFiles([
@@ -107,7 +107,7 @@ test("upload warns on an already-extracted duplicate", async ({ page }) => {
     });
   });
 
-  await page.goto("/");
+  await page.goto("/papers");
   await page
     .getByLabel("Paper (PDF)")
     .setInputFiles({
@@ -149,7 +149,7 @@ test("import from an arXiv ID extracts the download", async ({ page }) => {
     });
   });
 
-  await page.goto("/");
+  await page.goto("/papers");
   const form = page.getByRole("form", { name: "Import a paper from a link" });
   await form.getByLabel("ArXiv ID, DOI, or URL").fill("1706.03762v7");
   await page.getByRole("button", { name: "Import and extract" }).click();

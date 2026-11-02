@@ -39,6 +39,25 @@
   border-radius: var(--radius-sm);
 }
 
+.mainnav {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.mainnav a {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--color-ink-soft);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.mainnav a:hover {
+  color: var(--color-ink);
+  background: var(--color-accent-wash);
+}
+
 .subnav {
   display: flex;
   gap: var(--space-1);
