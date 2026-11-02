@@ -268,6 +268,25 @@ export interface ArenaComparison {
   metrics: ArenaMetricRow[];
 }
 
+export interface TransplantRequest {
+  source_project_id: string;
+  source_graph_id: string;
+  source_version?: number | null;
+  node_ids: string[];
+  created_by: string;
+}
+
+export interface TransplantResponse {
+  project_id: string;
+  graph_id: string;
+  version: number;
+  title: string;
+  added_node_ids: string[];
+  renamed: Record<string, string>;
+  copied_edge_count: number;
+  dropped_edge_count: number;
+}
+
 export interface GraphRevisionSummary {
   version: number;
   parent_version: number | null;

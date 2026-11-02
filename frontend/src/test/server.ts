@@ -41,6 +41,7 @@ import {
   succeededRun,
   tableFixture,
   tableFixture2,
+  transplantFixture,
   usageSummaryFixture,
   whatIfFixture,
 } from "./fixtures.ts";
@@ -61,6 +62,11 @@ export const handlers = [
   http.get("/api/v1/graphs", () => HttpResponse.json(graphSummariesFixture)),
 
   http.post("/api/v1/graphs/compare", () => HttpResponse.json(arenaFixture)),
+
+  http.post(
+    "/api/v1/graphs/:projectId/:graphId/transplant",
+    () => HttpResponse.json(transplantFixture, { status: 201 }),
+  ),
 
   http.get("/api/v1/graphs/:projectId/:graphId/revisions/:version", ({ params }) => {
     if (params["projectId"] === "project-1" && params["graphId"] === "graph-1") {

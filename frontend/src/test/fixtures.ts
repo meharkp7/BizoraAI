@@ -648,6 +648,17 @@ export const arenaFixture: ArenaComparison = {
   ],
 };
 
+export const transplantFixture = {
+  project_id: "project-2",
+  graph_id: "graph-2",
+  version: 2,
+  title: "Transplant 1 block from graph-1",
+  added_node_ids: ["encoder"],
+  renamed: {},
+  copied_edge_count: 0,
+  dropped_edge_count: 1,
+};
+
 export const paperTextFixture: PaperText = {
   source_id: "paper-1",
   page_count: 2,

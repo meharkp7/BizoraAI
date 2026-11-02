@@ -3,6 +3,9 @@
 /** Actor recorded on patches and layouts saved through the workspace UI. */
 export const WORKSPACE_ACTOR = "workspace-ui";
 
+/** Actor recorded on transplants run from the cross-paper lab. */
+export const CROSS_PAPER_ACTOR = "cross-paper-ui";
+
 /** Component kinds offered by the canvas toolbar and the replace form. */
 export const NODE_KINDS = [
   "input",

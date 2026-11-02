@@ -49,6 +49,8 @@ import type {
   RunUsage,
   SamplePaper,
   SimulationPreview,
+  TransplantRequest,
+  TransplantResponse,
   UsageSummary,
 } from "./types.ts";
 
@@ -180,6 +182,20 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ a, b }),
     });
+  },
+
+  transplantNodes(
+    projectId: string,
+    graphId: string,
+    payload: TransplantRequest,
+  ): Promise<TransplantResponse> {
+    return request(
+      `/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/transplant`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+    );
   },
 
   listRevisions(projectId: string, graphId: string): Promise<GraphRevisionSummary[]> {

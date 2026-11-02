@@ -27,6 +27,19 @@ describe("api client", () => {
     expect(comparison.metrics[0]?.name).toBe("Ours — Accuracy");
   });
 
+  it("transplants blocks into a new revision", async () => {
+    const result = await api.transplantNodes("project-2", "graph-2", {
+      source_project_id: "project-1",
+      source_graph_id: "graph-1",
+      source_version: 2,
+      node_ids: ["encoder"],
+      created_by: "cross-paper-ui",
+    });
+    expect(result.version).toBe(2);
+    expect(result.added_node_ids).toEqual(["encoder"]);
+    expect(result.dropped_edge_count).toBe(1);
+  });
+
   it("fetches a graph revision", async () => {
     const graph = await api.getGraphRevision("project-1", "graph-1", 2);
     expect(graph.title).toBe("Vision transformer");

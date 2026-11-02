@@ -82,6 +82,7 @@ from bizora.contracts.table import (
     SamplePaper,
     SuggestedIds,
 )
+from bizora.contracts.transplant import TransplantRequest, TransplantResponse
 from bizora.contracts.usage import RunUsage, UsageSummary
 from bizora.copilot.service import (
     CopilotDoneEvent,
@@ -139,6 +140,7 @@ from bizora.core.quality import build_quality_summary
 from bizora.core.reported_service import discover_reported_metrics, reported_metrics_for_tables
 from bizora.core.run_service import ExperimentRunService
 from bizora.core.table_persistence_service import TablePersistenceService
+from bizora.core.transplant import plan_transplant as transplant_plan
 from bizora.core.usage_ledger import (
     check_run_caps,
     check_spend_caps,
@@ -821,6 +823,60 @@ def compare_graphs(
         )
     ]
     return arena.compare_graphs(a_graph, b_graph, a_tables, b_tables)
+
+
+@router.post(
+    "/api/v1/graphs/{project_id}/{graph_id}/transplant",
+    response_model=TransplantResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["graphs"],
+)
+def transplant_nodes(
+    project_id: str,
+    graph_id: str,
+    request: TransplantRequest,
+    session: Session = DB_SESSION_DEPENDENCY,
+) -> TransplantResponse:
+    """Copy nodes from another graph into this graph as a new revision."""
+    source_graph = _pinned_or_latest_or_404(
+        session,
+        request.source_project_id,
+        request.source_graph_id,
+        request.source_version,
+    )
+    target_graph = _pinned_or_latest_or_404(session, project_id, graph_id, None)
+    try:
+        plan = transplant_plan(source_graph, target_graph, request.node_ids)
+    except KeyError as exc:
+        raise BizoraError(
+            ErrorCode.RESOURCE_NOT_FOUND,
+            "The source graph lacks the requested nodes.",
+            details={
+                "source_project_id": request.source_project_id,
+                "source_graph_id": request.source_graph_id,
+                "missing_node_ids": sorted(exc.args[0]),
+            },
+        ) from exc
+    record = GraphPersistenceService.create_revision(
+        session,
+        target_graph,
+        created_by=request.created_by,
+        nodes=plan.nodes,
+        edges=plan.edges,
+        source_ids=plan.source_ids,
+        title=plan.title,
+    )
+    revision = MethodologyGraph.model_validate(record.graph_payload)
+    return TransplantResponse(
+        project_id=revision.project_id,
+        graph_id=revision.graph_id,
+        version=revision.version,
+        title=revision.title,
+        added_node_ids=plan.added_node_ids,
+        renamed=plan.renamed,
+        copied_edge_count=plan.copied_edge_count,
+        dropped_edge_count=plan.dropped_edge_count,
+    )
 
 
 @router.post(
@@ -1518,12 +1574,14 @@ async def stream_copilot(
     return StreamingResponse(generate(), media_type="text/event-stream")
 
 
-def _arena_side_or_404(session: Session, side: ArenaSideRef) -> MethodologyGraph:
-    """Load one arena side's revision (pinned or latest)."""
-    if side.version is not None:
-        return _revision_or_404(session, side.project_id, side.graph_id, side.version)
+def _pinned_or_latest_or_404(
+    session: Session, project_id: str, graph_id: str, version: int | None
+) -> MethodologyGraph:
+    """Load one revision, pinned when given, else the head."""
+    if version is not None:
+        return _revision_or_404(session, project_id, graph_id, version)
     record = get_latest_graph_revision(
-        session, project_id=side.project_id, graph_id=side.graph_id
+        session, project_id=project_id, graph_id=graph_id
     )
     if record is None:
         raise HTTPException(
@@ -1531,6 +1589,13 @@ def _arena_side_or_404(session: Session, side: ArenaSideRef) -> MethodologyGraph
             detail="Graph revision not found.",
         )
     return MethodologyGraph.model_validate(record.graph_payload)
+
+
+def _arena_side_or_404(session: Session, side: ArenaSideRef) -> MethodologyGraph:
+    """Load one arena side's revision (pinned or latest)."""
+    return _pinned_or_latest_or_404(
+        session, side.project_id, side.graph_id, side.version
+    )
 
 
 def _graph_or_404(session: Session, project_id: str, graph_id: str) -> None:

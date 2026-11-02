@@ -186,3 +186,25 @@
   gap: var(--space-1);
   font-size: 0.875rem;
 }
+
+.checks {
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  display: grid;
+  gap: var(--space-1);
+}
+
+.checks legend {
+  font-size: 0.8125rem;
+  font-weight: 650;
+  color: var(--color-ink-soft);
+  padding: 0 var(--space-1);
+}
+
+.check {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+  font-size: 0.875rem;
+}
