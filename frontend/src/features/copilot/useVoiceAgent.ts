@@ -1,44 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { api } from "../../lib/api.ts";
+import {
+  captureSupported,
+  captureUtterance,
+  encodeWavPcm16,
+  type UtteranceCapture,
+} from "./voiceCapture.ts";
 
-/** Minimal Web Speech API shapes (DOM libs vary). */
-interface RecognitionAlternative {
-  transcript: string;
-}
-
-interface RecognitionResultItem {
-  isFinal: boolean;
-  0: RecognitionAlternative;
-}
-
-interface RecognitionResultList {
-  length: number;
-  [index: number]: RecognitionResultItem;
-}
-
-interface RecognitionEventLike {
-  resultIndex: number;
-  results: RecognitionResultList;
-}
-
-interface RecognitionErrorLike {
-  error: string;
-}
-
-interface RecognitionLike {
-  lang: string;
-  continuous: boolean;
-  interimResults: boolean;
-  onresult: ((event: RecognitionEventLike) => void) | null;
-  onerror: ((event: RecognitionErrorLike) => void) | null;
-  onend: (() => void) | null;
-  onspeechstart: (() => void) | null;
-  start: () => void;
-  stop: () => void;
-  abort: () => void;
-}
-
-type RecognitionCtor = new () => RecognitionLike;
-
+/** Minimal speech-synthesis shapes (DOM libs vary). */
 interface UtteranceLike {
   text: string;
   voice: unknown;
@@ -58,12 +27,6 @@ interface SynthesisLike {
   speak: (utterance: UtteranceLike) => void;
   cancel: () => void;
   getVoices: () => SynthesisVoiceLike[];
-}
-
-function recognitionCtor(): RecognitionCtor | null {
-  if (typeof window === "undefined") return null;
-  const w = window as unknown as Record<string, RecognitionCtor | undefined>;
-  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 
 function synthesis(): { synth: SynthesisLike; Utterance: UtteranceCtor } | null {
@@ -121,23 +84,22 @@ export function splitUtterances(text: string): string[] {
 
 export type VoiceAgentState = "idle" | "listening" | "thinking" | "speaking";
 
+export interface VoiceAgentScope {
+  projectId: string;
+  graphId: string;
+}
+
 export interface VoiceAgentCallbacks {
   /** A final user transcript: the caller asks and later calls speak(). */
   onUserTurn: (transcript: string) => void;
   /** The user started talking over the agent's speech. */
   onInterrupted?: () => void;
-  /** Recognition died with a fatal error. */
+  /** The voice loop died with a fatal error. */
   onError?: (message: string) => void;
 }
 
-/** Grace period per utterance before barge-in counts: the agent's own
- *  voice through speakers can trip speech-start immediately. */
-const BARGE_IN_GRACE_MS = 800;
-
-/** After speech ends, trailing echo finals are still filtered briefly. */
+/** After speech ends, trailing echo transcripts are still filtered briefly. */
 const ECHO_TAIL_MS = 1200;
-
-const FATAL_ERRORS = new Set(["not-allowed", "service-not-allowed", "network", "audio-capture"]);
 
 function normalizeEchoText(text: string): string {
   return text
@@ -167,23 +129,30 @@ export function isEchoTranscript(transcript: string, spoken: readonly string[]):
   return false;
 }
 
+function release(stream: MediaStream | null): void {
+  if (!stream) return;
+  for (const track of stream.getTracks()) track.stop();
+}
+
 /**
- * A full-duplex voice conversation loop: the agent listens, the caller
- * answers via speak(), the user barges in by talking over it.
- * Recognition restarts itself so the conversation continues until
- * stop() or unmount.
+ * A full-duplex voice conversation loop on Muse Voice Transcribe: the
+ * mic records utterances, silence ends them, the server transcribes
+ * each clip, the caller answers via speak(), and the user barges in
+ * by talking over it. Capture restarts itself so the conversation
+ * continues until stop() or unmount.
  */
-export function useVoiceAgent(lang: string, callbacks: VoiceAgentCallbacks) {
+export function useVoiceAgent(lang: string, scope: VoiceAgentScope, callbacks: VoiceAgentCallbacks) {
   const [state, setState] = useState<VoiceAgentState>("idle");
-  const [interim, setInterim] = useState("");
   const [error, setError] = useState<string | null>(null);
   const activeRef = useRef(false);
   const stateRef = useRef<VoiceAgentState>("idle");
-  const recognitionRef = useRef<RecognitionLike | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const captureRef = useRef<UtteranceCapture | null>(null);
   const callbacksRef = useRef(callbacks);
+  const scopeRef = useRef(scope);
+  const langRef = useRef(lang);
   const speakQueueRef = useRef<string[]>([]);
   const speakDoneRef = useRef<(() => void) | null>(null);
-  const utteranceStartRef = useRef(0);
   const speechEndRef = useRef(0);
   const spokenRef = useRef<string[]>([]);
   const runRef = useRef(0);
@@ -192,92 +161,99 @@ export function useVoiceAgent(lang: string, callbacks: VoiceAgentCallbacks) {
     callbacksRef.current = callbacks;
   });
 
+  useEffect(() => {
+    scopeRef.current = scope;
+    langRef.current = lang;
+  });
+
   function setBoth(next: VoiceAgentState): void {
     stateRef.current = next;
     setState(next);
   }
 
-  const interrupt = useCallback(() => {
-    if (stateRef.current !== "speaking") return;
+  // Stop talking now: the barge-in transcript below forces its way
+  // in even though the turn moved through "thinking" first.
+  const interruptForced = useCallback(() => {
     synthesis()?.synth.cancel();
     runRef.current += 1;
     speakQueueRef.current = [];
     speakDoneRef.current = null;
     // A barge-in's own transcript must never be echo-filtered.
     speechEndRef.current = 0;
-    setInterim("");
     setBoth("listening");
     callbacksRef.current.onInterrupted?.();
   }, []);
 
+  const interrupt = useCallback(() => {
+    if (stateRef.current !== "speaking") return;
+    interruptForced();
+  }, [interruptForced]);
+
   const listen = useCallback(() => {
-    if (!activeRef.current) return;
-    const Ctor = recognitionCtor();
-    if (!Ctor) {
-      setError("Voice conversation is not supported in this browser.");
-      activeRef.current = false;
-      setBoth("idle");
-      return;
-    }
-    const recognition = new Ctor();
-    recognition.lang = lang;
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.onresult = (event) => {
-      if (!activeRef.current) return;
-      let pending = "";
-      for (let i = event.resultIndex; i < event.results.length; i += 1) {
-        const result = event.results[i];
-        if (result.isFinal) {
-          const transcript = result[0].transcript.trim();
-          setInterim("");
-          if (transcript === "") continue;
-          const speaking = stateRef.current === "speaking";
-          // The speaker feeds back into the mic while talking and just
-          // after: same-words finals are echo, never user turns.
-          const echoWindow =
-            speaking || Date.now() - speechEndRef.current < ECHO_TAIL_MS;
-          if (echoWindow && isEchoTranscript(transcript, spokenRef.current)) continue;
-          // A real final over agent speech is a barge-in even when the
-          // browser never fires speech-start: stop talking first.
-          if (speaking) interrupt();
-          callbacksRef.current.onUserTurn(transcript);
-        } else {
-          pending += result[0].transcript;
+    const stream = streamRef.current;
+    if (!activeRef.current || !stream) return;
+    // One capture at a time: a stale one is orphaned (its completion is
+    // ignored below) and cancelled so its decode graph is released.
+    captureRef.current?.cancel();
+    const capture = captureUtterance(stream);
+    captureRef.current = capture;
+    void capture.done.then(
+      (samples) => {
+        if (captureRef.current !== capture || !activeRef.current) return;
+        captureRef.current = null;
+        // Snapshot the overlap at capture end: transcription lands
+        // later, after the turn has moved through "thinking".
+        const overlapped = stateRef.current === "speaking";
+        if (samples.length === 0) {
+          setBoth(overlapped ? "speaking" : "listening");
+          listen();
+          return;
         }
-      }
-      setInterim(pending);
-    };
-    recognition.onspeechstart = () => {
-      // Barge-in: user speech during agent speech takes the turn.
-      if (stateRef.current !== "speaking") return;
-      if (Date.now() - utteranceStartRef.current < BARGE_IN_GRACE_MS) return;
-      interrupt();
-    };
-    recognition.onerror = (event) => {
-      if (event.error === "aborted" || event.error === "no-speech") return;
-      if (!FATAL_ERRORS.has(event.error)) return;
-      setError(
-        event.error === "not-allowed" || event.error === "service-not-allowed"
-          ? "Microphone access was blocked."
-          : "Voice conversation failed.",
-      );
-      activeRef.current = false;
-      setBoth("idle");
-      callbacksRef.current.onError?.(event.error);
-    };
-    recognition.onend = () => {
-      recognitionRef.current = null;
-      // Chrome ends recognition after silence: restart while active.
-      if (activeRef.current) listen();
-    };
-    recognitionRef.current = recognition;
-    try {
-      recognition.start();
-    } catch {
-      recognitionRef.current = null;
-    }
-  }, [lang, interrupt]);
+        setBoth("thinking");
+        const clip = new Blob([encodeWavPcm16(samples, 16000)], { type: "audio/wav" });
+        const { projectId, graphId } = scopeRef.current;
+        const language = langRef.current.split("-")[0] || langRef.current;
+        api
+          .transcribeVoice(projectId, graphId, clip, language)
+          .then((result) => {
+            if (!activeRef.current) return;
+            const transcript = result.transcript.trim();
+            if (transcript === "") {
+              // Sub-second turns transcribe empty: keep listening.
+              setBoth(overlapped ? "speaking" : "listening");
+              listen();
+              return;
+            }
+            // The speaker feeds back into the mic while talking and just
+            // after: same-words transcripts are echo, never user turns.
+            // Barge-in is decided HERE, on words — mic energy alone
+            // cannot tell echo from an interruption, so the agent never
+            // stops talking until a real transcript says otherwise.
+            const echoWindow =
+              overlapped || Date.now() - speechEndRef.current < ECHO_TAIL_MS;
+            if (echoWindow && isEchoTranscript(transcript, spokenRef.current)) {
+              setBoth(overlapped ? "speaking" : "listening");
+              listen();
+              return;
+            }
+            if (overlapped) interruptForced();
+            else setBoth("listening");
+            listen();
+            callbacksRef.current.onUserTurn(transcript);
+          })
+          .catch(() => {
+            if (!activeRef.current) return;
+            // One failed turn must not end the conversation.
+            setError("Voice transcription failed.");
+            setBoth("listening");
+            listen();
+          });
+      },
+      () => {
+        // Cancelled via stop(): state is settled there.
+      },
+    );
+  }, [interruptForced]);
 
   const speakNext = useCallback(() => {
     const pair = synthesis();
@@ -297,7 +273,6 @@ export function useVoiceAgent(lang: string, callbacks: VoiceAgentCallbacks) {
     const voice = pickVoice(pair.synth);
     if (voice) utterance.voice = voice;
     utterance.rate = 1.06;
-    utteranceStartRef.current = Date.now();
     const advance = () => {
       if (runRef.current !== run || !activeRef.current) return;
       speakNext();
@@ -322,7 +297,6 @@ export function useVoiceAgent(lang: string, callbacks: VoiceAgentCallbacks) {
       runRef.current += 1;
       speakQueueRef.current = splitUtterances(text);
       speakDoneRef.current = onDone ?? null;
-      setInterim("");
       setBoth("speaking");
       speakNext();
     },
@@ -336,33 +310,49 @@ export function useVoiceAgent(lang: string, callbacks: VoiceAgentCallbacks) {
     speakDoneRef.current = null;
     spokenRef.current = [];
     speechEndRef.current = 0;
-    recognitionRef.current?.abort();
-    recognitionRef.current = null;
+    captureRef.current?.cancel();
+    captureRef.current = null;
+    release(streamRef.current);
+    streamRef.current = null;
     synthesis()?.synth.cancel();
-    setInterim("");
     setBoth("idle");
   }, []);
 
   const start = useCallback(() => {
     if (activeRef.current) return;
-    if (!recognitionCtor() || !synthesis()) {
+    if (!captureSupported() || !synthesis()) {
       setError("Voice conversation needs a browser with speech support.");
       return;
     }
     setError(null);
-    setInterim("");
     activeRef.current = true;
     runRef.current += 1;
     setBoth("listening");
-    listen();
+    navigator.mediaDevices
+      .getUserMedia({ audio: true })
+      .then((stream) => {
+        if (!activeRef.current) {
+          release(stream);
+          return;
+        }
+        streamRef.current = stream;
+        listen();
+      })
+      .catch(() => {
+        if (!activeRef.current) return;
+        setError("Microphone access was blocked.");
+        activeRef.current = false;
+        setBoth("idle");
+        callbacksRef.current.onError?.("not-allowed");
+      });
   }, [listen]);
 
   useEffect(() => stop, [stop]);
 
   return {
-    supported: recognitionCtor() !== null && synthesis() !== null,
+    supported: captureSupported() && synthesis() !== null,
     state,
-    interim,
+    interim: "",
     error,
     start,
     stop,

@@ -230,19 +230,22 @@ export function CopilotPanel({
   const [threadId, setThreadId] = useState<string | null>(null);
   const { selectedNodeIds } = useWorkspaceSelection();
   const [input, setInput] = useState("");
-  const voice = useVoiceInput("en-IN", (transcript) =>
-    setInput((current) => {
-      const clean = transcript.trim();
-      if (!clean) return current;
-      return current.trim() === "" ? clean : `${current.trimEnd()} ${clean}`;
-    }),
+  const voice = useVoiceInput(
+    "en-IN",
+    (transcript) =>
+      setInput((current) => {
+        const clean = transcript.trim();
+        if (!clean) return current;
+        return current.trim() === "" ? clean : `${current.trimEnd()} ${clean}`;
+      }),
+    { projectId, graphId: graph.graph_id },
   );
   const [turns, setTurns] = useState<Turn[]>([]);
   const [dismissed, setDismissed] = useState<Set<number>>(new Set());
   const [voiceMode, setVoiceMode] = useState(false);
   const voiceModeRef = useRef(false);
   const voiceGenRef = useRef(0);
-  const agent = useVoiceAgent("en-IN", {
+  const agent = useVoiceAgent("en-IN", { projectId, graphId: graph.graph_id }, {
     // askVoice is hoisted, so the live transcript reuses the same path
     // as typed follow-ups in voice mode. The agent refreshes its
     // callbacks every render, so this always reaches the latest agent.

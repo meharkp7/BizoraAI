@@ -1,58 +1,53 @@
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { api } from "../../lib/api.ts";
 import { useVoiceInput } from "./useVoiceInput.ts";
+import * as voiceCapture from "./voiceCapture.ts";
 
-interface FakeResult {
-  isFinal: boolean;
-  0: { transcript: string };
+vi.mock("../../lib/api.ts", () => ({
+  api: { transcribeVoice: vi.fn() },
+}));
+
+const transcribeVoice = vi.mocked(api.transcribeVoice);
+
+function fakeStream(): MediaStream {
+  return { getTracks: () => [{ stop: vi.fn() }] } as unknown as MediaStream;
 }
 
-class FakeRecognition {
-  static instances: FakeRecognition[] = [];
-  lang = "";
-  interimResults = false;
-  onresult: ((event: { resultIndex: number; results: FakeResult[] }) => void) | null =
-    null;
-  onerror: ((event: { error: string }) => void) | null = null;
-  onend: (() => void) | null = null;
-  started = false;
-
-  constructor() {
-    FakeRecognition.instances.push(this);
-  }
-
-  start(): void {
-    this.started = true;
-  }
-
-  stop(): void {
-    this.started = false;
-    this.onend?.();
-  }
-
-  abort(): void {
-    this.started = false;
-  }
-
-  emit(transcript: string, isFinal: boolean): void {
-    this.onresult?.({ resultIndex: 0, results: [{ isFinal, 0: { transcript } }] });
-  }
+function installMic(stream: MediaStream | null = fakeStream()): void {
+  Object.defineProperty(navigator, "mediaDevices", {
+    configurable: true,
+    value: {
+      getUserMedia: stream === null ? vi.fn().mockRejectedValue(new Error("denied")) : vi.fn().mockResolvedValue(stream),
+    },
+  });
+  (window as unknown as Record<string, unknown>).AudioContext = vi.fn();
+  (window as unknown as Record<string, unknown>).MediaStream = vi.fn();
 }
 
-function installFake(): void {
-  (window as unknown as Record<string, unknown>).SpeechRecognition = FakeRecognition;
+function fakeCapture(samples: Float32Array = Float32Array.from([0.1, 0.2])) {
+  const capture = {
+    done: Promise.resolve(samples),
+    stop: vi.fn(),
+    cancel: vi.fn(),
+  };
+  const spy = vi.spyOn(voiceCapture, "captureUtterance").mockReturnValue(capture);
+  return { capture, spy };
 }
 
 describe("useVoiceInput", () => {
   afterEach(() => {
-    FakeRecognition.instances = [];
-    delete (window as unknown as Record<string, unknown>).SpeechRecognition;
-    delete (window as unknown as Record<string, unknown>).webkitSpeechRecognition;
+    delete (window as unknown as Record<string, unknown>).AudioContext;
+    delete (window as unknown as Record<string, unknown>).MediaStream;
     vi.restoreAllMocks();
+    vi.clearAllMocks();
+    vi.unstubAllGlobals();
   });
 
-  it("reports unsupported without the browser API", () => {
-    const { result } = renderHook(() => useVoiceInput("en-IN", () => {}));
+  it("reports unsupported without capture APIs", () => {
+    const { result } = renderHook(() =>
+      useVoiceInput("en-IN", () => {}, { projectId: "p", graphId: "g" }),
+    );
 
     expect(result.current.supported).toBe(false);
 
@@ -63,52 +58,72 @@ describe("useVoiceInput", () => {
     expect(result.current.listening).toBe(false);
   });
 
-  it("streams interim transcripts and delivers finals", () => {
-    installFake();
+  it("captures one utterance and delivers the server transcript", async () => {
+    installMic();
+    fakeCapture();
+    transcribeVoice.mockResolvedValue({ transcript: "tilt the rails", audio_duration_ms: 900, session_id: "s-1" });
     const onFinal = vi.fn();
-    const { result } = renderHook(() => useVoiceInput("en-IN", onFinal));
+    const { result } = renderHook(() =>
+      useVoiceInput("en-IN", onFinal, { projectId: "p", graphId: "g" }),
+    );
 
     expect(result.current.supported).toBe(true);
     act(() => {
       result.current.toggle();
     });
     expect(result.current.listening).toBe(true);
-    expect(FakeRecognition.instances).toHaveLength(1);
-    expect(FakeRecognition.instances[0]?.lang).toBe("en-IN");
 
-    act(() => {
-      FakeRecognition.instances[0]?.emit("find npn", false);
-    });
-    expect(result.current.interim).toBe("find npn");
-    expect(onFinal).not.toHaveBeenCalled();
-
-    act(() => {
-      FakeRecognition.instances[0]?.emit("find npn transistor", true);
-    });
-    expect(onFinal).toHaveBeenCalledWith("find npn transistor");
-    expect(result.current.interim).toBe("");
-
-    act(() => {
-      result.current.stop();
-    });
+    await waitFor(() => expect(onFinal).toHaveBeenCalledWith("tilt the rails"));
+    expect(transcribeVoice).toHaveBeenCalledWith("p", "g", expect.any(Blob), "en");
     expect(result.current.listening).toBe(false);
+    expect(result.current.error).toBeNull();
   });
 
-  it("explains blocked microphones and ignores aborts", () => {
-    installFake();
-    const { result } = renderHook(() => useVoiceInput("en-IN", () => {}));
+  it("stays silent when nothing was said", async () => {
+    installMic();
+    fakeCapture(new Float32Array(0));
+    const onFinal = vi.fn();
+    const { result } = renderHook(() =>
+      useVoiceInput("en-IN", onFinal, { projectId: "p", graphId: "g" }),
+    );
+
     act(() => {
       result.current.toggle();
     });
 
-    act(() => {
-      FakeRecognition.instances[0]?.onerror?.({ error: "aborted" });
-    });
+    await waitFor(() => expect(result.current.listening).toBe(false));
+    expect(onFinal).not.toHaveBeenCalled();
+    expect(transcribeVoice).not.toHaveBeenCalled();
     expect(result.current.error).toBeNull();
+  });
+
+  it("reports blocked microphones and failed turns", async () => {
+    installMic(null);
+    const { result } = renderHook(() =>
+      useVoiceInput("en-IN", () => {}, { projectId: "p", graphId: "g" }),
+    );
 
     act(() => {
-      FakeRecognition.instances[0]?.onerror?.({ error: "not-allowed" });
+      result.current.toggle();
     });
-    expect(result.current.error).toBe("Microphone access was blocked.");
+
+    await waitFor(() => expect(result.current.error).toMatch(/blocked/));
+    expect(result.current.listening).toBe(false);
+  });
+
+  it("reports transcription failures without losing the error", async () => {
+    installMic();
+    fakeCapture();
+    transcribeVoice.mockRejectedValue(new Error("down"));
+    const { result } = renderHook(() =>
+      useVoiceInput("en-IN", () => {}, { projectId: "p", graphId: "g" }),
+    );
+
+    act(() => {
+      result.current.toggle();
+    });
+
+    await waitFor(() => expect(result.current.error).toMatch(/type instead/));
+    expect(result.current.listening).toBe(false);
   });
 });

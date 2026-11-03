@@ -1,46 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { api } from "../../lib/api.ts";
+import {
+  captureSupported,
+  captureUtterance,
+  encodeWavPcm16,
+  type UtteranceCapture,
+} from "./voiceCapture.ts";
 
-/** Minimal Web Speech API shapes (not all DOM libs ship them). */
-interface SpeechRecognitionAlternative {
-  transcript: string;
-}
-
-interface SpeechRecognitionResultItem {
-  isFinal: boolean;
-  0: SpeechRecognitionAlternative;
-}
-
-interface SpeechRecognitionResultList {
-  length: number;
-  [index: number]: SpeechRecognitionResultItem;
-}
-
-interface SpeechRecognitionEventLike {
-  resultIndex: number;
-  results: SpeechRecognitionResultList;
-}
-
-interface SpeechRecognitionErrorLike {
-  error: string;
-}
-
-interface SpeechRecognitionLike {
-  lang: string;
-  interimResults: boolean;
-  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
-  onerror: ((event: SpeechRecognitionErrorLike) => void) | null;
-  onend: (() => void) | null;
-  start: () => void;
-  stop: () => void;
-  abort: () => void;
-}
-
-type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
-
-function recognitionCtor(): SpeechRecognitionCtor | null {
-  if (typeof window === "undefined") return null;
-  const w = window as unknown as Record<string, SpeechRecognitionCtor | undefined>;
-  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+export interface VoiceInputScope {
+  projectId: string;
+  graphId: string;
 }
 
 export interface VoiceInput {
@@ -52,90 +21,104 @@ export interface VoiceInput {
   stop: () => void;
 }
 
+/** Dictation pauses run longer than chat turns before they end. */
+const DICTATION_SILENCE_MS = 2500;
+
+function release(stream: MediaStream | null): void {
+  if (!stream) return;
+  for (const track of stream.getTracks()) track.stop();
+}
+
 /**
- * Dictate into a callback using the browser's speech recognition.
- * Final transcripts are delivered for the caller to append and edit;
- * interim transcripts surface live while listening.
+ * Dictate into a callback through Muse Voice Transcribe: the mic
+ * records one utterance, silence (or a second tap) ends it, and the
+ * server transcript is delivered for the caller to append and edit.
+ * There are no interim transcripts — one-shot turns only.
  */
 export function useVoiceInput(
   lang: string,
   onFinal: (transcript: string) => void,
+  scope: VoiceInputScope,
 ): VoiceInput {
   const [listening, setListening] = useState(false);
-  const [interim, setInterim] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const captureRef = useRef<UtteranceCapture | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const finalRef = useRef(onFinal);
-  const supported = recognitionCtor() !== null;
+  const scopeRef = useRef(scope);
+  const supported = captureSupported();
 
   useEffect(() => {
     finalRef.current = onFinal;
   });
 
+  useEffect(() => {
+    scopeRef.current = scope;
+  });
+
   const stop = useCallback(() => {
-    recognitionRef.current?.stop();
-    recognitionRef.current = null;
+    captureRef.current?.cancel();
+    captureRef.current = null;
+    release(streamRef.current);
+    streamRef.current = null;
     setListening(false);
-    setInterim("");
   }, []);
 
-  useEffect(() => {
-    return () => {
-      recognitionRef.current?.abort();
-      recognitionRef.current = null;
-    };
-  }, []);
+  useEffect(() => stop, [stop]);
 
   const toggle = useCallback(() => {
-    if (listening) {
-      stop();
+    if (captureRef.current) {
+      // Second tap ends the utterance now; transcription follows.
+      captureRef.current.stop();
       return;
     }
-    const Ctor = recognitionCtor();
-    if (!Ctor) {
+    if (listening) return;
+    if (!captureSupported()) {
       setError("Voice input is not supported in this browser.");
       return;
     }
     setError(null);
-    setInterim("");
-    const recognition = new Ctor();
-    recognition.lang = lang;
-    recognition.interimResults = true;
-    recognition.onresult = (event) => {
-      let pending = "";
-      for (let i = event.resultIndex; i < event.results.length; i += 1) {
-        const result = event.results[i];
-        if (result.isFinal) finalRef.current(result[0].transcript);
-        else pending += result[0].transcript;
-      }
-      setInterim(pending);
-    };
-    recognition.onerror = (event) => {
-      if (event.error === "aborted" || event.error === "no-speech") {
-        setInterim("");
-        return;
-      }
-      setError(
-        event.error === "not-allowed"
-          ? "Microphone access was blocked."
-          : "Voice input failed; type instead.",
-      );
-    };
-    recognition.onend = () => {
-      recognitionRef.current = null;
-      setListening(false);
-      setInterim("");
-    };
-    recognitionRef.current = recognition;
-    try {
-      recognition.start();
-    } catch {
-      recognitionRef.current = null;
-      setError("Voice input failed; type instead.");
-      return;
-    }
     setListening(true);
-  }, [lang, listening, stop]);
+    const language = lang.split("-")[0] || lang;
+    navigator.mediaDevices
+      .getUserMedia({ audio: true })
+      .then((stream) => {
+        streamRef.current = stream;
+        const capture = captureUtterance(stream, { vad: { silenceMs: DICTATION_SILENCE_MS } });
+        captureRef.current = capture;
+        return capture.done.then(
+          (samples) => {
+            captureRef.current = null;
+            release(streamRef.current);
+            streamRef.current = null;
+            if (samples.length === 0) {
+              setListening(false);
+              return;
+            }
+            const clip = new Blob([encodeWavPcm16(samples, 16000)], { type: "audio/wav" });
+            const { projectId, graphId } = scopeRef.current;
+            return api
+              .transcribeVoice(projectId, graphId, clip, language)
+              .then((result) => {
+                setListening(false);
+                const clean = result.transcript.trim();
+                if (clean !== "") finalRef.current(result.transcript);
+              })
+              .catch(() => {
+                setListening(false);
+                setError("Voice input failed; type instead.");
+              });
+          },
+          () => {
+            // Cancelled via stop(): state is already settled there.
+          },
+        );
+      })
+      .catch(() => {
+        setListening(false);
+        setError("Microphone access was blocked.");
+      });
+  }, [lang, listening]);
 
-  return { supported, listening, interim, error, toggle, stop };
+  return { supported, listening, interim: "", error, toggle, stop };
 }

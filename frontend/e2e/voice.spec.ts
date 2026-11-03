@@ -26,6 +26,33 @@ const graph = {
   parent_version: 1,
 };
 
+/** Raw multipart bodies the app uploaded for transcription. */
+const transcribeUploads: string[] = [];
+
+/** Feed one 4096-sample frame into the latest scripted capture. */
+async function feedFrame(page: { evaluate: (fn: (loud: boolean) => void, loud: boolean) => Promise<void> }, loud: boolean): Promise<void> {
+  await page.evaluate((isLoud: boolean) => {
+    const scope = globalThis as unknown as {
+      __processors?: Array<{ onaudioprocess: ((event: unknown) => void) | null }>;
+    };
+    const processor = (scope.__processors ?? []).at(-1);
+    const frame = new Float32Array(4096).fill(isLoud ? 0.2 : 0.0);
+    processor?.onaudioprocess?.({ inputBuffer: { getChannelData: () => frame } });
+  }, loud);
+}
+
+/** Speak briefly, then hold silence until the utterance endpoint fires. */
+async function speakUtterance(
+  page: { evaluate: (fn: (loud: boolean) => void, loud: boolean) => Promise<void> },
+  silenceFrames: number,
+): Promise<void> {
+  await feedFrame(page, true);
+  await feedFrame(page, true);
+  for (let i = 0; i < silenceFrames; i += 1) {
+    await feedFrame(page, false);
+  }
+}
+
 test.beforeEach(async ({ page }) => {
   await page.route("**/api/v1/graphs/**/revisions/*", async (route) => {
     await route.fulfill({ json: graph });
@@ -63,26 +90,49 @@ test.beforeEach(async ({ page }) => {
         `event: done\ndata: ${JSON.stringify({ response })}\n\n`,
     });
   });
-  // Deterministic speech input: the fake recognizer emits one final
-  // transcript as soon as listening starts, and the fake synthesizer
-  // records everything the agent reads aloud.
+  transcribeUploads.length = 0;
+  await page.route("**/graph-1/copilot/transcribe", async (route) => {
+    transcribeUploads.push(route.request().postDataBuffer()?.toString("latin1") ?? "");
+    await route.fulfill({
+      json: {
+        transcript: "find NPN transistor",
+        audio_duration_ms: 900,
+        session_id: "s-1",
+      },
+    });
+  });
+  // Deterministic speech input: a scripted AudioContext lets the test
+  // feed loud frames (speech) then quiet frames (silence) into the real
+  // capture/VAD/WAV path, and the fake synthesizer records everything
+  // the agent reads aloud.
   await page.addInitScript(() => {
-    class FakeRecognition {
-      onresult: ((event: unknown) => void) | null = null;
-      onend: (() => void) | null = null;
-      onspeechstart: (() => void) | null = null;
-      start(): void {
-        queueMicrotask(() => {
-          this.onresult?.({
-            resultIndex: 0,
-            results: [{ isFinal: true, 0: { transcript: "find NPN transistor" } }],
-          });
-        });
+    interface FakeProcessor {
+      onaudioprocess: ((event: unknown) => void) | null;
+      connect: () => void;
+      disconnect: () => void;
+    }
+    class FakeAudioContext {
+      readonly sampleRate = 16000;
+      readonly destination = {};
+      createMediaStreamSource(): { connect: () => void; disconnect: () => void } {
+        return { connect: () => {}, disconnect: () => {} };
       }
-      stop(): void {
-        this.onend?.();
+      createGain(): { gain: { value: number }; connect: () => void; disconnect: () => void } {
+        return { gain: { value: 0 }, connect: () => {}, disconnect: () => {} };
       }
-      abort(): void {}
+      createScriptProcessor(): FakeProcessor {
+        const processor: FakeProcessor = {
+          onaudioprocess: null,
+          connect: () => {},
+          disconnect: () => {},
+        };
+        const scope = globalThis as unknown as { __processors?: FakeProcessor[] };
+        scope.__processors = [...(scope.__processors ?? []), processor];
+        return processor;
+      }
+      close(): Promise<void> {
+        return Promise.resolve();
+      }
     }
     class FakeUtterance {
       text: string;
@@ -95,9 +145,15 @@ test.beforeEach(async ({ page }) => {
       }
     }
     const scope = globalThis as unknown as Record<string, unknown>;
-    scope.SpeechRecognition = FakeRecognition;
-    scope.SpeechSynthesisUtterance = FakeUtterance;
+    scope.AudioContext = FakeAudioContext;
+    scope.MediaStream = class {};
     scope.__spoken = [];
+    scope.__processors = [];
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getUserMedia: () => Promise.resolve({ getTracks: () => [] }) },
+    });
+    scope.SpeechSynthesisUtterance = FakeUtterance;
     // window.speechSynthesis is a read-only accessor in Chrome: a plain
     // assignment silently fails, so shadow it with a defined property.
     Object.defineProperty(globalThis, "speechSynthesis", {
@@ -120,9 +176,19 @@ test("dictation fills an editable message that asks normally", async ({ page }) 
 
   const chat = page.getByRole("dialog", { name: "Bizora agent chat" });
   await chat.getByRole("button", { name: "Dictate message" }).click();
+  await page.waitForFunction(
+    () =>
+      ((globalThis as unknown as { __processors?: unknown[] }).__processors ?? []).length > 0,
+  );
+
+  // Dictation endpoints on 2.5s of silence: ten 256ms frames.
+  await speakUtterance(page, 10);
 
   const input = chat.getByLabel("Agent message");
   await expect(input).toHaveValue("find NPN transistor");
+  expect(transcribeUploads).toHaveLength(1);
+  expect(transcribeUploads[0]).toContain("RIFF");
+  expect(transcribeUploads[0]).toContain("WAVE");
 
   await input.fill("find NPN transistor edited");
   await chat.getByRole("button", { name: "Ask" }).click();
@@ -150,8 +216,13 @@ test("voice chat asks hands-free and reads the answer aloud", async ({ page }) =
 
   const chat = page.getByRole("dialog", { name: "Bizora agent chat" });
   await chat.getByRole("button", { name: "Voice chat" }).click();
+  await page.waitForFunction(
+    () =>
+      ((globalThis as unknown as { __processors?: unknown[] }).__processors ?? []).length > 0,
+  );
 
-  // The fake recognizer emits its transcript on start: no typing needed.
+  // The scripted mic speaks one utterance: no typing needed.
+  await speakUtterance(page, 5);
   await expect(chat.getByText("find NPN transistor")).toBeVisible();
   await expect(
     chat.getByText("The 2N3904 is a general purpose NPN transistor."),

@@ -19,6 +19,7 @@ import type { DiagramSelection } from "../diagrams/selection.ts";
 import { CopilotPanel } from "./CopilotPanel.tsx";
 import { diagramContextFor } from "./copilotContext.ts";
 import { turnsFromThread } from "./copilotThreads.ts";
+import * as voiceCapture from "./voiceCapture.ts";
 
 const n1Selection: DiagramSelection = {
   view: "schematic",
@@ -311,30 +312,37 @@ describe("CopilotPanel", () => {
 
   it("dictates an editable message with the microphone", async () => {
     useWorkspaceSelection.setState({ selectedNodeIds: [], selectedEdgeIds: [] });
-    interface FakeEvent {
-      resultIndex: number;
-      results: Array<{ isFinal: boolean; 0: { transcript: string } }>;
-    }
-    const instances: Array<{
-      onresult: ((event: FakeEvent) => void) | null;
-      onend: (() => void) | null;
-    }> = [];
-    class FakeRecognition {
-      lang = "";
-      interimResults = false;
-      onresult: ((event: FakeEvent) => void) | null = null;
-      onerror: ((event: never) => void) | null = null;
-      onend: (() => void) | null = null;
-      constructor() {
-        instances.push(this);
-      }
-      start(): void {}
-      stop(): void {
-        this.onend?.();
-      }
-      abort(): void {}
-    }
-    (window as unknown as Record<string, unknown>).SpeechRecognition = FakeRecognition;
+    const w = window as unknown as Record<string, unknown>;
+    w.AudioContext = vi.fn();
+    w.MediaStream = vi.fn();
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: {
+        getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: vi.fn() }] }),
+      },
+    });
+    const resolvers: Array<(samples: Float32Array) => void> = [];
+    const captureSpy = vi
+      .spyOn(voiceCapture, "captureUtterance")
+      .mockImplementation(() => {
+        let resolve!: (samples: Float32Array) => void;
+        const done = new Promise<Float32Array>((pass) => {
+          resolve = pass;
+        });
+        resolvers.push(resolve);
+        return { done, stop: () => {}, cancel: () => {} };
+      });
+    server.use(
+      http.post(
+        "/api/v1/graphs/:projectId/:graphId/copilot/transcribe",
+        () =>
+          HttpResponse.json({
+            transcript: "find NPN transistor",
+            audio_duration_ms: 900,
+            session_id: "s-1",
+          }),
+      ),
+    );
     try {
       const user = userEvent.setup();
       render(
@@ -353,52 +361,22 @@ describe("CopilotPanel", () => {
       expect(await screen.findByText(/Listening/)).toBeInTheDocument();
 
       const { act } = await import("@testing-library/react");
-      act(() => {
-        instances[0]?.onresult?.({
-          resultIndex: 0,
-          results: [{ isFinal: true, 0: { transcript: "find NPN transistor" } }],
-        });
+      await act(async () => {
+        resolvers[0]?.(Float32Array.from([0.1, 0.2]));
       });
-      expect(screen.getByLabelText("Agent message")).toHaveValue("find NPN transistor");
+      expect(captureSpy).toHaveBeenCalledTimes(1);
+      expect(await screen.findByDisplayValue("find NPN transistor")).toBeInTheDocument();
 
       await user.click(screen.getByRole("button", { name: "Ask" }));
       expect(await screen.findByText(/Closest library matches/)).toBeInTheDocument();
     } finally {
-      delete (window as unknown as Record<string, unknown>).SpeechRecognition;
+      delete w.AudioContext;
+      delete w.MediaStream;
     }
   });
 
   it("holds a hands-free voice turn and reads the answer aloud", async () => {
     useWorkspaceSelection.setState({ selectedNodeIds: [], selectedEdgeIds: [] });
-    interface FakeEvent {
-      resultIndex: number;
-      results: Array<{ isFinal: boolean; 0: { transcript: string } }>;
-    }
-    const instances: Array<{
-      onresult: ((event: FakeEvent) => void) | null;
-      onend: (() => void) | null;
-      onspeechstart: (() => void) | null;
-      aborted: boolean;
-      abort: () => void;
-    }> = [];
-    class FakeRecognition {
-      lang = "";
-      continuous = false;
-      interimResults = false;
-      onresult: ((event: FakeEvent) => void) | null = null;
-      onerror: ((event: never) => void) | null = null;
-      onend: (() => void) | null = null;
-      onspeechstart: (() => void) | null = null;
-      aborted = false;
-      constructor() {
-        instances.push(this);
-      }
-      start(): void {}
-      stop(): void {}
-      abort(): void {
-        this.aborted = true;
-      }
-    }
     class FakeUtterance {
       text: string;
       voice: unknown = null;
@@ -411,7 +389,36 @@ describe("CopilotPanel", () => {
     }
     const spoken: string[] = [];
     const w = window as unknown as Record<string, unknown>;
-    w.SpeechRecognition = FakeRecognition;
+    w.AudioContext = vi.fn();
+    w.MediaStream = vi.fn();
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: {
+        getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: vi.fn() }] }),
+      },
+    });
+    const captures: Array<{ resolve: (samples: Float32Array) => void; cancelled: boolean }> = [];
+    vi.spyOn(voiceCapture, "captureUtterance").mockImplementation(() => {
+      let resolve!: (samples: Float32Array) => void;
+      let reject!: (error: Error) => void;
+      const done = new Promise<Float32Array>((pass, fail) => {
+        resolve = pass;
+        reject = fail;
+      });
+      done.catch(() => {});
+      const capture = {
+        resolve,
+        cancelled: false,
+        done,
+        stop: () => {},
+        cancel: () => {
+          capture.cancelled = true;
+          reject(new Error("cancelled"));
+        },
+      };
+      captures.push(capture);
+      return capture;
+    });
     w.SpeechSynthesisUtterance = FakeUtterance;
     w.speechSynthesis = {
       speak: (utterance: FakeUtterance) => {
@@ -437,6 +444,15 @@ describe("CopilotPanel", () => {
           );
         },
       ),
+      http.post(
+        "/api/v1/graphs/:projectId/:graphId/copilot/transcribe",
+        () =>
+          HttpResponse.json({
+            transcript: "what does the bitcell do",
+            audio_duration_ms: 900,
+            session_id: "s-1",
+          }),
+      ),
     );
     try {
       const user = userEvent.setup();
@@ -458,11 +474,8 @@ describe("CopilotPanel", () => {
         screen.queryByRole("button", { name: "Dictate message" }),
       ).not.toBeInTheDocument();
 
-      act(() => {
-        instances[0]?.onresult?.({
-          resultIndex: 0,
-          results: [{ isFinal: true, 0: { transcript: "what does the bitcell do" } }],
-        });
+      await act(async () => {
+        captures[0]?.resolve(Float32Array.from([0.1, 0.2]));
       });
 
       expect(await screen.findByText("what does the bitcell do")).toBeInTheDocument();
@@ -475,12 +488,13 @@ describe("CopilotPanel", () => {
       expect(await screen.findByText("Listening — just talk.")).toBeInTheDocument();
 
       await user.click(screen.getByRole("button", { name: "End voice chat" }));
-      expect(instances[0]?.aborted).toBe(true);
+      expect(captures.some((capture) => capture.cancelled)).toBe(true);
       expect(
         screen.queryByText("Listening — just talk."),
       ).not.toBeInTheDocument();
     } finally {
-      delete w.SpeechRecognition;
+      delete w.AudioContext;
+      delete w.MediaStream;
       delete w.SpeechSynthesisUtterance;
       delete w.speechSynthesis;
     }
@@ -488,22 +502,6 @@ describe("CopilotPanel", () => {
 
   it("interrupts speech from the status line", async () => {
     useWorkspaceSelection.setState({ selectedNodeIds: [], selectedEdgeIds: [] });
-    interface FakeEvent {
-      resultIndex: number;
-      results: Array<{ isFinal: boolean; 0: { transcript: string } }>;
-    }
-    const instances: Array<{ onresult: ((event: FakeEvent) => void) | null }> = [];
-    class FakeRecognition {
-      onresult: ((event: FakeEvent) => void) | null = null;
-      onend: (() => void) | null = null;
-      onspeechstart: (() => void) | null = null;
-      constructor() {
-        instances.push(this);
-      }
-      start(): void {}
-      stop(): void {}
-      abort(): void {}
-    }
     class FakeUtterance {
       text: string;
       onend: (() => void) | null = null;
@@ -513,7 +511,26 @@ describe("CopilotPanel", () => {
     }
     let cancelled = 0;
     const w = window as unknown as Record<string, unknown>;
-    w.SpeechRecognition = FakeRecognition;
+    w.AudioContext = vi.fn();
+    w.MediaStream = vi.fn();
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: {
+        getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: vi.fn() }] }),
+      },
+    });
+    const resolvers: Array<(samples: Float32Array) => void> = [];
+    vi.spyOn(voiceCapture, "captureUtterance").mockImplementation(() => {
+      let resolve!: (samples: Float32Array) => void;
+      let reject!: (error: Error) => void;
+      const done = new Promise<Float32Array>((pass, fail) => {
+        resolve = pass;
+        reject = fail;
+      });
+      done.catch(() => {});
+      resolvers.push(resolve);
+      return { done, stop: () => {}, cancel: () => reject(new Error("cancelled")) };
+    });
     w.SpeechSynthesisUtterance = FakeUtterance;
     w.speechSynthesis = {
       speak: () => {},
@@ -530,6 +547,15 @@ describe("CopilotPanel", () => {
             copilotStreamBody({ reply: "A long answer worth interrupting.", cards: [], proposal: null }),
             { headers: { "Content-Type": "text/event-stream" } },
           ),
+      ),
+      http.post(
+        "/api/v1/graphs/:projectId/:graphId/copilot/transcribe",
+        () =>
+          HttpResponse.json({
+            transcript: "tell me everything",
+            audio_duration_ms: 900,
+            session_id: "s-1",
+          }),
       ),
     );
     try {
@@ -548,11 +574,8 @@ describe("CopilotPanel", () => {
 
       await user.click(screen.getByRole("button", { name: "Voice chat" }));
       expect(await screen.findByText("Listening — just talk.")).toBeInTheDocument();
-      act(() => {
-        instances[0]?.onresult?.({
-          resultIndex: 0,
-          results: [{ isFinal: true, 0: { transcript: "tell me everything" } }],
-        });
+      await act(async () => {
+        resolvers[0]?.(Float32Array.from([0.1, 0.2]));
       });
 
       const interrupt = await screen.findByRole("button", { name: "Interrupt" });
@@ -562,7 +585,8 @@ describe("CopilotPanel", () => {
       expect(await screen.findByText("Listening — just talk.")).toBeInTheDocument();
       expect(screen.queryByRole("button", { name: "Interrupt" })).not.toBeInTheDocument();
     } finally {
-      delete w.SpeechRecognition;
+      delete w.AudioContext;
+      delete w.MediaStream;
       delete w.SpeechSynthesisUtterance;
       delete w.speechSynthesis;
     }
