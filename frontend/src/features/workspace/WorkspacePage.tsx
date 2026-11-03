@@ -20,6 +20,7 @@ import type {
   ResearchBrief,
 } from "../../lib/types.ts";
 import { EmptyState, ErrorState, LoadingState } from "../../components/states.tsx";
+import { AddStepForm } from "./AddStep.tsx";
 import { DomainBadge } from "../canvas/EntityLegend.tsx";
 import { CopilotBot } from "../copilot/CopilotBot.tsx";
 import { FigureOverlay } from "../figures/FigureOverlay.tsx";
@@ -180,6 +181,7 @@ function IndexPanel({
   onSubmit: (patches: GraphPatch[]) => void;
 }) {
   const { indexTab, setIndexTab, selectedComponentId } = useLibrarySelection();
+  const [addingStep, setAddingStep] = useState(false);
   return (
     <section className={`${styles.panel} ${styles.indexPanel}`} aria-label="Index">
       <div className={styles.tabs} role="tablist" aria-label="Index tabs">
@@ -209,7 +211,29 @@ function IndexPanel({
             <span className={styles.count} aria-hidden="true">
               {graph.nodes.length}
             </span>
+            <button
+              type="button"
+              className={styles.addStepButton}
+              aria-label="Add step to graph"
+              title="Add step to graph"
+              disabled={mutating}
+              onClick={() => setAddingStep((current) => !current)}
+            >
+              +
+            </button>
           </div>
+          {addingStep ? (
+            <AddStepForm
+              graph={graph}
+              disabled={mutating}
+              insertAfter={selectedNode?.id ?? null}
+              onSubmit={(patches) => {
+                setAddingStep(false);
+                onSubmit(patches);
+              }}
+              onCancel={() => setAddingStep(false)}
+            />
+          ) : null}
           <NodeList
             nodes={graph.nodes}
             selectedId={selectedNode?.id ?? null}
@@ -611,9 +635,13 @@ function WorkspaceLoaded({
             paperId={paperId}
             projectId={projectId}
             graphId={graph.graph_id}
+            graph={graph}
             view={view}
             nodeLabels={nodeLabels}
+            disabled={mutating}
+            insertAfterId={selectedNode?.id ?? null}
             onSelect={handleDiagramSelect}
+            onSubmit={onSubmit}
           />
         </section>
 
@@ -714,16 +742,24 @@ function DiagramCanvas({
   paperId,
   projectId,
   graphId,
+  graph,
   view,
   nodeLabels,
+  disabled,
+  insertAfterId,
   onSelect,
+  onSubmit,
 }: {
   paperId: string | null;
   projectId: string;
   graphId: string;
+  graph: MethodologyGraph;
   view: CanvasView;
   nodeLabels: Map<string, string>;
+  disabled: boolean;
+  insertAfterId: string | null;
   onSelect: (selection: DiagramSelection) => void;
+  onSubmit: (patches: GraphPatch[]) => void;
 }) {
   const diagrams = usePaperDiagrams(paperId);
 
@@ -786,9 +822,13 @@ function DiagramCanvas({
       warnings={response.validation["methodology"]?.warnings ?? []}
       projectId={projectId}
       graphId={graphId}
+      graph={graph}
       paperId={paperId}
       nodeLabels={nodeLabels}
+      disabled={disabled}
+      insertAfterId={insertAfterId}
       onSelect={onSelect}
+      onSubmit={onSubmit}
     />
   );
 }

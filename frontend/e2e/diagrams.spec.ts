@@ -527,3 +527,31 @@ test("thin IRs fall back to the paper figure, never a placeholder", async ({
     "Transformer encoder",
   );
 });
+
+test("methodology plus appends a connected step to the graph", async ({ page }) => {
+  let batch: Record<string, unknown> | null = null;
+  await page.route("**/api/v1/graphs/**/patch-batches", async (route) => {
+    batch = (await route.request().postDataJSON()) as Record<string, unknown>;
+    await route.fulfill({ json: { ...graph, version: 3 } });
+  });
+
+  await page.goto("/g/project-1/graph-1");
+  const canvas = page.getByRole("region", { name: "Canvas" });
+  await canvas.getByRole("button", { name: "Add step to graph" }).click();
+
+  await canvas.getByLabel("Step label").fill("Quantize weights");
+  await canvas.getByLabel("Kind").selectOption("operation");
+  await canvas.getByLabel("Insert after").selectOption("encoder");
+  await canvas.getByRole("button", { name: "Add step", exact: true }).click();
+
+  await expect
+    .poll(() => batch, { message: "patch batch submitted" })
+    .not.toBeNull();
+  const patches = (batch as unknown as { patches: Array<Record<string, unknown>> }).patches;
+  expect(patches.map((patch) => patch["operation"])).toEqual(["add_node", "add_edge"]);
+  const node = patches[0]["payload"] as Record<string, Record<string, unknown>>;
+  expect(node["node"]["id"]).toBe("quantize-weights");
+  const edge = patches[1]["payload"] as Record<string, Record<string, unknown>>;
+  expect(edge["edge"]["source"]).toBe("encoder");
+  expect(edge["edge"]["target"]).toBe("quantize-weights");
+});

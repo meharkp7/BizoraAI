@@ -1,7 +1,12 @@
 import { useMemo, useState } from "react";
 import { dark, light } from "../../diagram-engine/index.js";
 import { useTheme } from "../../lib/store.ts";
-import type { MethodologyIRJson } from "../../lib/types.ts";
+import type {
+  GraphPatch,
+  MethodologyGraph,
+  MethodologyIRJson,
+} from "../../lib/types.ts";
+import { AddStepForm } from "../workspace/AddStep.tsx";
 import { renderMethodologyDiagram } from "./adapters.ts";
 import { DiagramFallback } from "./DiagramFallback.tsx";
 import styles from "./DiagramView.module.css";
@@ -20,20 +25,31 @@ export function MethodologyDiagramView({
   warnings,
   projectId,
   graphId,
+  graph,
   paperId,
   nodeLabels,
+  disabled,
+  insertAfterId,
   onSelect,
+  onSubmit,
 }: {
   methodology: MethodologyIRJson | null;
   sourceFigureId: string | null;
   warnings: string[];
   projectId: string;
   graphId: string;
+  /** Present on the workspace: enables the add-step form. */
+  graph?: MethodologyGraph;
   paperId: string;
   nodeLabels: Map<string, string>;
+  disabled?: boolean;
+  insertAfterId?: string | null;
   onSelect: (selection: DiagramSelection) => void;
+  onSubmit?: (patches: GraphPatch[]) => void;
 }) {
   const theme = useTheme((state) => state.theme);
+  const [addingStep, setAddingStep] = useState(false);
+  const canAdd = graph !== undefined && onSubmit !== undefined;
   // Vertical flow keeps every node at full text size; horizontal chains
   // shrink to fit and turn unreadable, so it stays one click away.
   const [direction, setDirection] = useState<"TB" | "LR">("TB");
@@ -83,7 +99,31 @@ export function MethodologyDiagramView({
         <p className={styles.counts}>
           {counts.fromPaper} from paper · {counts.assumed} assumed
         </p>
+        {canAdd ? (
+          <button
+            type="button"
+            className={styles.addStepButton}
+            aria-label="Add step to graph"
+            title="Add step to graph"
+            disabled={disabled}
+            onClick={() => setAddingStep((current) => !current)}
+          >
+            +
+          </button>
+        ) : null}
       </div>
+      {addingStep && graph !== undefined && onSubmit !== undefined ? (
+        <AddStepForm
+          graph={graph}
+          disabled={disabled ?? false}
+          insertAfter={insertAfterId ?? null}
+          onSubmit={(patches) => {
+            setAddingStep(false);
+            onSubmit(patches);
+          }}
+          onCancel={() => setAddingStep(false)}
+        />
+      ) : null}
       <ProvenanceLegend />
       {warnings.length > 0 ? (
         <ul className={styles.warnings} aria-label="Extraction warnings">
