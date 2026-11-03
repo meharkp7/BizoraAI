@@ -56,6 +56,18 @@ def _methodology_figure(methodology: MethodologyIR) -> tuple[str | None, int | N
     return (figure_id, page)
 
 
+#: Methodology step kinds with a real 3D shape keep their kind as
+#: the derived component type; abstract steps stay generic blocks.
+_DERIVED_COMPONENT_TYPES = {
+    "model": ComponentType.MODEL,
+    "store": ComponentType.STORE,
+    "dataset": ComponentType.DATASET,
+    "input": ComponentType.INPUT,
+    "output": ComponentType.OUTPUT,
+    "decision": ComponentType.DECISION,
+}
+
+
 def methodology_to_circuit(
     methodology: MethodologyIR, *, source_id: str
 ) -> CircuitIR | None:
@@ -146,7 +158,7 @@ def methodology_to_circuit(
             CircuitComponent(
                 id=node.id,
                 label=_truncate(node.label, 256),
-                type=ComponentType.BLOCK,
+                type=_DERIVED_COMPONENT_TYPES.get(node.kind.value, ComponentType.BLOCK),
                 pins=pins,
                 pin_sides=pin_sides,
                 confidence=DERIVED_CONFIDENCE,

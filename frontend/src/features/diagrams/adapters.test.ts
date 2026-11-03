@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { dark, light } from "../../diagram-engine/index.js";
 import { sceneToThree } from "../../diagram-engine/three-adapter.js";
 import { diagramsFixture } from "../../test/fixtures.ts";
-import type { MethodologyIRJson } from "../../lib/types.ts";
+import type { CircuitIRJson, MethodologyIRJson } from "../../lib/types.ts";
 import {
   circuitHasPaperLayout,
   renderCircuitDiagram,
@@ -45,6 +45,67 @@ describe("diagram adapters", () => {
     if (!result.ok) return;
     expect(result.svg).toContain('data-id="m1"');
     expect(result.svg).toContain('data-id="r1"');
+  });
+
+  it("draws methodology-derived system blocks without unknown-type warnings", () => {
+    // Derived circuits carry step kinds (model/store/...) as component
+    // types: first-class system blocks, not unknown devices.
+    const derived: CircuitIRJson = {
+      version: 1,
+      title: "derived",
+      source: { figure_id: "methodology", page: 1 },
+      components: [
+        {
+          id: "load",
+          type: "input",
+          label: "load",
+          value: null,
+          pins: { out: "e0" },
+          pin_sides: { out: "right" },
+          placement: null,
+          confidence: 0.6,
+          evidence: null,
+        },
+        {
+          id: "train",
+          type: "model",
+          label: "train",
+          value: null,
+          pins: { in: "e0", out: "e1" },
+          pin_sides: { in: "left", out: "right" },
+          placement: null,
+          confidence: 0.6,
+          evidence: null,
+        },
+        {
+          id: "score",
+          type: "output",
+          label: "score",
+          value: null,
+          pins: { in: "e1" },
+          pin_sides: { in: "left" },
+          placement: null,
+          confidence: 0.6,
+          evidence: null,
+        },
+      ],
+      nets: [
+        { id: "e0", label: "e0", role: "signal", global: false },
+        { id: "e1", label: "e1", role: "signal", global: false },
+      ],
+      ports: [],
+      subcircuits: [],
+      layout: null,
+    };
+    const result = renderCircuitDiagram(derived);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.svg).toContain('data-id="train"');
+    expect(
+      result.validation.warnings.filter(
+        (warning) => warning.code === "unknown_type",
+      ),
+    ).toEqual([]);
   });
 
   it("gives schematic labels a halo in the active theme background", () => {

@@ -47,6 +47,16 @@ class ComponentType(StrEnum):
     AMP = "amp"
     COMPARATOR = "comparator"
     BLOCK = "block"
+    # Methodology-step kinds, used only by methodology-derived system
+    # blocks so the 3D view builds real shapes (models, stores, ports)
+    # instead of a plate per step. Figure transcription never emits
+    # these: its prompts enumerate the device list above plus BLOCK.
+    MODEL = "model"
+    STORE = "store"
+    DATASET = "dataset"
+    INPUT = "input"
+    OUTPUT = "output"
+    DECISION = "decision"
 
 
 class NetRole(StrEnum):

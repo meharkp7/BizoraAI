@@ -46,6 +46,19 @@ DANGLING_CHECK_ROLES = frozenset(
     {NetRole.SIGNAL, NetRole.CLOCK, NetRole.INPUT, NetRole.OUTPUT}
 )
 
+#: Component types that are system blocks, not electrical devices.
+_SYSTEM_BLOCK_TYPES = frozenset(
+    {
+        ComponentType.BLOCK,
+        ComponentType.MODEL,
+        ComponentType.STORE,
+        ComponentType.DATASET,
+        ComponentType.INPUT,
+        ComponentType.OUTPUT,
+        ComponentType.DECISION,
+    }
+)
+
 
 @dataclass(frozen=True)
 class DiagramValidationResult:
@@ -113,7 +126,7 @@ def validate_circuit(ir: CircuitIR) -> DiagramValidationResult:
                     f"references unknown net '{net_ref}'"
                 )
         if component.pin_sides is not None:
-            if component.type is not ComponentType.BLOCK:
+            if component.type not in _SYSTEM_BLOCK_TYPES:
                 warnings.append(
                     f"component '{component.id}' ({component.type.value}) "
                     "defines pin_sides, which only applies to block components"
@@ -162,10 +175,11 @@ def validate_circuit(ir: CircuitIR) -> DiagramValidationResult:
             warnings.append(f"net '{net.id}' ({net.role.value}) is unused")
 
     # Power rails are mandatory for electrical schematics, but a
-    # system block diagram (every component a block) legitimately has
-    # none: its nets are data/control flow, not power distribution.
+    # system block diagram (blocks and methodology-step kinds only)
+    # legitimately has none: its nets are data/control flow, not
+    # power distribution.
     has_electrical = any(
-        component.type is not ComponentType.BLOCK for component in ir.components
+        component.type not in _SYSTEM_BLOCK_TYPES for component in ir.components
     )
     if has_electrical and not any(
         net.role in (NetRole.SUPPLY, NetRole.GROUND) for net in ir.nets

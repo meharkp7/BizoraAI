@@ -94,7 +94,12 @@ def test_derived_circuit_maps_steps_to_blocks_and_edges_to_nets() -> None:
         "score",
         "loner",
     ]
-    assert all(component.type is ComponentType.BLOCK for component in circuit.components)
+    assert [component.type for component in circuit.components] == [
+        ComponentType.INPUT,
+        ComponentType.MODEL,
+        ComponentType.BLOCK,
+        ComponentType.OUTPUT,
+    ]
     assert circuit.components[1].pins == {"in": "e0", "out": "e1"}
     # Every net joins exactly two block pins; the loner gets a ported solo net.
     assert [(net.id, net.role.value) for net in circuit.nets] == [
@@ -109,6 +114,49 @@ def test_derived_circuit_maps_steps_to_blocks_and_edges_to_nets() -> None:
     assert all(component.confidence == DERIVED_CONFIDENCE for component in circuit.components)
     assert [sub.id for sub in circuit.subcircuits] == ["prep", "infer"]
     assert circuit.subcircuits[1].component_ids == ("encode", "score")
+
+
+def test_derived_circuit_types_follow_methodology_kinds() -> None:
+    """Derived blocks carry their step kind so the 3D view builds real
+    shapes (models, stores, ports) instead of a plate per step."""
+    kinds = [
+        MethodologyNodeKind.INPUT,
+        MethodologyNodeKind.PROCESS,
+        MethodologyNodeKind.DECISION,
+        MethodologyNodeKind.STORE,
+        MethodologyNodeKind.MODEL,
+        MethodologyNodeKind.EVALUATION,
+        MethodologyNodeKind.DATASET,
+        MethodologyNodeKind.OUTPUT,
+    ]
+    methodology = MethodologyIR(
+        version=1,
+        title="Kinds",
+        groups=(),
+        nodes=tuple(
+            MethodologyNode(
+                id=f"n{i}",
+                label=f"step {i}",
+                kind=kind,
+                confidence=0.9,
+            )
+            for i, kind in enumerate(kinds)
+        ),
+        edges=(),
+    )
+    circuit = methodology_to_circuit(methodology, source_id="paper-x")
+
+    assert circuit is not None
+    assert [component.type for component in circuit.components] == [
+        ComponentType.INPUT,
+        ComponentType.BLOCK,
+        ComponentType.DECISION,
+        ComponentType.STORE,
+        ComponentType.MODEL,
+        ComponentType.BLOCK,
+        ComponentType.DATASET,
+        ComponentType.OUTPUT,
+    ]
 
 
 def test_derived_circuit_validates_clean() -> None:

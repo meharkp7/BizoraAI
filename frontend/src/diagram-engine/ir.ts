@@ -4,7 +4,11 @@ export interface Evidence { figure_id?: string; page?: number; bbox?: [number, n
 // ---------------- CircuitIR ----------------
 export type ComponentType =
   | 'nmos' | 'pmos' | 'resistor' | 'capacitor' | 'inductor' | 'diode'
-  | 'vsource' | 'isource' | 'ground' | 'inverter' | 'buffer' | 'amp' | 'comparator' | 'block';
+  | 'vsource' | 'isource' | 'ground' | 'inverter' | 'buffer' | 'amp' | 'comparator' | 'block'
+  // Methodology-step kinds: methodology-derived system blocks carry their
+  // step kind as the component type so the 3D view builds real shapes.
+  // The 2D schematic draws them as generic blocks (see getSymbol).
+  | 'model' | 'store' | 'dataset' | 'input' | 'output' | 'decision';
 export type Side = 'left' | 'right' | 'up' | 'down';
 export interface Placement { x: number; y: number; rot?: 0 | 90 | 180 | 270; mirror?: boolean; flip?: boolean }
 export interface CircuitComponent {

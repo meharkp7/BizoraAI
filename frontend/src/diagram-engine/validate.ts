@@ -6,6 +6,9 @@ export const REQUIRED_PINS: Record<string, string[]> = {
   amp: ['inp', 'inn', 'out'], comparator: ['inp', 'inn', 'out'],
 };
 export const OPTIONAL_PINS: Record<string, string[]> = { nmos: ['b'], pmos: ['b'] };
+// System-block types are drawn as generic blocks without an unknown-type
+// warning (mirrors the backend's _SYSTEM_BLOCK_TYPES).
+const SYSTEM_BLOCK_TYPES = new Set(['block', 'model', 'store', 'dataset', 'input', 'output', 'decision']);
 
 const mk = (): ValidationResult => ({ errors: [], warnings: [], stats: {} });
 const err = (r: ValidationResult, code: string, message: string, ref?: string) => r.errors.push({ code, message, ref } as Issue);
@@ -22,7 +25,7 @@ export function validateCircuit(ir: CircuitIR): ValidationResult {
     compIds.add(c.id);
     if (c.type === 'nmos') nmos++; if (c.type === 'pmos') pmos++;
     const req = REQUIRED_PINS[c.type];
-    if (!req && c.type !== 'block') warn(r, 'unknown_type', `unknown type "${c.type}" drawn as a generic block`, c.id);
+    if (!req && !SYSTEM_BLOCK_TYPES.has(c.type)) warn(r, 'unknown_type', `unknown type "${c.type}" drawn as a generic block`, c.id);
     for (const p of req ?? []) if (!(p in c.pins)) err(r, 'missing_pin', `${c.id} (${c.type}) is missing required pin ${p}`, c.id);
     const allowed = new Set([...(req ?? []), ...(OPTIONAL_PINS[c.type] ?? [])]);
     for (const [pin, net] of Object.entries(c.pins)) {
