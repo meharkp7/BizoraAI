@@ -622,10 +622,11 @@ async def extract_paper_diagrams(
     """Extract every diagram IR: figures first, paper text as fallback.
 
     Circuits come from circuit figures, else derived as system blocks
-    from the methodology. Methodology comes from the first flow figure,
-    else from text; structure comes from the first structure figure,
-    else from text, else derived from the methodology. Every paper
-    with a methodology therefore yields all three views.
+    from the methodology. Methodology comes from the richest valid
+    flow figure, else from text; structure comes from the richest
+    valid structure figure, else from text, else derived from the
+    methodology. Every paper with a methodology therefore yields all
+    three views.
     """
     figure_results: list[FigureDiagramResult] = []
     for figure in figures:
@@ -676,7 +677,12 @@ async def extract_paper_diagrams(
     # text fallback below can serve a renderable IR instead. Circuits
     # have no fallback: non-empty ones are always served with their
     # report, empty ones are set aside the same way.
+    # A tile fragment extracts before the full figure in page order,
+    # so first-match would serve a quadrant over the whole diagram.
+    # Methodology and structure serve the valid IR with the most
+    # content instead (ties keep page order: max is stable).
     methodology: MethodologyIR | None = None
+    flow_candidates: list[tuple[FigureDiagramResult, MethodologyIR]] = []
     for result in figure_results:
         if result.kind is DiagramKind.FLOW and isinstance(result.ir, MethodologyIR):
             if result.validation.errors:
@@ -685,12 +691,14 @@ async def extract_paper_diagrams(
                     f"figure:{result.figure_id}"
                 )
                 continue
-            methodology = result.ir
-            validation["methodology"] = result.validation
-            sources["methodology"] = f"figure:{result.figure_id}"
-            break
+            flow_candidates.append((result, result.ir))
+    if flow_candidates:
+        winner, methodology = max(flow_candidates, key=lambda item: len(item[1].nodes))
+        validation["methodology"] = winner.validation
+        sources["methodology"] = f"figure:{winner.figure_id}"
 
     structure: StructureIR | None = None
+    structure_candidates: list[tuple[FigureDiagramResult, StructureIR]] = []
     for result in figure_results:
         if result.kind is DiagramKind.STRUCTURE and isinstance(result.ir, StructureIR):
             if result.validation.errors:
@@ -699,10 +707,13 @@ async def extract_paper_diagrams(
                     f"figure:{result.figure_id}"
                 )
                 continue
-            structure = result.ir
-            validation["structure"] = result.validation
-            sources["structure"] = f"figure:{result.figure_id}"
-            break
+            structure_candidates.append((result, result.ir))
+    if structure_candidates:
+        winner, structure = max(
+            structure_candidates, key=lambda item: structure_drawable_boxes(item[1])
+        )
+        validation["structure"] = winner.validation
+        sources["structure"] = f"figure:{winner.figure_id}"
 
     figure_cell = first_array_cell(structure) if structure is not None else None
     needs_interior = (

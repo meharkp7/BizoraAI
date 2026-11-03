@@ -64,16 +64,30 @@ def make_circuit_payload(**overrides: Any) -> dict[str, Any]:
     return base
 
 
-def make_methodology_payload() -> dict[str, Any]:
+def make_methodology_payload(count: int = 2) -> dict[str, Any]:
+    # The default pair is the long-standing shared fixture (whatif tests
+    # resolve the "train" step by label); larger counts extend it.
+    base = [
+        {"id": "n1", "label": "load", "kind": "input", "confidence": 0.9},
+        {"id": "n2", "label": "train", "kind": "model", "confidence": 0.8},
+    ]
+    if count <= 2:
+        nodes = base[:count]
+    else:
+        nodes = base + [
+            {"id": f"n{i}", "label": f"step {i}", "kind": "process", "confidence": 0.9}
+            for i in range(3, count + 1)
+        ]
+    edges = [
+        {"from": f"n{i}", "to": f"n{i + 1}", "kind": "data"}
+        for i in range(1, count)
+    ]
     return {
         "version": 1,
         "title": "flow",
         "groups": [],
-        "nodes": [
-            {"id": "n1", "label": "load", "kind": "input", "confidence": 0.9},
-            {"id": "n2", "label": "train", "kind": "model", "confidence": 0.8},
-        ],
-        "edges": [{"from": "n1", "to": "n2", "kind": "data"}],
+        "nodes": nodes,
+        "edges": edges,
     }
 
 
@@ -994,6 +1008,93 @@ def test_empty_figure_circuit_is_set_aside(tmp_path: Any) -> None:
             assert "circuit:fig2" in result.sources
             assert "circuit:fig1" not in result.sources
             assert "circuit:figure:fig1" in result.sources
+
+        asyncio.run(run_test())
+    finally:
+        del os.environ["BIZORA_CACHE_DIR"]
+
+
+def test_richest_flow_figure_wins_methodology(tmp_path: Any) -> None:
+    """A tile fragment must not shadow the full flowchart.
+
+    Page tiles extract before later embedded figures in page order;
+    methodology serves the valid flow IR with the most steps so a
+    quadrant fragment never stands in for the whole diagram.
+    """
+    import os
+
+    os.environ["BIZORA_CACHE_DIR"] = str(tmp_path)
+    try:
+        provider = ScriptedDiagramProvider()
+        provider.classifications["tile"] = DiagramKind.FLOW
+        provider.classifications["fig2"] = DiagramKind.FLOW
+        provider.figure_payloads[("tile", "flow")] = make_methodology_payload(2)
+        provider.figure_payloads[("fig2", "flow")] = make_methodology_payload(6)
+        provider.text_payloads["structure"] = make_structure_payload()
+
+        async def run_test() -> None:
+            result = await extract_paper_diagrams(
+                provider,
+                [make_figure("tile"), make_figure("fig2")],
+                "Some paper text.",
+                paper_hash="e" * 64,
+            )
+
+            assert isinstance(result.methodology, MethodologyIR)
+            assert len(result.methodology.nodes) == 6
+            assert result.sources["methodology"] == "figure:fig2"
+
+        asyncio.run(run_test())
+    finally:
+        del os.environ["BIZORA_CACHE_DIR"]
+
+
+def test_richest_structure_figure_wins_structure(tmp_path: Any) -> None:
+    """Structure serves the valid structure IR with the most boxes."""
+    import os
+
+    os.environ["BIZORA_CACHE_DIR"] = str(tmp_path)
+    try:
+        provider = ScriptedDiagramProvider()
+        provider.classifications["tile"] = DiagramKind.STRUCTURE
+        provider.classifications["fig2"] = DiagramKind.STRUCTURE
+
+        def structure_with(children: int) -> dict[str, Any]:
+            return {
+                "version": 1,
+                "title": "macro",
+                "root": {
+                    "id": "chip",
+                    "label": "chip",
+                    "kind": "chip",
+                    "confidence": 0.9,
+                    "children": [
+                        {
+                            "id": f"mod{i}",
+                            "label": f"module {i}",
+                            "kind": "module",
+                            "confidence": 0.8,
+                        }
+                        for i in range(children)
+                    ],
+                },
+            }
+
+        provider.figure_payloads[("tile", "structure")] = structure_with(1)
+        provider.figure_payloads[("fig2", "structure")] = structure_with(4)
+        provider.text_payloads["methodology"] = make_methodology_payload()
+
+        async def run_test() -> None:
+            result = await extract_paper_diagrams(
+                provider,
+                [make_figure("tile"), make_figure("fig2")],
+                "Some paper text.",
+                paper_hash="f0" * 32,
+            )
+
+            assert isinstance(result.structure, StructureIR)
+            assert result.sources["structure"] == "figure:fig2"
+            assert len(result.structure.root.children) == 4
 
         asyncio.run(run_test())
     finally:
