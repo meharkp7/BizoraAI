@@ -1643,7 +1643,9 @@ async def ask_copilot(
         request.selected_node_id,
         provider=_copilot_provider_or_none(),
         context=context,
-        mode="auto",
+        # Voice turns are conversations: they always need the model,
+        # never the deterministic command fast path.
+        mode="llm" if request.voice else "auto",
         report=report,
     )
     _record_copilot_usage(session, settings, project_id, graph_id, report)
@@ -1706,7 +1708,9 @@ async def stream_copilot(
             request.selected_node_id,
             provider=provider,
             context=context,
-            mode="auto",
+            # Voice turns are conversations: they always need the model,
+            # never the deterministic command fast path.
+            mode="llm" if request.voice else "auto",
             report=report,
         ):
             if isinstance(event, CopilotStatusEvent):

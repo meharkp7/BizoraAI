@@ -40,7 +40,7 @@ from bizora.core.component_catalog import (
 from bizora.core.component_service import build_replacement_node, preflight_replacement
 from bizora.core.entity_service import pack_for_graph, resolve_graph
 from bizora.core.errors import BizoraError
-from bizora.providers.copilot import CopilotProvider
+from bizora.providers.copilot import CopilotProvider, CopilotProviderError
 
 COMPARE_SPLIT = re.compile(
     r"\s+(?:vs\.?|versus|against|and|or|with|compared?\s+to)\s+", re.IGNORECASE
@@ -634,6 +634,10 @@ async def answer_copilot_async(
     active_context = (
         context if context is not None else build_default_context(graph, selected_node_id)
     )
+    if provider is None and active_context.voice:
+        # A spoken fast-path answer sounds authoritative; voice turns
+        # fail loudly so the agent speaks an honest error instead.
+        raise CopilotProviderError("Copilot provider is not configured.")
     if not use_llm or provider is None:
         return answer_copilot(
             graph, message, selected_node_id, diagram_elements=active_context.diagram_elements
@@ -643,6 +647,8 @@ async def answer_copilot_async(
     try:
         return await answer_with_llm(message, active_context, provider, report=report)
     except Exception:
+        if active_context.voice:
+            raise
         if report is not None:
             report.fallback = True
         return answer_copilot(
@@ -673,6 +679,10 @@ async def answer_copilot_stream(
     active_context = (
         context if context is not None else build_default_context(graph, selected_node_id)
     )
+    if provider is None and active_context.voice:
+        # A spoken fast-path answer sounds authoritative; voice turns
+        # fail loudly so the agent speaks an honest error instead.
+        raise CopilotProviderError("Copilot provider is not configured.")
     if not use_llm or provider is None:
         yield CopilotStatusEvent(message="Answering from the workspace graph…")
         yield CopilotDoneEvent(
@@ -692,6 +702,8 @@ async def answer_copilot_stream(
         ):
             yield event
     except Exception:
+        if active_context.voice:
+            raise
         if report is not None:
             report.fallback = True
         yield CopilotStatusEvent(message="The model stumbled; answering directly…")

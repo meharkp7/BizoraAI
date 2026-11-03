@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from dataclasses import replace
 from typing import Any
 
 from bizora.copilot.service import (
@@ -15,6 +16,7 @@ from bizora.copilot.testing import EVAL_SOURCE_ID, make_eval_context
 from bizora.core.copilot_service import answer_copilot_stream
 from bizora.providers.copilot import (
     CopilotAssistantTurn,
+    CopilotProviderError,
     CopilotToolCall,
 )
 from bizora.providers.fixture_copilot import (
@@ -166,5 +168,53 @@ def test_stream_provider_failure_raises_for_caller_fallback() -> None:
         else:  # pragma: no cover - the fixture always fails
             raise AssertionError("expected the provider error to propagate")
         assert all(isinstance(e, CopilotStatusEvent) for e in events)
+
+    asyncio.run(run_test())
+
+
+def test_stream_voice_failure_raises_instead_of_fallback() -> None:
+    """Voice turns never speak fabricated fast-path answers.
+
+    A spoken fallback ("I interpreted that as a library search…")
+    sounds authoritative; the caller must surface an honest error
+    the agent can speak instead.
+    """
+
+    async def run_test() -> None:
+        context = replace(make_eval_context(), voice=True)
+        events: list[CopilotStatusEvent | CopilotDoneEvent] = []
+        try:
+            async for event in answer_copilot_stream(
+                context.graph,
+                "Why did run-eval-2 fail?",
+                "filter",
+                provider=FailingCopilotProvider(),
+                context=context,
+                mode="llm",
+            ):
+                events.append(event)
+        except Exception as exc:  # noqa: BLE001 - asserting the raise site
+            assert "Scripted provider failure" in str(exc)
+        else:
+            raise AssertionError("expected the provider error to propagate")
+        assert all(isinstance(e, CopilotStatusEvent) for e in events)
+
+    asyncio.run(run_test())
+
+
+def test_stream_voice_without_provider_raises() -> None:
+    """Voice turns with no provider fail loudly instead of answering."""
+
+    async def run_test() -> None:
+        context = replace(make_eval_context(), voice=True)
+        try:
+            async for _ in answer_copilot_stream(
+                context.graph, "hello", "filter", provider=None, context=context
+            ):
+                pass
+        except CopilotProviderError as exc:
+            assert "not configured" in str(exc)
+        else:
+            raise AssertionError("expected CopilotProviderError")
 
     asyncio.run(run_test())
