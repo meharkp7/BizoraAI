@@ -54,7 +54,7 @@ export function CrossPaperPage() {
   }
 
   return (
-    <div className={styles.page}>
+    <div className={`bz-enter ${styles.page}`}>
       <h1>Cross-paper workspace</h1>
       <p className={styles.hint}>
         Collect graphs from different papers into a tray, then compare or combine them.

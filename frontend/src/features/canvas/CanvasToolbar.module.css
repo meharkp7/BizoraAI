@@ -19,14 +19,21 @@
   display: flex;
   gap: var(--space-1);
   margin-left: auto;
-  padding-left: var(--space-3);
-  border-left: 1px solid var(--color-line-strong);
+  padding: var(--space-1);
+  background: var(--color-canvas);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+}
+
+.viewToggle button {
+  border-color: transparent;
 }
 
 .viewToggle button[aria-pressed="true"] {
-  background: var(--color-ink);
-  color: var(--color-surface);
-  border-color: var(--color-ink);
+  background: var(--color-surface-raised);
+  color: var(--color-accent-strong);
+  border-color: var(--color-line-strong);
+  box-shadow: var(--shadow-1);
 }
 
 .history button,
@@ -40,6 +47,11 @@
   border-radius: var(--radius-sm);
   font-weight: 600;
   font-size: 0.875rem;
+  transition:
+    background-color var(--motion-quick) var(--ease-out),
+    color var(--motion-quick) var(--ease-out),
+    border-color var(--motion-quick) var(--ease-out),
+    box-shadow var(--motion-quick) var(--ease-out);
 }
 
 .history button:not(:disabled):hover,

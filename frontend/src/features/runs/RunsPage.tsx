@@ -53,7 +53,7 @@ export function RunsPage({ projectId, graphId }: { projectId: string; graphId: s
   }
 
   return (
-    <div className={styles.page}>
+    <div className={`bz-enter ${styles.page}`}>
       <h1>Runs</h1>
       <ul className={styles.list}>
         {runs.data.map((run) => (
@@ -130,7 +130,7 @@ export function RunDetailPage({
 
   const data = run.data;
   return (
-    <div className={styles.page}>
+    <div className={`bz-enter ${styles.page}`}>
       <div className={styles.detailHead}>
         <h1 className="mono">{data.run_id}</h1>
         <StateBadge state={data.state} />

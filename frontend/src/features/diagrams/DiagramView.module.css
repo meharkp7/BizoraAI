@@ -120,8 +120,8 @@
   height: auto;
 }
 
-/* Diagrams that stay readable only at their drawn size (methodology):
-   never shrink to fit; the frame scrolls instead. */
+/* Diagrams that stay readable only at their drawn size (methodology,
+   schematics): never shrink to fit; the frame scrolls instead. */
 .canvas.canvasNatural svg {
   width: auto;
   max-width: none;

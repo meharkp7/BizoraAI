@@ -546,6 +546,9 @@ function WorkspaceLoaded({
     });
   }
 
+  // No bz-enter here: any transform on this root (even a fill-mode
+  // translateY(0)) would re-anchor the floating CopilotBot from the
+  // viewport to this box, breaking its fixed placement and dragging.
   return (
     <div className={styles.page}>
       <div className={styles.heading}>

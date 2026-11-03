@@ -49,6 +49,14 @@
   --color-minimap-mask: rgb(158 90 46 / 0.16);
   --shadow-1: 0 1px 2px rgb(35 33 27 / 0.1);
   --shadow-2: 0 10px 28px rgb(35 33 27 / 0.14);
+  --shadow-lift: 0 2px 4px rgb(35 33 27 / 0.08), 0 14px 34px rgb(35 33 27 / 0.16);
+
+  /* Motion: single entrance curve for the whole site. Durations stay
+     short; the reduced-motion block below collapses them all. */
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --motion-instant: 120ms;
+  --motion-quick: 180ms;
+  --motion-rise: 420ms;
 
   /* Muted inline text (alias of ink-soft; the name the panels use). */
   --color-ink-muted: #5b5647;
@@ -104,6 +112,7 @@
   --color-minimap-mask: rgb(208 138 82 / 0.2);
   --shadow-1: 0 1px 2px rgb(0 0 0 / 0.5);
   --shadow-2: 0 10px 28px rgb(0 0 0 / 0.5);
+  --shadow-lift: 0 2px 4px rgb(0 0 0 / 0.4), 0 14px 34px rgb(0 0 0 / 0.55);
 
   /* Muted inline text (alias of ink-soft; the name the panels use). */
   --color-ink-muted: #b3a98f;

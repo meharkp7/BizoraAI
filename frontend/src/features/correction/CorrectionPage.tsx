@@ -55,7 +55,7 @@ export function CorrectionPage({
   const submitError = batch.error instanceof Error ? batch.error.message : null;
 
   return (
-    <div className={styles.page}>
+    <div className={`bz-enter ${styles.page}`}>
       <header className={styles.header}>
         <div>
           <h1 className={styles.title}>Review extraction</h1>

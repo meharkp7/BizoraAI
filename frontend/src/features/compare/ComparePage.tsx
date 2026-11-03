@@ -40,7 +40,7 @@ export function ComparePage() {
   }
 
   return (
-    <div className={styles.page}>
+    <div className={`bz-enter ${styles.page}`}>
       <h1>Compare runs</h1>
       <form className={styles.form} onSubmit={compare}>
         <label>

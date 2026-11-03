@@ -65,7 +65,7 @@ export function TablesPage({ projectId, graphId }: { projectId: string; graphId:
 
   const active = tables.data.find((table) => table.table_id === activeId) ?? tables.data[0];
   return (
-    <div className={styles.page}>
+    <div className={`bz-enter ${styles.page}`}>
       <h1>Results tables</h1>
       <div className={styles.layout}>
         <nav className={styles.index} aria-label="Tables">

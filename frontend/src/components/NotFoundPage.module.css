@@ -1,0 +1,35 @@
+.page {
+  max-width: 36rem;
+  margin: 0 auto;
+  padding-block: var(--space-8);
+  text-align: center;
+}
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-lg);
+  padding: var(--space-8) var(--space-6);
+  box-shadow: var(--shadow-2);
+  display: grid;
+  gap: var(--space-3);
+  justify-items: center;
+}
+
+.code {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 4rem;
+  line-height: 1;
+  color: var(--color-accent);
+}
+
+.card h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.card p {
+  margin: 0;
+  color: var(--color-ink-soft);
+}

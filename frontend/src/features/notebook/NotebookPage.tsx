@@ -72,7 +72,7 @@ export function NotebookPage({
   }
 
   return (
-    <div className={styles.page}>
+    <div className={`bz-enter ${styles.page}`}>
       <div className={styles.head}>
         <div>
           <h1>Notebook</h1>

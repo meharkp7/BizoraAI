@@ -30,7 +30,7 @@ export function QualityPage() {
   const data = summary.data;
   const copilot = data.copilot_eval;
   return (
-    <div className={styles.page}>
+    <div className={`bz-enter ${styles.page}`}>
       <h1>Extraction quality</h1>
       <p className={styles.hint}>
         Last eval runs, not vibes. Generated {formatInstant(data.generated_at)}.

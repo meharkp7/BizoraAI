@@ -63,74 +63,85 @@ export function LoginPage() {
   }
 
   return (
-    <div className={styles.page}>
+    <div className={`bz-page bz-enter ${styles.page}`}>
       <section className={styles.card} aria-label="Log in to Bizora">
-        <h1>{mode === "login" ? "Log in" : "Create an account"}</h1>
-        <p className={styles.lede}>
-          Your papers and notes follow your login: upload once, find everything later
-          under My profile. The same account works from the terminal — the login
-          returns a JWT Bearer [REDACTED] curl.
-        </p>
-        <div className={styles.modes} role="group" aria-label="Login or register">
-          <button
-            type="button"
-            aria-pressed={mode === "login"}
-            onClick={() => switchMode("login")}
-          >
-            Log in
-          </button>
-          <button
-            type="button"
-            aria-pressed={mode === "register"}
-            onClick={() => switchMode("register")}
-          >
-            Create account
-          </button>
-        </div>
-        <form className={styles.form} onSubmit={submit} aria-label="Login form">
-          <label className={styles.field}>
-            Email
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              autoComplete="email"
-              required
-            />
-          </label>
-          {mode === "register" ? (
+        <div className={styles.formSide}>
+          <h1>{mode === "login" ? "Log in" : "Create an account"}</h1>
+          <p className={styles.lede}>
+            Your papers and notes follow your login: upload once, find everything
+            later under My profile. The same account works from the terminal — the
+            login returns a JWT Bearer [REDACTED] curl.
+          </p>
+          <div className={styles.modes} role="group" aria-label="Login or register">
+            <button
+              type="button"
+              aria-pressed={mode === "login"}
+              onClick={() => switchMode("login")}
+            >
+              Log in
+            </button>
+            <button
+              type="button"
+              aria-pressed={mode === "register"}
+              onClick={() => switchMode("register")}
+            >
+              Create account
+            </button>
+          </div>
+          <form className={styles.form} onSubmit={submit} aria-label="Login form">
             <label className={styles.field}>
-              Name
+              Email
               <input
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder="What should we call you?"
-                autoComplete="nickname"
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                autoComplete="email"
+                required
               />
             </label>
+            {mode === "register" ? (
+              <label className={styles.field}>
+                Name
+                <input
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="What should we call you?"
+                  autoComplete="nickname"
+                />
+              </label>
+            ) : null}
+            <label className={styles.field}>
+              Password{mode === "register" ? " (8+ characters)" : ""}
+              <input
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
+                required
+              />
+            </label>
+            <button type="submit" disabled={busy || email.trim() === "" || password === ""}>
+              {busy ? "…" : mode === "login" ? "Log in" : "Create account"}
+            </button>
+          </form>
+          {error ? (
+            <p className={styles.formError} role="alert">
+              {error}
+            </p>
           ) : null}
-          <label className={styles.field}>
-            Password{mode === "register" ? " (8+ characters)" : ""}
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              autoComplete={mode === "login" ? "current-password" : "new-password"}
-              required
-            />
-          </label>
-          <button type="submit" disabled={busy || email.trim() === "" || password === ""}>
-            {busy ? "…" : mode === "login" ? "Log in" : "Create account"}
-          </button>
-        </form>
-        {error ? (
-          <p className={styles.formError} role="alert">
-            {error}
+          <p className={styles.back}>
+            <Link to="/">Back to the homepage</Link>
           </p>
-        ) : null}
-        <p className={styles.back}>
-          <Link to="/">Back to the homepage</Link>
-        </p>
+        </div>
+        <div className={styles.artSide} aria-hidden="true">
+          <img
+            className="bz-art"
+            src="/images/login-layers.jpg"
+            alt=""
+            loading="lazy"
+          />
+          <p>Upload once, find everything later.</p>
+        </div>
       </section>
     </div>
   );

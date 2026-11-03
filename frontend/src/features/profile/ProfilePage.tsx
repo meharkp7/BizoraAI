@@ -90,7 +90,7 @@ export function ProfilePage() {
 
   if (!token) {
     return (
-      <div className={styles.page}>
+      <div className={`bz-enter ${styles.page}`}>
         <section className={styles.card} aria-label="My profile">
           <h1>My profile</h1>
           <p>
@@ -103,7 +103,7 @@ export function ProfilePage() {
 
   if (me.isPending) {
     return (
-      <div className={styles.page}>
+      <div className={`bz-enter ${styles.page}`}>
         <section className={styles.card} aria-label="My profile">
           <h1>My profile</h1>
           <p role="status">Loading your account…</p>
@@ -114,7 +114,7 @@ export function ProfilePage() {
 
   if (me.isError || !me.data) {
     return (
-      <div className={styles.page}>
+      <div className={`bz-enter ${styles.page}`}>
         <section className={styles.card} aria-label="My profile">
           <h1>My profile</h1>
           <p role="alert">
@@ -131,7 +131,7 @@ export function ProfilePage() {
   const user = me.data;
   const library = papers.data ?? [];
   return (
-    <div className={styles.page}>
+    <div className={`bz-enter ${styles.page}`}>
       <section className={styles.card} aria-label="My profile">
         <h1>My profile</h1>
         <dl className={styles.facts}>

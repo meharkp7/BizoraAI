@@ -102,3 +102,99 @@ code,
   font-family: var(--font-mono);
   font-size: 0.85em;
 }
+
+/* Shared page columns. Every route centers one of these inside the
+   shell so content never hugs the left edge on wide screens. */
+.bz-page {
+  display: grid;
+  gap: var(--space-6);
+  width: 100%;
+  margin: 0 auto;
+  align-content: start;
+}
+
+.bz-measure {
+  max-width: 46rem;
+}
+
+.bz-wide {
+  max-width: 76rem;
+}
+
+.bz-full {
+  max-width: none;
+}
+
+/* Marketing buttons shared by the landing, login, and papers pages.
+   App chrome keeps its own smaller controls. */
+.bz-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-sm);
+  font-weight: 650;
+  font-size: 0.9375rem;
+  line-height: 1.4;
+  text-decoration: none;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition:
+    background-color var(--motion-quick) var(--ease-out),
+    color var(--motion-quick) var(--ease-out),
+    border-color var(--motion-quick) var(--ease-out),
+    box-shadow var(--motion-quick) var(--ease-out),
+    transform var(--motion-quick) var(--ease-out);
+}
+
+.bz-btn-primary {
+  background: var(--color-accent-strong);
+  color: var(--color-accent-ink);
+  box-shadow: var(--shadow-1);
+}
+
+.bz-btn-primary:hover {
+  box-shadow: var(--shadow-lift);
+  transform: translateY(-1px);
+}
+
+.bz-btn-ghost {
+  background: transparent;
+  color: var(--color-ink);
+  border-color: var(--color-line-strong);
+}
+
+.bz-btn-ghost:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent-strong);
+}
+
+/* One restrained page entrance. Applied to route roots only — never
+   to scrolling lists or cards. */
+@keyframes bz-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    /* `none`, not translateY(0): a retained transform would re-anchor
+       any fixed-position descendant to this box. */
+    transform: none;
+  }
+}
+
+.bz-enter {
+  animation: bz-rise var(--motion-rise) var(--ease-out) both;
+}
+
+/* Illustrated panels: the artwork dims slightly in night studio so
+   ivory art never glows against the dark page. */
+.bz-art {
+  transition: filter var(--motion-quick) var(--ease-out);
+}
+
+:root[data-theme="dark"] .bz-art {
+  filter: brightness(0.88) saturate(0.94);
+}

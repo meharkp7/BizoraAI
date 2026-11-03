@@ -236,6 +236,7 @@ function UploadForm() {
                     ) : null}
                     <button
                       type="button"
+                      className="bz-btn bz-btn-primary"
                       onClick={() =>
                         void navigate(
                           `/g/${encodeURIComponent(item.result?.graph.project_id ?? "")}/${encodeURIComponent(item.result?.graph.graph_id ?? "")}`,
@@ -250,7 +251,11 @@ function UploadForm() {
             </li>
           ))}
         </ul>
-        <button type="submit" disabled={items.length === 0 || submitting}>
+        <button
+          type="submit"
+          className="bz-btn bz-btn-primary"
+          disabled={items.length === 0 || submitting}
+        >
           {submitting ? "Extracting papers…" : "Upload and extract"}
         </button>
       </form>
@@ -304,7 +309,11 @@ function ImportForm() {
             spellCheck={false}
           />
         </label>
-        <button type="submit" disabled={source.trim() === "" || importing.isPending}>
+        <button
+          type="submit"
+          className="bz-btn bz-btn-primary"
+          disabled={source.trim() === "" || importing.isPending}
+        >
           {importing.isPending ? "Importing paper…" : "Import and extract"}
         </button>
       </form>
@@ -330,6 +339,7 @@ function ImportForm() {
           ) : null}
           <button
             type="button"
+            className="bz-btn bz-btn-primary"
             onClick={() =>
               void navigate(
                 `/g/${encodeURIComponent(result.extraction.graph.project_id)}/${encodeURIComponent(result.extraction.graph.graph_id)}`,
@@ -348,7 +358,7 @@ function SamplePaper() {
   const sample = useSamplePaper();
 
   return (
-    <section className={styles.opener} aria-label="Sample paper">
+    <section className={`${styles.opener} ${styles.sample}`} aria-label="Sample paper">
       <h2>Sample paper</h2>
       {sample.isPending ? (
         <p className={styles.parseStatus} role="status">
@@ -361,7 +371,10 @@ function SamplePaper() {
           <p className={styles.hint}>
             Start here: a complete workspace with no upload or setup.
           </p>
-          <Link className={styles.sampleLink} to={sample.data.workspace_path}>
+          <Link
+            className={`bz-btn bz-btn-primary ${styles.sampleLink}`}
+            to={sample.data.workspace_path}
+          >
             Open the sample paper: {sample.data.title}
           </Link>
         </>
@@ -422,37 +435,39 @@ function MyPapers() {
 
 export function PapersPage() {
   return (
-    <div className={styles.page}>
+    <div className={`bz-page bz-wide bz-enter ${styles.page}`}>
       <section className={styles.intro}>
+        <p className={styles.kicker}>
+          <span className={styles.rule} aria-hidden="true" />
+          Your library
+        </p>
         <h1>Evidence-grounded methodology, made testable</h1>
         <p>
           Bizora turns scientific papers into explorable methodology graphs: inspect
           components, trace claims to their sources, propose validated changes, and
           compare measured results against baselines.
         </p>
-        <p className={styles.hint}>
-          Wondering how much to trust extraction?{" "}
-          <Link to="/quality">See the latest eval scores</Link>.
-        </p>
       </section>
       <SamplePaper />
-      <section className={styles.opener} aria-label="Upload a paper">
-        <h2>Upload a paper</h2>
-        <UploadForm />
-        <p className={styles.hint}>
-          Attach one or several research PDFs; each is read, then extracted in
-          turn. Identifiers are assigned automatically, and logged-in uploads
-          land in your library.
-        </p>
-      </section>
-      <section className={styles.opener} aria-label="Import a paper">
-        <h2>Import a paper</h2>
-        <ImportForm />
-        <p className={styles.hint}>
-          Paste an arXiv ID, DOI, or direct PDF link — Bizora downloads and
-          extracts it exactly like an upload.
-        </p>
-      </section>
+      <div className={styles.intake}>
+        <section className={styles.opener} aria-label="Upload a paper">
+          <h2>Upload a paper</h2>
+          <UploadForm />
+          <p className={styles.hint}>
+            Attach one or several research PDFs; each is read, then extracted in
+            turn. Identifiers are assigned automatically, and logged-in uploads
+            land in your library.
+          </p>
+        </section>
+        <section className={styles.opener} aria-label="Import a paper">
+          <h2>Import a paper</h2>
+          <ImportForm />
+          <p className={styles.hint}>
+            Paste an arXiv ID, DOI, or direct PDF link — Bizora downloads and
+            extracts it exactly like an upload.
+          </p>
+        </section>
+      </div>
       <MyPapers />
     </div>
   );

@@ -1,32 +1,90 @@
 .page {
-  display: grid;
   gap: var(--space-6);
-  max-width: 46rem;
+}
+
+.intro {
+  max-width: 44rem;
+}
+
+.kicker {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 1.0625rem;
+  color: var(--color-accent-strong);
+}
+
+.rule {
+  display: inline-block;
+  width: 2.5rem;
+  height: 2px;
+  background: var(--color-accent-strong);
+  flex: none;
 }
 
 .intro h1 {
-  font-size: 1.875rem;
-  max-width: 32rem;
+  font-size: clamp(1.875rem, 3.5vw, 2.625rem);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
 }
 
 .intro p {
   color: var(--color-ink-soft);
   font-size: 1.0625rem;
-  max-width: 38rem;
+  max-width: 40rem;
 }
 
 .opener {
   background: var(--color-surface);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-lg);
-  padding: var(--space-5);
+  padding: var(--space-5) var(--space-6);
   box-shadow: var(--shadow-1);
+  transition:
+    border-color var(--motion-quick) var(--ease-out),
+    box-shadow var(--motion-quick) var(--ease-out);
+}
+
+.opener:hover {
+  border-color: var(--color-line-strong);
+  box-shadow: var(--shadow-2);
+}
+
+.opener > h2 {
+  margin-bottom: var(--space-3);
+  font-family: var(--font-display);
+  font-size: 1.375rem;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: -0.01em;
+  color: var(--color-ink);
+}
+
+.sample {
+  background:
+    radial-gradient(
+      120% 160% at 100% 0%,
+      var(--color-olive-wash) 0%,
+      transparent 55%
+    ),
+    var(--color-surface);
+}
+
+.intake {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
+  align-items: start;
 }
 
 .form {
   display: grid;
   gap: var(--space-3);
-  margin-top: var(--space-4);
+  justify-items: start;
 }
 
 .field {
@@ -34,6 +92,7 @@
   gap: var(--space-1);
   font-weight: 600;
   font-size: 0.875rem;
+  width: 100%;
 }
 
 .field input {
@@ -42,28 +101,45 @@
   color: var(--color-ink);
   border: 1px solid var(--color-line-strong);
   border-radius: var(--radius-sm);
+  transition:
+    border-color var(--motion-instant) var(--ease-out),
+    box-shadow var(--motion-instant) var(--ease-out);
 }
 
-.form button {
-  justify-self: start;
-  margin-top: var(--space-2);
-  padding: var(--space-2) var(--space-4);
-  background: var(--color-accent);
-  color: var(--color-accent-ink);
-  border: none;
+.field input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-wash);
+}
+
+.field input[type="file"] {
+  padding: var(--space-2);
+}
+
+.field input[type="file"]::file-selector-button {
+  margin-right: var(--space-3);
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  border: 1px solid var(--color-line-strong);
   border-radius: var(--radius-sm);
   font-weight: 650;
+  cursor: pointer;
+  transition:
+    border-color var(--motion-instant) var(--ease-out),
+    color var(--motion-instant) var(--ease-out);
 }
 
-.form button:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
+.field input[type="file"]::file-selector-button:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent-strong);
 }
 
 .hint {
   margin: var(--space-4) 0 0;
   color: var(--color-ink-faint);
   font-size: 0.875rem;
+  line-height: 1.6;
 }
 
 .parseStatus {
@@ -74,17 +150,23 @@
 
 .formError {
   margin: var(--space-3) 0 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-danger-wash);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-sm);
   color: var(--color-danger);
   font-size: 0.875rem;
+  font-weight: 600;
 }
 
 .result {
   margin-top: var(--space-4);
-  padding-top: var(--space-3);
+  padding-top: var(--space-4);
   border-top: 1px solid var(--color-line);
   display: grid;
-  gap: var(--space-2);
-  font-size: 0.875rem;
+  gap: var(--space-3);
+  justify-items: start;
+  font-size: 0.9375rem;
 }
 
 .result p {
@@ -97,21 +179,33 @@
   color: var(--color-warn);
 }
 
-.result button {
-  justify-self: start;
-  padding: var(--space-2) var(--space-4);
-  background: var(--color-accent);
-  color: var(--color-accent-ink);
-  border: none;
-  border-radius: var(--radius-sm);
-  font-weight: 650;
-}
-
 .papers {
   display: grid;
   gap: var(--space-2);
-  margin: var(--space-3) 0 0;
-  padding-left: var(--space-4);
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.papers li a {
+  display: block;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  color: var(--color-ink);
+  text-decoration: none;
+  font-weight: 600;
+  transition:
+    border-color var(--motion-quick) var(--ease-out),
+    box-shadow var(--motion-quick) var(--ease-out),
+    transform var(--motion-quick) var(--ease-out);
+}
+
+.papers li a:hover {
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-1);
+  transform: translateX(3px);
 }
 
 .queue {
@@ -120,20 +214,21 @@
   margin: var(--space-3) 0 0;
   padding: 0;
   list-style: none;
+  width: 100%;
 }
 
 .queueItem {
   display: grid;
   gap: var(--space-2);
   margin: 0;
-  padding: var(--space-3);
+  padding: var(--space-4);
   background: var(--color-surface-raised);
   border: 1px solid var(--color-line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
 }
 
 .queueItem legend {
-  padding: 0 var(--space-1);
+  padding: 0 var(--space-2);
   font-size: 0.8125rem;
   font-weight: 700;
   color: var(--color-ink-soft);
@@ -141,22 +236,28 @@
 
 .duplicate {
   margin: 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-warn-wash);
+  border-radius: var(--radius-sm);
   color: var(--color-warn);
   font-size: 0.875rem;
 }
 
 .sampleLink {
-  display: inline-block;
   margin-top: var(--space-3);
-  padding: var(--space-2) var(--space-4);
-  background: var(--color-accent);
-  color: var(--color-accent-ink);
-  border-radius: var(--radius-sm);
-  font-weight: 650;
-  text-decoration: none;
 }
 
 .command {
   font-family: var(--font-mono);
   font-size: 0.8125rem;
+}
+
+@media (max-width: 60rem) {
+  .intake {
+    grid-template-columns: 1fr;
+  }
+
+  .opener {
+    padding: var(--space-4);
+  }
 }

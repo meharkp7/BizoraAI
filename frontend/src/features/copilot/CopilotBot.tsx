@@ -102,6 +102,21 @@ export function CopilotBot({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open ]);
 
+  // The site footer owns the bottom-right corner when scrolled into
+  // view: lift above it instead of covering its links.
+  const [footerVisible, setFooterVisible] = useState(false);
+  useEffect(() => {
+    if (typeof IntersectionObserver === "undefined") return;
+    const footer = document.querySelector("footer");
+    if (!footer) return;
+    const observer = new IntersectionObserver(
+      (entries) => setFooterVisible(entries.some((entry) => entry.isIntersecting)),
+      { threshold: 0 },
+    );
+    observer.observe(footer);
+    return () => observer.disconnect();
+  }, []);
+
   function clamp(position: Position): Position {
     const margin = 8;
     const size = 56;
@@ -115,7 +130,7 @@ export function CopilotBot({
     <>
       <button
         type="button"
-        className={styles.bot}
+        className={footerVisible ? `${styles.bot} ${styles.lifted}` : styles.bot}
         style={pos ? { left: pos.x, top: pos.y, right: "auto", bottom: "auto" } : undefined}
         aria-label={open ? "Close Bizora agent" : "Open Bizora agent"}
         aria-expanded={open}
@@ -175,7 +190,11 @@ export function CopilotBot({
         <RobotFace />
       </button>
       {open ? (
-        <div className={styles.overlay} role="dialog" aria-label="Bizora agent chat">
+        <div
+          className={footerVisible ? `${styles.overlay} ${styles.lifted}` : styles.overlay}
+          role="dialog"
+          aria-label="Bizora agent chat"
+        >
           <button
             type="button"
             className={styles.close}

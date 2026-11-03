@@ -1,37 +1,50 @@
 .page {
   display: grid;
   gap: var(--space-5);
+  align-content: start;
 }
 
-/* Masthead: serif title over a folio line, double-ruled below. */
+/* Masthead band: title block left, revision instrument right. */
 .heading {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  gap: var(--space-4);
+  gap: var(--space-5);
   flex-wrap: wrap;
-  padding-bottom: var(--space-4);
-  border-bottom: 3px double var(--color-line-strong);
+  padding: var(--space-5) var(--space-6);
+  background:
+    radial-gradient(
+      90% 140% at 0% 0%,
+      var(--color-accent-wash) 0%,
+      transparent 50%
+    ),
+    var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
 }
 
 .heading h1 {
-  margin-bottom: var(--space-2);
+  margin: 0 0 var(--space-2);
+  font-size: clamp(1.5rem, 2.5vw, 2rem);
+  letter-spacing: -0.02em;
+  text-wrap: balance;
 }
 
 .subtitle {
-  margin: 0;
+  margin: 0 0 var(--space-2);
   color: var(--color-ink-soft);
   font-size: 0.8125rem;
 }
 
-/* Revision folio: hairline plate with prev / numeral / next. */
+/* Revision instrument: undo/redo/stepper plate plus export. */
 .stepper {
   display: flex;
   align-items: stretch;
-  gap: 0;
   border: 1px solid var(--color-line-strong);
   border-radius: var(--radius-md);
-  background: var(--color-surface);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-1);
   overflow: hidden;
 }
 
@@ -40,41 +53,57 @@
   background: transparent;
   color: var(--color-ink);
   border: none;
+  border-left: 1px solid var(--color-line);
   font-weight: 600;
   font-size: 0.875rem;
   white-space: nowrap;
+  transition:
+    background-color var(--motion-instant) var(--ease-out),
+    color var(--motion-instant) var(--ease-out);
+}
+
+.stepper button:first-child {
+  border-left: none;
 }
 
 .stepper button:not(:disabled):hover {
   background: var(--color-accent-wash);
+  color: var(--color-accent-strong);
 }
 
-.stepper button:first-child {
-  border-right: 1px solid var(--color-line);
+.stepper button:disabled {
+  color: var(--color-ink-faint);
 }
 
-.stepper button:last-child {
-  border-left: 1px solid var(--color-line);
+.stepper > span {
+  display: inline-flex;
+  align-items: stretch;
+}
+
+.stepper > span > button {
+  height: 100%;
 }
 
 .versionBadge {
   display: inline-flex;
   align-items: center;
-  min-width: 4rem;
   justify-content: center;
+  min-width: 3.5rem;
   padding: var(--space-2) var(--space-3);
+  background: var(--color-accent-strong);
+  color: var(--color-accent-ink);
+  border-left: 1px solid var(--color-line);
   font-family: var(--font-mono);
   font-weight: 700;
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   font-variant-numeric: tabular-nums;
-  color: var(--color-accent-strong);
 }
 
 /* Workbench: contents index, plate-mounted canvas, inspector rail. */
 .grid {
   display: grid;
-  grid-template-columns: 14rem minmax(0, 1fr) 20rem;
-  gap: var(--space-4);
+  grid-template-columns: 15rem minmax(0, 1fr) 21rem;
+  gap: var(--space-5);
   align-items: start;
 }
 
@@ -90,20 +119,36 @@
 .panel {
   background: var(--color-surface);
   border: 1px solid var(--color-line);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   padding: var(--space-4);
+  box-shadow: var(--shadow-1);
 }
 
 .indexPanel {
   padding: var(--space-4) var(--space-3);
-  max-height: 48rem;
+  max-height: calc(100vh - 12rem);
   overflow-y: auto;
+  position: sticky;
+  top: 5rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line-strong) transparent;
+}
+
+@media (max-width: 70rem) {
+  .indexPanel {
+    position: static;
+    max-height: 32rem;
+  }
 }
 
 .tabs {
   display: flex;
   gap: var(--space-1);
-  margin-bottom: var(--space-3);
+  margin-bottom: var(--space-4);
+  padding: var(--space-1);
+  background: var(--color-canvas);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
 }
 
 .tabs button {
@@ -111,43 +156,57 @@
   padding: var(--space-1) var(--space-2);
   background: transparent;
   color: var(--color-ink-soft);
-  border: 1px solid var(--color-line);
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
   font-size: 0.8125rem;
   font-weight: 650;
+  transition:
+    background-color var(--motion-quick) var(--ease-out),
+    color var(--motion-quick) var(--ease-out),
+    box-shadow var(--motion-quick) var(--ease-out);
 }
 
 .tabs button.activeTab {
-  background: var(--color-accent-wash);
+  background: var(--color-surface-raised);
+  color: var(--color-ink);
+  box-shadow: var(--shadow-1);
+}
+
+.tabs button:not(.activeTab):hover {
   color: var(--color-accent-strong);
-  border-color: var(--color-accent-strong);
 }
 
 .entitiesError {
-  margin: var(--space-2) 0 0;
+  margin: var(--space-3) 0 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-danger-wash);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-sm);
   font-size: 0.8125rem;
+  font-weight: 600;
   color: var(--color-danger);
 }
 
 .draftBanner {
-  margin-top: var(--space-3);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-4);
   background: var(--color-olive-wash);
   border: 1px solid var(--color-olive);
   border-radius: var(--radius-md);
   font-size: 0.875rem;
+  font-weight: 600;
   color: var(--color-ink);
 }
 
-/* Plate mount: stone mat with an inner hairline frame. */
+/* Plate mount: framed canvas with presence. */
 .canvasPanel {
   background: var(--color-surface);
   border: 1px solid var(--color-line-strong);
-  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
   display: grid;
   gap: var(--space-3);
   align-content: start;
-  box-shadow: var(--shadow-1);
+  box-shadow: var(--shadow-2);
   /* Wide diagrams (horizontal methodology) must scroll inside the
      canvas frame, never stretch the column over the inspector rail. */
   min-width: 0;
@@ -161,23 +220,25 @@
   display: grid;
   gap: var(--space-4);
   min-width: 0;
+  align-content: start;
 }
 
 .brief {
   background: var(--color-surface);
   border: 1px solid var(--color-line);
-  border-radius: var(--radius-md);
-  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5) var(--space-6);
+  box-shadow: var(--shadow-1);
 }
 
 .brief h2 {
-  margin-bottom: var(--space-3);
+  margin-bottom: var(--space-4);
 }
 
 .briefGrid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-4);
+  gap: var(--space-5);
 }
 
 @media (max-width: 70rem) {
@@ -192,6 +253,15 @@
   }
 }
 
+.briefGrid > div {
+  border-top: 2px solid var(--color-line-strong);
+  padding-top: var(--space-3);
+}
+
+.briefGrid > div:first-child {
+  border-top-color: var(--color-accent-strong);
+}
+
 .briefGrid h3 {
   font-size: 0.75rem;
   text-transform: uppercase;
@@ -203,12 +273,14 @@
 .briefGrid p {
   margin: 0;
   font-size: 0.875rem;
+  line-height: 1.6;
 }
 
 .briefList {
   margin: 0;
   padding-left: var(--space-4);
   font-size: 0.875rem;
+  line-height: 1.6;
   display: grid;
   gap: var(--space-1);
 }
@@ -221,7 +293,7 @@
 /* Folio section head: label, hairline rule, count. */
 .sectionHead {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--space-2);
   padding: 0 var(--space-1);
 }
@@ -236,7 +308,6 @@
   flex: 1;
   order: 1;
   border-bottom: 1px solid var(--color-line);
-  transform: translateY(-3px);
 }
 
 .sectionHead .count {
@@ -245,15 +316,30 @@
 
 .sectionHead .addStepButton {
   order: 3;
-  padding: 0 var(--space-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
   font-size: 1rem;
   font-weight: 700;
-  line-height: 1.4;
-  background: none;
+  line-height: 1;
+  background: var(--color-surface-raised);
   color: var(--color-accent-strong);
   border: 1px solid var(--color-line-strong);
   border-radius: var(--radius-sm);
   cursor: pointer;
+  transition:
+    border-color var(--motion-instant) var(--ease-out),
+    box-shadow var(--motion-instant) var(--ease-out),
+    transform var(--motion-instant) var(--ease-out);
+}
+
+.sectionHead .addStepButton:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-1);
+  transform: scale(1.08);
 }
 
 .sectionHead .addStepButton:disabled {
@@ -265,7 +351,12 @@
   font-family: var(--font-mono);
   font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
-  color: var(--color-ink-faint);
+  color: var(--color-ink-soft);
+  background: var(--color-canvas);
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  padding: 0 var(--space-2);
+  line-height: 1.5;
 }
 
 .edgesHeading {
@@ -278,16 +369,16 @@
   margin: var(--space-2) 0 0;
   padding: 0;
   display: grid;
+  gap: 2px;
   counter-reset: index;
 }
 
 .nodeList li {
   counter-increment: index;
-  border-bottom: 1px solid var(--color-line);
 }
 
-.nodeList li:first-child {
-  border-top: 1px solid var(--color-line);
+.nodeList li::marker {
+  content: none;
 }
 
 .nodeList button {
@@ -296,17 +387,16 @@
   display: grid;
   grid-template-columns: 2rem 1fr;
   gap: 0 var(--space-2);
-  padding: var(--space-2) var(--space-1);
+  padding: var(--space-2);
   background: transparent;
   color: var(--color-ink);
   border: none;
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   font-size: 0.8125rem;
   line-height: 1.4;
-}
-
-.nodeList li::marker {
-  content: none;
+  transition:
+    background-color var(--motion-instant) var(--ease-out),
+    transform var(--motion-instant) var(--ease-out);
 }
 
 .nodeList button::before {
@@ -316,14 +406,21 @@
   font-size: 0.6875rem;
   color: var(--color-ink-faint);
   padding-top: 2px;
+  transition: color var(--motion-instant) var(--ease-out);
 }
 
 .nodeList button:hover {
   background: var(--color-accent-wash);
+  transform: translateX(2px);
 }
 
 .nodeList button.selected {
   background: var(--color-accent-wash);
+}
+
+.nodeList button.selected::before {
+  color: var(--color-accent-strong);
+  font-weight: 700;
 }
 
 .nodeList button.selected .nodeLabel {

@@ -3,10 +3,25 @@
   flex-direction: column;
   align-items: flex-start;
   gap: var(--space-2);
-  padding: var(--space-5);
+  padding: var(--space-5) var(--space-6);
   background: var(--color-surface);
   border: 1px solid var(--color-line);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+  animation: state-in var(--motion-rise) var(--ease-out) both;
+}
+
+@keyframes state-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    /* `none`, not translateY(0): a retained transform would re-anchor
+       any fixed-position descendant to this box. */
+    transform: none;
+  }
 }
 
 .error {
@@ -16,31 +31,41 @@
 
 .title {
   margin: 0;
-  font-weight: 650;
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .text {
   margin: 0;
   color: var(--color-ink-soft);
   font-size: 0.875rem;
+  line-height: 1.6;
 }
 
 .retry {
   margin-top: var(--space-2);
-  padding: var(--space-1) var(--space-3);
-  background: var(--color-surface-raised);
-  color: var(--color-ink);
-  border: 1px solid var(--color-line-strong);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-accent-strong);
+  color: var(--color-accent-ink);
+  border: none;
   border-radius: var(--radius-sm);
+  font-weight: 650;
+  font-size: 0.875rem;
+  transition:
+    box-shadow var(--motion-quick) var(--ease-out),
+    transform var(--motion-quick) var(--ease-out);
 }
 
 .retry:hover {
-  border-color: var(--color-accent);
+  box-shadow: var(--shadow-lift);
+  transform: translateY(-1px);
 }
 
 .spinner {
-  width: 1rem;
-  height: 1rem;
+  width: 1.25rem;
+  height: 1.25rem;
   border-radius: 50%;
   border: 2px solid var(--color-line-strong);
   border-top-color: var(--color-accent);
