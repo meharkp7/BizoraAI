@@ -38,8 +38,15 @@ function buildArrayScene(sc: Scene, root: Block, arr: Block, kids: Block[]) {
   if (rows < c.rows || cols < c.cols) sc.notes.push(`Showing ${rows}x${cols} of ${c.rows}x${c.cols} cells.`);
   const gap = 2, AW = cols * cw + (cols - 1) * gap, AD = rows * cd + (rows - 1) * gap;
   const per = kids.filter((k) => k !== arr && k.kind !== 'cell');
-  const posOf = (k: Block): 'left' | 'right' | 'top' | 'bottom' => (typeof k.pos === 'string' && ['left', 'right', 'top', 'bottom'].includes(k.pos) ? (k.pos as 'left') : 'bottom');
-  const thick = (k: Block, axis: 'w' | 'd') => (k.dims?.[axis] ? k.dims[axis]! * f : 13);
+  // Stated sides win; members spread along the array's long side when
+  // the short end cannot hold them, else the bottom default.
+  const posOf = (k: Block): 'left' | 'right' | 'top' | 'bottom' => {
+    if (typeof k.pos === 'string' && ['left', 'right', 'top', 'bottom'].includes(k.pos)) return (k.pos as 'left');
+    return (k.children?.length ?? 0) > 0 && AD > AW ? 'left' : 'bottom';
+  };
+  // Members dress on top of the strip, so a strip with children
+  // reserves a cell per member instead of the flat default.
+  const thick = (k: Block, axis: 'w' | 'd') => { const base = k.dims?.[axis] ? k.dims[axis]! * f : 13, kids = k.children?.length ?? 0; return kids ? Math.max(base, Math.ceil(Math.sqrt(kids)) * 11) : base; };
   const side = { left: 0, right: 0, top: 0, bottom: 0 } as Record<string, number>;
   per.forEach((k) => { const p = posOf(k); side[p] = Math.max(side[p], p === 'left' || p === 'right' ? thick(k, 'w') : thick(k, 'd')); });
   const M = 8, G = 3;

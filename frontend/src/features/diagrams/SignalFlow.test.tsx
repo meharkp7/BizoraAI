@@ -25,6 +25,35 @@ describe("SignalFlow", () => {
     vi.useRealTimers();
   });
 
+  it("renders the schematic at its drawn size, never shrunk to fit", () => {
+    render(<SignalFlow circuit={circuit()} svg={svg()} netLabels={netLabels()} onSelect={() => {}} />);
+    // A wide auto-layout shrunk to the frame would be unreadable: the
+    // frame scrolls at natural size instead (see canvasNatural).
+    const stage = screen.getByRole("group", { name: "Schematic diagram" });
+    expect(stage.className).toMatch(/canvasNatural/);
+    expect(stage.className).toMatch(/canvas/);
+  });
+
+  it("scrolls the active step into view without yanking the page", async () => {
+    const user = userEvent.setup();
+    const scroll = vi.fn();
+    const proto = Element.prototype as unknown as Record<string, unknown>;
+    const previous = proto.scrollIntoView;
+    proto.scrollIntoView = scroll;
+    try {
+      render(<SignalFlow circuit={circuit()} svg={svg()} netLabels={netLabels()} onSelect={() => {}} />);
+      expect(scroll).toHaveBeenCalledTimes(1);
+      await user.click(screen.getByRole("button", { name: "Next" }));
+      expect(scroll).toHaveBeenCalledTimes(2);
+      expect(scroll).toHaveBeenLastCalledWith(
+        expect.objectContaining({ block: "nearest", inline: "center" }),
+      );
+    } finally {
+      if (previous === undefined) delete proto.scrollIntoView;
+      else proto.scrollIntoView = previous;
+    }
+  });
+
   it("opens the first step on mount and rings its group", () => {
     const onSelect = vi.fn();
     render(<SignalFlow circuit={circuit()} svg={svg()} netLabels={netLabels()} onSelect={onSelect} />);

@@ -29,6 +29,12 @@ export const graphKeys = {
     ["graph", projectId, graphId, "revisions", version, "render-specs"] as const,
   figures: (projectId: string, graphId: string) =>
     ["graph", projectId, graphId, "figures"] as const,
+  figureSegments: (
+    projectId: string,
+    graphId: string,
+    figureId: string,
+    prompts: readonly string[],
+  ) => ["graph", projectId, graphId, "figures", figureId, "segments", prompts] as const,
   reportedMetrics: (projectId: string, graphId: string) =>
     ["graph", projectId, graphId, "reported-metrics"] as const,
   replicationPlan: (projectId: string, graphId: string) =>
@@ -553,6 +559,47 @@ export function usePlanNarration(projectId: string, graphId: string, enabled: bo
     enabled,
     retry: false,
     staleTime: Infinity,
+  });
+}
+
+/** Cached outlines for one figure (never runs inference). */
+export function useFigureSegments(
+  projectId: string,
+  graphId: string,
+  figureId: string | null,
+  prompts: readonly string[],
+) {
+  return useQuery({
+    queryKey: graphKeys.figureSegments(
+      projectId,
+      graphId,
+      figureId ?? "",
+      prompts,
+    ),
+    queryFn: () => api.getFigureSegments(projectId, graphId, figureId ?? "", [...prompts]),
+    enabled: figureId !== null && prompts.length > 0,
+    // Segments are optional enrichment: absence keeps procedural models.
+    retry: false,
+    staleTime: 300_000,
+  });
+}
+
+/** Outline named components in one figure (runs SAM, then caches). */
+export function useSegmentFigure(
+  projectId: string,
+  graphId: string,
+  figureId: string,
+) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (prompts: string[]) =>
+      api.segmentFigure(projectId, graphId, figureId, prompts),
+    onSuccess: (data, prompts) => {
+      queryClient.setQueryData(
+        graphKeys.figureSegments(projectId, graphId, figureId, prompts),
+        data,
+      );
+    },
   });
 }
 

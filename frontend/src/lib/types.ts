@@ -542,6 +542,25 @@ export interface FigureIngestResponse {
   skipped: number;
 }
 
+/** One segmented component outline. Bbox and polygon are normalized
+ *  to the figure image (x right, y down, 0..1). */
+export interface FigureSegment {
+  segment_id: string;
+  label: string;
+  bbox: [number, number, number, number];
+  polygon: [number, number][];
+  score: number | null;
+}
+
+/** Segmentation outcome: outlines plus honest availability. */
+export interface FigureSegmentList {
+  available: boolean;
+  reason: string | null;
+  cached: boolean;
+  elapsed_ms: number | null;
+  segments: FigureSegment[];
+}
+
 /** One number quoted from the paper; mirrors backend PaperReportedMetric JSON. */
 export interface PaperReportedMetric {
   name: string;
@@ -838,6 +857,12 @@ export interface CopilotResponse {
   reply: string;
   cards: CopilotCard[];
   proposal: CopilotProposal | null;
+}
+
+export interface VoiceTranscription {
+  transcript: string;
+  audio_duration_ms: number | null;
+  session_id: string | null;
 }
 
 export interface CopilotThreadSummary {

@@ -9,14 +9,18 @@ import { useTheme } from "../../lib/store.ts";
 import type {
   CircuitIRJson,
   DiagramBlock,
+  FigureSegment,
   StructureIRJson,
 } from "../../lib/types.ts";
+import { useFigureSegments, useSegmentFigure } from "../../app/queries.ts";
 import { renderStructureDiagram } from "./adapters.ts";
 import { CircuitPicker } from "./CircuitPicker.tsx";
 import { circuitToStructure } from "./circuitToStructure.ts";
 import { buildCircuitWires, wireHoverThreshold } from "./circuitWires.ts";
 import { buildComponentModel, modelKindForBlock } from "./componentModels.ts";
 import { buildPartIdentity, shortTagLabel } from "./partIdentity.ts";
+import { nestedFootprintScales, nestedGrid, nestedLabel, nestedTagLift } from "./nestedLayout.ts";
+import { buildSegmentModel, matchSegmentToBlock } from "./segmentModels.ts";
 import { DiagramFallback } from "./DiagramFallback.tsx";
 import styles from "./DiagramView.module.css";
 import canvasStyles from "./StructureCanvas.module.css";
@@ -37,6 +41,9 @@ import type { DiagramSelection } from "./selection.ts";
 import { findBlock, sceneIdToBlockId, structureSelection } from "./selection.ts";
 
 const CLICK_DRIFT_PX = 6;
+
+/** Stable empty segments: the canvas effect rebuilds on identity change. */
+const NO_SEGMENTS: readonly FigureSegment[] = [];
 
 function themeBackground(): string {
   const value = getComputedStyle(document.documentElement)
@@ -106,6 +113,36 @@ export function StructureDiagramView({
   const [scene, setScene] = useState<StructureScene | null>(null);
   const effective = scene ?? (circuitScene ? "circuit" : "full");
   const [spotId, setSpotId] = useState<string | null>(null);
+  const [showTraced, setShowTraced] = useState(true);
+  // Trace prompts name the visible parts (scene-independent, so the
+  // hooks below stay above the early returns); matching by label
+  // applies outlines to whichever scene is active.
+  const tracePrompts = useMemo(() => {
+    if (structure === null) return [];
+    const labels = new Set<string>();
+    for (const block of walkBlocks(structure.root).slice(1)) {
+      if (block.kind === "chip" || block.kind === "array") continue;
+      // Concept prompts name the part family ("nmos N1"): bare
+      // instance names ("N1") segment nothing.
+      const family = block.part && block.part !== "block" ? `${block.part} ` : "";
+      labels.add(`${family}${block.label}`);
+    }
+    for (const circuit of circuits) {
+      for (const component of circuit.components) {
+        const family =
+          component.type && component.type !== "block" ? `${component.type} ` : "";
+        labels.add(`${family}${component.label}`);
+      }
+    }
+    return [...labels].slice(0, 12);
+  }, [structure, circuits]);
+  const tracedOutlines = useFigureSegments(
+    projectId,
+    graphId,
+    sourceFigureId,
+    tracePrompts,
+  );
+  const traceMutation = useSegmentFigure(projectId, graphId, sourceFigureId ?? "");
 
   if (structure === null) {
     return (
@@ -145,6 +182,13 @@ export function StructureDiagramView({
       : null;
   const showingCircuit = effective === "circuit" && circuitScene !== null;
   const showingDetail = effective === "detail" && detail !== null;
+  // Methodology-derived system blocks are pipeline stages, gauges and
+  // stores — not devices — so they get the step caption and the shape
+  // legend instead of the transistor/passive/power families.
+  const showingDerivedCircuit =
+    showingCircuit &&
+    (circuitScene?.circuit.source.figure_id.startsWith("derived-") ?? false);
+  const showFamilyLegend = (showingCircuit && !showingDerivedCircuit) || showingDetail;
   const activeScene = showingCircuit && circuitScene ? circuitScene.scene : showingDetail && detail ? detail : built.scene;
   const activeRoot =
     showingCircuit && circuitScene
@@ -153,6 +197,13 @@ export function StructureDiagramView({
         ? detailCell
         : structure.root;
   const counts = countProvenance(walkBlocks(activeRoot));
+  const cachedSegments = tracedOutlines.data?.segments ?? NO_SEGMENTS;
+  // Traced outlines stay on once they arrive; the toggle below lets the
+  // viewer flip back to procedural models for comparison.
+  const segments = showTraced ? cachedSegments : NO_SEGMENTS;
+  const tracedCount = walkBlocks(activeRoot).filter(
+    (block) => matchSegmentToBlock(block, segments) !== null,
+  ).length;
   const title = showingCircuit && circuitScene ? circuitScene.circuit.title : structure.title;
   return (
     <div className={styles.view}>
@@ -218,10 +269,58 @@ export function StructureDiagramView({
           }}
         />
       ) : null}
+      {sourceFigureId !== null && tracePrompts.length > 0 ? (
+        <div className={styles.picker} role="group" aria-label="Figure tracing">
+          {cachedSegments.length === 0 ? (
+            <button
+              type="button"
+              disabled={
+                traceMutation.isPending || tracedOutlines.data?.available === false
+              }
+              title={
+                tracedOutlines.data?.available === false
+                  ? (tracedOutlines.data.reason ?? "Segmentation unavailable.")
+                  : "Outline these parts from the source figure (SAM 3.1)"
+              }
+              onClick={() => traceMutation.mutate(tracePrompts)}
+            >
+              {traceMutation.isPending ? "Tracing…" : "Trace true shapes"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              aria-pressed={showTraced}
+              title={
+                showTraced
+                  ? "Outlines from the source figure are on; flip to procedural models"
+                  : "Procedural models are on; flip to the traced outlines"
+              }
+              onClick={() => setShowTraced((value) => !value)}
+            >
+              {showTraced ? "✓ Traced outlines" : "Show procedural"}
+            </button>
+          )}
+          {tracedCount > 0 ? (
+            <p className={styles.counts} role="status">
+              {tracedCount} {tracedCount === 1 ? "part" : "parts"} traced from the figure.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+      {traceMutation.isError ? (
+        <ul className={styles.warnings} aria-label="Tracing errors">
+          <li>
+            {traceMutation.error instanceof Error
+              ? traceMutation.error.message
+              : "Tracing failed."}
+          </li>
+        </ul>
+      ) : null}
       <StructureCanvas
         scene={activeScene}
         root={activeRoot}
         circuit={showingCircuit && circuitScene ? circuitScene.circuit : null}
+        segments={segments}
         spotId={spotId}
         onSelect={onSelect}
         onSpot={setSpotId}
@@ -251,7 +350,7 @@ export function StructureDiagramView({
           ))}
         </ul>
       ) : null}
-      {showingCircuit || showingDetail ? (
+      {showFamilyLegend ? (
         <ul className={styles.layerLegend} aria-label="Part family legend">
           <li><span className={styles.swatch} data-shape="transistor" />Transistor</li>
           <li><span className={styles.swatch} data-shape="passive" />Passive</li>
@@ -261,17 +360,23 @@ export function StructureDiagramView({
         </ul>
       ) : (
         <ul className={styles.layerLegend} aria-label="Part shape legend">
+          <li><span className={styles.swatch} data-shape="logic" />Process stage</li>
+          <li><span className={styles.swatch} data-shape="decision" />Decision / evaluation</li>
           <li><span className={styles.swatch} data-shape="store" />Store / dataset</li>
           <li><span className={styles.swatch} data-shape="module" />Module</li>
-          <li><span className={styles.swatch} data-shape="decision" />Decision</li>
           <li><span className={styles.swatch} data-shape="io" />Input / output</li>
           <li><span className={styles.swatch} data-shape="part" />Part</li>
         </ul>
       )}
       <p className={styles.counts}>
-        Each part builds as its typed device from the paper&apos;s own IR —
-        transistors, passives, converters, stores — click any part for its
-        evidence. Unrecognized parts keep a labeled plate. Arrangement, not dimensions.
+        {showFamilyLegend
+          ? "Each part builds as its typed device from the paper's own IR — transistors, passives, converters, stores — click any part for its evidence. Unrecognized parts keep a labeled plate. Arrangement, not dimensions."
+          : showingDerivedCircuit
+            ? "Each step builds as its typed shape from the paper's own methodology — pipeline stages, evaluation gauges, stores, ports — click any part for its evidence. Unrecognized steps keep a labeled plate. Arrangement, not dimensions."
+            : "Each block builds from the paper's own structure — arrays, modules, and weight matrices sized by their stated dims — click any block for its evidence. Floating tags name nested blocks. Arrangement, not dimensions."}
+        {tracedCount > 0
+          ? ` ${tracedCount} ${tracedCount === 1 ? "part is" : "parts are"} traced from the source figure's own outlines.`
+          : ""}
       </p>
     </div>
   );
@@ -285,7 +390,41 @@ export function StructureDiagramView({
  *  picking, hover, spotlight and disposal keep working unchanged;
  *  nested children (module members the engine never draws) lay out
  *  in a grid on top. */
-function dressPartMeshes(group: THREE.Group, root: DiagramBlock): void {
+/** Dress one block: a traced figure outline when SAM matched it,
+ *  else its typed procedural model, else the honest labeled plate. */
+function dressBlockModel(
+  block: DiagramBlock,
+  width: number,
+  height: number,
+  depth: number,
+  segments: readonly FigureSegment[],
+): THREE.Group {
+  const segment = matchSegmentToBlock(block, segments);
+  const traced = segment ? buildSegmentModel(segment.polygon, block.part) : null;
+  const kind = traced ? null : modelKindForBlock(block);
+  const model = traced ?? (kind
+    ? buildComponentModel(kind)
+    : buildPartIdentity(block, width / Math.max(depth, 1e-6)));
+  // Unit footprint (1x1, height 0.5) scaled onto the engine box.
+  model.scale.set(width, height / 0.5, depth);
+  return model;
+}
+
+function dressPartMeshes(
+  group: THREE.Group,
+  root: DiagramBlock,
+  segments: readonly FigureSegment[],
+  tags: NestedTag[],
+): void {
+  // Blocks the engine already drew as top-level boxes (arrays, side
+  // strips): nested layout must not lay them again as members, or
+  // the scene shows every container twice — once placed, once nested.
+  const drawn = new Set<string>();
+  for (const child of group.children) {
+    if (!(child instanceof THREE.Mesh)) continue;
+    const rawId = (child.userData as { id?: unknown }).id;
+    if (typeof rawId === "string") drawn.add(sceneIdToBlockId(rawId));
+  }
   for (const child of [...group.children]) {
     if (!(child instanceof THREE.Mesh)) continue;
     const rawId = (child.userData as { id?: unknown }).id;
@@ -305,14 +444,9 @@ function dressPartMeshes(group: THREE.Group, root: DiagramBlock): void {
       child.position.z,
     );
     wrapper.userData = { ...child.userData };
-    const kind = modelKindForBlock(block);
-    const model = kind
-      ? buildComponentModel(kind)
-      : buildPartIdentity(block, params.width / Math.max(params.depth, 1e-6));
-    // Unit footprint (1x1, height 0.5) scaled onto the engine box.
-    model.scale.set(params.width, params.height / 0.5, params.depth);
+    const model = dressBlockModel(block, params.width, params.height, params.depth, segments);
     wrapper.add(model);
-    layoutNestedParts(wrapper, block, params.width, params.height, params.depth);
+    layoutNestedParts(wrapper, block, params.width, params.height, params.depth, segments, tags, drawn);
     group.add(wrapper);
     group.remove(child);
     child.geometry.dispose();
@@ -331,6 +465,17 @@ function dressPartMeshes(group: THREE.Group, root: DiagramBlock): void {
   }
 }
 
+/** One nested part awaiting its floating tag: the wrapper it rides
+ *  on (so explode carries the tag with the part), the full tag text,
+ *  the model's top in wrapper units, and the sibling slot that
+ *  staggers dense tags across heights. */
+interface NestedTag {
+  wrapper: THREE.Group;
+  full: string;
+  top: number;
+  slot: number;
+}
+
 /** Lay a block's children in a grid on top of its dressed box. The
  *  engine draws only top-level boxes, so module members (and any other
  *  nesting) would otherwise stay invisible; this arrangement is
@@ -338,24 +483,34 @@ function dressPartMeshes(group: THREE.Group, root: DiagramBlock): void {
  *  labeled fallback stay just as honest as top-level parts. Each
  *  child gets its own unscaled wrapper with its block id/label, so
  *  picking, hover and spotlight treat nested parts exactly like
- *  top-level ones. */
+ *  top-level ones. Siblings stating tensor dims size their footprints
+ *  from them (a 14336-wide matrix reads larger than a 1024-wide one);
+ *  every nested child reports a tag so the scene names it in 3D.
+ *  Members the engine already drew as top-level boxes are skipped —
+ *  they own their own wrapper, tags, and evidence already. */
 function layoutNestedParts(
   parent: THREE.Group,
   block: DiagramBlock,
   w: number,
   h: number,
   d: number,
+  segments: readonly FigureSegment[],
+  tags: NestedTag[],
+  drawn: ReadonlySet<string>,
 ): void {
-  const kids = block.children;
+  const kids = block.children.filter((kid) => !drawn.has(kid.id));
   if (kids.length === 0) return;
-  const cols = Math.ceil(Math.sqrt(kids.length));
-  const rows = Math.ceil(kids.length / cols);
+  const { cols, rows } = nestedGrid(kids.length, w, d);
   const cellW = w / cols;
   const cellD = d / rows;
   const childH = Math.min(h * 0.9, Math.max(cellW, cellD) * 0.55);
+  const scales = nestedFootprintScales(kids.map((kid) => kid.dims));
   kids.forEach((kid, index) => {
     const col = index % cols;
     const row = Math.floor(index / cols);
+    const scale = scales[index] ?? 1;
+    const footW = cellW * 0.9 * scale;
+    const footD = cellD * 0.9 * scale;
     const wrapper = new THREE.Group();
     wrapper.position.set(
       -w / 2 + cellW * (col + 0.5),
@@ -363,14 +518,11 @@ function layoutNestedParts(
       -d / 2 + cellD * (row + 0.5),
     );
     wrapper.userData = { id: kid.id, label: kid.label };
-    const kind = modelKindForBlock(kid);
-    const model = kind
-      ? buildComponentModel(kind)
-      : buildPartIdentity(kid, cellW / Math.max(cellD, 1e-6));
-    model.scale.set(cellW * 0.9, childH / 0.5, cellD * 0.9);
+    const model = dressBlockModel(kid, footW, childH, footD, segments);
     wrapper.add(model);
     parent.add(wrapper);
-    layoutNestedParts(wrapper, kid, cellW * 0.9, childH, cellD * 0.9);
+    tags.push({ wrapper, full: nestedLabel(kid.label, kid.dims), top: childH, slot: index % 3 });
+    layoutNestedParts(wrapper, kid, footW, childH, footD, segments, tags, drawn);
   });
 }
 
@@ -430,6 +582,7 @@ function StructureCanvas({
   scene,
   root,
   circuit,
+  segments,
   spotId,
   onSelect,
   onSpot,
@@ -437,6 +590,7 @@ function StructureCanvas({
   scene: Scene;
   root: DiagramBlock;
   circuit: CircuitIRJson | null;
+  segments: readonly FigureSegment[];
   spotId: string | null;
   onSelect: (selection: DiagramSelection) => void;
   onSpot: (blockId: string | null) => void;
@@ -471,7 +625,8 @@ function StructureCanvas({
       scene3.background = background;
 
       const group = sceneToThree(scene);
-      dressPartMeshes(group, root);
+      const nestedTags: NestedTag[] = [];
+      dressPartMeshes(group, root, segments, nestedTags);
       dressChipPlate(group, root);
       if (circuit) {
         // Wire anchor: the top-center of each dressed part, so the
@@ -558,6 +713,22 @@ function StructureCanvas({
         markers.push(marker);
         onDispose.push(() => {
           scene3.remove(marker);
+        });
+      }
+      // Nested module members get the same tags, riding their own
+      // wrapper just above the model: they state name and dims
+      // ("Up · 14336×4096"), and explode carries them with the part,
+      // so they stay out of the snapshot's marker list.
+      for (const nested of nestedTags) {
+        const tag = document.createElement("div");
+        tag.className = canvasStyles.tagInner;
+        tag.textContent = shortTagLabel(nested.full);
+        tag.dataset.full = nested.full;
+        const marker = new CSS2DObject(tag);
+        marker.position.set(0, nested.top + nestedTagLift(nested.slot), 0);
+        nested.wrapper.add(marker);
+        onDispose.push(() => {
+          nested.wrapper.remove(marker);
         });
       }
       snapshotRef.current = snapshotExplode(
@@ -718,8 +889,8 @@ function StructureCanvas({
     // The scene, root, circuit, and handlers are stable per IR (the
     // select handler is memoized at the workspace, the spot handler is
     // a setState), so parent re-renders never rebuild the canvas; a
-    // refetched IR rebuilds it once.
-  }, [scene, root, circuit, onSelect, onSpot, failed]);
+    // refetched IR — or newly traced outlines — rebuilds it once.
+  }, [scene, root, circuit, segments, onSelect, onSpot, failed]);
 
   // The slider only rewrites three.js transforms from the snapshot —
   // no state, no rebuild, so it glides at input speed.
@@ -824,7 +995,10 @@ function StructureCanvas({
       for (const el of host.querySelectorAll(`.${canvasStyles.tagInner}`)) {
         const tag = el as HTMLDivElement;
         const full = tag.dataset.full ?? tag.textContent ?? "";
-        const open = spotLabel !== null && full === spotLabel;
+        // Nested tags carry dims ("Up · 14336×4096"); they still open
+        // for their own block.
+        const open =
+          spotLabel !== null && (full === spotLabel || full.startsWith(`${spotLabel} · `));
         tag.textContent = open ? full : shortTagLabel(full);
         tag.classList.toggle(canvasStyles.tagOpen, open);
       }

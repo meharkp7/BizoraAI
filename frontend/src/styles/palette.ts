@@ -7,6 +7,8 @@
 
 export const PART_TINTS: Readonly<Record<string, number>> = {
   decision: 0x9a6234,
+  evaluation: 0x9a6234,
+  process: 0x5f7052,
   input: 0x3f5a66,
   output: 0x3f5a66,
   nmos: 0x4a6a8a,

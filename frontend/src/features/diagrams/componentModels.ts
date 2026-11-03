@@ -15,6 +15,7 @@
  * highlight state across parts. */
 
 import * as THREE from "three";
+import { isWeightMatrix } from "./nestedLayout.ts";
 
 export type ComponentModelKind =
   | "nmos"
@@ -41,7 +42,9 @@ export type ComponentModelKind =
   | "inputPort"
   | "outputPort"
   | "decision"
-  | "moduleSlab";
+  | "moduleSlab"
+  | "pipeline"
+  | "evalGauge";
 
 /** Map an IR component type (or methodology kind) to a model kind, or
  *  null to keep the fallback. Exact, case-folded match only. */
@@ -106,6 +109,11 @@ export function modelKindForType(type: string | null | undefined): ComponentMode
       return "outputPort";
     case "decision":
       return "decision";
+    case "process":
+      return "pipeline";
+    case "evaluation":
+    case "eval":
+      return "evalGauge";
     default:
       return null;
   }
@@ -154,19 +162,26 @@ function modelKindForLabelWords(words: Set<string>): ComponentModelKind | null {
 }
 
 /** Map a structure block to a model kind: the typed `part` field
- *  first, then the block kind (layers/modules), else — only when the
- *  part is untyped — whole-word device words in the paper's own
- *  label. A typed non-device part ("block", "process", ...) is
- *  respected: a methodology step that merely mentions NMOS keeps the
- *  honest labeled fallback instead of dressing as a transistor.
- *  Null keeps the honest labeled fallback. */
+ *  first, then a leaf weight matrix (childless module with stated
+ *  tensor dims — Q/K/V projections read as weight stacks), then the
+ *  block kind (layers/modules), else — only when the part is
+ *  untyped — whole-word device words in the paper's own label. A
+ *  typed non-device part ("block", "process", ...) is respected: a
+ *  methodology step that merely mentions NMOS keeps the honest
+ *  labeled fallback instead of dressing as a transistor. Null keeps
+ *  the honest labeled fallback. */
 export function modelKindForBlock(block: {
   kind: string;
   part: string | null;
   label: string;
+  dims?: { w: number | null; h: number | null; d: number | null; unit: string | null } | null;
+  children?: ReadonlyArray<unknown>;
 }): ComponentModelKind | null {
   const typed = modelKindForType(block.part);
   if (typed) return typed;
+  if (isWeightMatrix(block.kind, block.dims ?? null, block.children?.length ?? 0)) {
+    return "layerStack";
+  }
   const kinded = modelKindForKind(block.kind);
   if (kinded) return kinded;
   if (block.part !== null && block.part !== "") return null;
@@ -536,6 +551,46 @@ function buildDecision(palette: LayerPalette): THREE.Group {
   return group;
 }
 
+/** Pipeline stage: three chevrons streaming along a track —
+ *  a compute step in a flow, not a container. */
+function buildPipeline(palette: LayerPalette): THREE.Group {
+  const group = new THREE.Group();
+  group.add(box(palette.dark, 0.96, 0.05, 0.96, 0, 0.025, 0));
+  const mats = [palette.slabA, palette.slabB, palette.poly];
+  for (let i = 0; i < 3; i++) {
+    const z = -0.3 + i * 0.3;
+    for (const side of [-1, 1]) {
+      const bar = box(mats[i], 0.14, 0.32, 0.34, side * 0.19, 0.24, z);
+      bar.rotation.y = side * (Math.PI / 5.2);
+      group.add(bar);
+    }
+  }
+  return group;
+}
+
+/** Evaluation: half-dial gauge with a needle on a base plate —
+ *  a measurement/benchmark step. The arc spans the upper half only,
+ *  so the dial sits on the plate inside the unit footprint. */
+function buildEvalGauge(palette: LayerPalette): THREE.Group {
+  const group = new THREE.Group();
+  group.add(box(palette.sub, 0.9, 0.06, 0.9, 0, 0.03, 0));
+  const hubY = 0.14;
+  const arc = new THREE.Mesh(
+    new THREE.TorusGeometry(0.22, 0.04, 10, 32, Math.PI),
+    palette.steel,
+  );
+  arc.position.set(0, hubY, 0);
+  group.add(arc);
+  const needle = box(palette.poly, 0.04, 0.22, 0.04, 0.05, hubY + 0.09, 0);
+  needle.rotation.z = -Math.PI / 7;
+  group.add(needle);
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.08, 12), palette.dark);
+  hub.rotation.x = Math.PI / 2;
+  hub.position.set(0, hubY, 0.01);
+  group.add(hub);
+  return group;
+}
+
 /** Module slab: graphite containment block with crisp edges. */
 function buildModuleSlab(palette: LayerPalette): THREE.Group {
   const group = new THREE.Group();
@@ -578,6 +633,8 @@ const BUILDERS: Record<ComponentModelKind, (palette: LayerPalette) => THREE.Grou
   outputPort: (palette) => buildPort(palette, true),
   decision: buildDecision,
   moduleSlab: buildModuleSlab,
+  pipeline: buildPipeline,
+  evalGauge: buildEvalGauge,
 };
 
 /** Build the true structure for a kind (fresh materials each call). */

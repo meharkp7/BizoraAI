@@ -108,6 +108,26 @@ describe("StructureDiagramView", () => {
     expect(screen.queryByRole("group", { name: "Structure scene" })).toBeNull();
   });
 
+  it("describes the full structure as blocks, not devices", () => {
+    render(
+      <StructureDiagramView
+        structure={structure()}
+        circuits={[]}
+        sourceFigureId={null}
+        warnings={[]}
+        projectId="project-1"
+        graphId="graph-1"
+        nodeLabels={nodeLabels}
+        onSelect={() => {}}
+      />,
+      { wrapper },
+    );
+    expect(
+      screen.getByText(/Each block builds from the paper's own structure/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "Part shape legend" })).toBeInTheDocument();
+  });
+
   it("falls back to the paper figure when no structure was extracted", async () => {
     render(
       <StructureDiagramView
@@ -204,6 +224,38 @@ describe("StructureDiagramView", () => {
     const picker = within(screen.getByRole("tablist", { name: "Circuits" }));
     fireEvent.click(picker.getByRole("tab", { name: "Second cell" }));
     expect(screen.getByRole("heading", { name: "Second cell" })).toBeInTheDocument();
+  });
+
+  it("describes a methodology-derived circuit as steps, not devices", () => {
+    const derived = {
+      ...diagramsFixture.circuits[0],
+      title: "Toy pipeline (system blocks)",
+      source: { figure_id: "derived-paper-x", page: 1 },
+      components: diagramsFixture.circuits[0].components.map((component, index) => ({
+        ...component,
+        type: index === 0 ? "process" : "evaluation",
+      })),
+    };
+    render(
+      <StructureDiagramView
+        structure={structure()}
+        circuits={[derived]}
+        sourceFigureId={null}
+        warnings={[]}
+        projectId="project-1"
+        graphId="graph-1"
+        nodeLabels={nodeLabels}
+        onSelect={() => {}}
+      />,
+      { wrapper },
+    );
+    expect(
+      screen.getByText(/Each step builds as its typed shape/),
+    ).toBeInTheDocument();
+    const legend = within(screen.getByRole("list", { name: "Part shape legend" }));
+    expect(legend.getByText("Process stage")).toBeInTheDocument();
+    expect(legend.getByText("Decision / evaluation")).toBeInTheDocument();
+    expect(screen.queryByRole("list", { name: "Part family legend" })).toBeNull();
   });
 
   it("hides the circuit scene when the circuit is too thin", () => {

@@ -35,6 +35,8 @@ const ALL_KINDS: ComponentModelKind[] = [
   "outputPort",
   "decision",
   "moduleSlab",
+  "pipeline",
+  "evalGauge",
 ];
 
 describe("modelKindForType", () => {
@@ -69,11 +71,14 @@ describe("modelKindForType", () => {
     ["input", "inputPort"],
     ["output", "outputPort"],
     ["decision", "decision"],
+    ["process", "pipeline"],
+    ["evaluation", "evalGauge"],
+    ["eval", "evalGauge"],
   ] as Array<[string, ComponentModelKind]>)("maps typed %s to %s", (type, kind) => {
     expect(modelKindForType(type)).toBe(kind);
   });
 
-  it.each([["block"], ["process"], ["evaluation"], ["transistor"], ["mystery"], [null], [""]])(
+  it.each([["block"], ["transistor"], ["mystery"], [null], [""]])(
     "leaves %s to the fallback",
     (type) => {
       expect(modelKindForType(type)).toBeNull();
@@ -121,8 +126,44 @@ describe("modelKindForBlock", () => {
     );
   });
 
+  it("builds leaf weight matrices as weight stacks", () => {
+    const dims = { w: 4096, h: 4096, d: null, unit: null };
+    expect(
+      modelKindForBlock({ kind: "module", part: null, label: "Q", dims, children: [] }),
+    ).toBe("layerStack");
+    // Containers, physical dims, and small shapes stay slabs.
+    expect(
+      modelKindForBlock({
+        kind: "module",
+        part: null,
+        label: "transformer block",
+        dims,
+        children: [{ id: "q" }],
+      }),
+    ).toBe("moduleSlab");
+    expect(
+      modelKindForBlock({
+        kind: "module",
+        part: null,
+        label: "sense amp",
+        dims: { w: 10, h: 5, d: null, unit: "um" },
+        children: [],
+      }),
+    ).toBe("moduleSlab");
+    expect(
+      modelKindForBlock({
+        kind: "module",
+        part: null,
+        label: "keeper",
+        dims: { w: 4, h: 3, d: null, unit: null },
+        children: [],
+      }),
+    ).toBe("moduleSlab");
+  });
+
   it("respects a typed non-device part over label words", () => {
-    // Methodology steps that merely mention a device stay honest boxes.
+    // Methodology steps that merely mention a device never borrow it:
+    // untyped blocks stay honest boxes; typed steps get step shapes.
     expect(
       modelKindForBlock({
         kind: "part",
@@ -132,7 +173,7 @@ describe("modelKindForBlock", () => {
     ).toBeNull();
     expect(
       modelKindForBlock({ kind: "part", part: "process", label: "coupling capacitor sizing" }),
-    ).toBeNull();
+    ).toBe("pipeline");
   });
 
   it("never matches substrings or bare transistor", () => {

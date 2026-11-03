@@ -174,11 +174,21 @@ export function SignalFlow({
   }, [playing, steps]);
 
   // Highlight ring follows the active group across re-renders.
+  // The frame scrolls at natural size, so the active group is also
+  // scrolled into view; nearest-block never yanks the page.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     for (const group of canvas.querySelectorAll("[data-id]")) {
-      group.classList.toggle("flow-active", group.getAttribute("data-id") === activeId);
+      const active = group.getAttribute("data-id") === activeId;
+      group.classList.toggle("flow-active", active);
+      if (active && typeof group.scrollIntoView === "function") {
+        group.scrollIntoView({
+          block: "nearest",
+          inline: "center",
+          behavior: prefersReducedMotion() ? "auto" : "smooth",
+        });
+      }
     }
   }, [activeId, svg]);
 
@@ -348,7 +358,7 @@ export function SignalFlow({
       </div>
       <div
         ref={canvasRef}
-        className={`${diagramStyles.canvas} ${styles.stage}`}
+        className={`${diagramStyles.canvas} ${diagramStyles.canvasNatural} ${styles.stage}`}
         role="group"
         aria-label="Schematic diagram"
         onClick={(event) => {

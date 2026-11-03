@@ -37,6 +37,7 @@ import type {
   PaperNote,
   PaperExtractionResponse,
   PaperFigure,
+  FigureSegmentList,
   PaperImportRequest,
   PaperImportResponse,
   ProjectInviteCreateResponse,
@@ -59,6 +60,7 @@ import type {
   TransplantRequest,
   TransplantResponse,
   UsageSummary,
+  VoiceTranscription,
 } from "./types.ts";
 
 export class BizoraApiError extends Error {
@@ -159,6 +161,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
     headers: { "Content-Type": "application/json", ...init?.headers },
   });
+  return parse(response);
+}
+
+/** POST multipart form data: fetch sets the boundary itself, so no
+ *  Content-Type is sent (request() would pin it to JSON). */
+async function requestForm<T>(path: string, form: FormData): Promise<T> {
+  const response = await send(path, { method: "POST", body: form });
   return parse(response);
 }
 
@@ -350,6 +359,30 @@ export const api = {
 
   getGraphFigures(projectId: string, graphId: string): Promise<PaperFigure[]> {
     return request(`/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/figures`);
+  },
+
+  getFigureSegments(
+    projectId: string,
+    graphId: string,
+    figureId: string,
+    prompts: string[],
+  ): Promise<FigureSegmentList> {
+    const query = `?prompts=${encode(prompts.join(","))}`;
+    return request(
+      `/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/figures/${encode(figureId)}/segments${query}`,
+    );
+  },
+
+  segmentFigure(
+    projectId: string,
+    graphId: string,
+    figureId: string,
+    prompts: string[],
+  ): Promise<FigureSegmentList> {
+    return request(
+      `/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/figures/${encode(figureId)}/segments`,
+      { method: "POST", body: JSON.stringify({ prompts }) },
+    );
   },
 
   getGraphReportedMetrics(
@@ -579,6 +612,21 @@ export const api = {
           diagram_elements: diagramElements ?? [],
         }),
       },
+    );
+  },
+
+  transcribeVoice(
+    projectId: string,
+    graphId: string,
+    clip: Blob,
+    languageBias?: string,
+  ): Promise<VoiceTranscription> {
+    const form = new FormData();
+    form.append("file", clip, "utterance.wav");
+    if (languageBias) form.append("language_bias", languageBias);
+    return requestForm(
+      `/api/v1/graphs/${encode(projectId)}/${encode(graphId)}/copilot/transcribe`,
+      form,
     );
   },
 
