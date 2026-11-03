@@ -250,6 +250,18 @@
   font-weight: 600;
 }
 
+.voiceStatus .interruptButton {
+  margin-left: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  font-size: 0.8125rem;
+  font-weight: 650;
+  background: none;
+  color: var(--color-accent-strong);
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
 .threadRow {
   display: flex;
   gap: var(--space-2);

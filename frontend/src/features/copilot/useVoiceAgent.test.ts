@@ -223,6 +223,67 @@ describe("useVoiceAgent", () => {
     expect(result.current.state).toBe("speaking");
   });
 
+  it("ignores its own echo but hears real interruptions", () => {
+    const turns: string[] = [];
+    let interrupted = 0;
+    const { result } = renderHook(() =>
+      useVoiceAgent("en-IN", {
+        onUserTurn: (text) => turns.push(text),
+        onInterrupted: () => {
+          interrupted += 1;
+        },
+      }),
+    );
+    autoEnd = false;
+
+    act(() => result.current.start());
+    act(() => result.current.speak("The bitcell holds one bit."));
+    expect(result.current.state).toBe("speaking");
+
+    // The speaker feeds back into the mic: same words are echo, not a turn.
+    act(() => FakeRecognition.instances[0]?.emitFinal("The bitcell holds one bit."));
+    expect(turns).toEqual([]);
+    expect(interrupted).toBe(0);
+    expect(result.current.state).toBe("speaking");
+
+    // Interim echo never interrupts either, though it still displays.
+    act(() => FakeRecognition.instances[0]?.emitInterim("The bitcell holds"));
+    expect(result.current.interim).toBe("The bitcell holds");
+    expect(interrupted).toBe(0);
+
+    // Different words mid-speech are the user barging in.
+    act(() => FakeRecognition.instances[0]?.emitFinal("stop, what about N2?"));
+    expect(interrupted).toBe(1);
+    expect(turns).toEqual(["stop, what about N2?"]);
+  });
+
+  it("ignores echo tails just after speech ends", () => {
+    vi.useFakeTimers();
+    try {
+      const turns: string[] = [];
+      const { result } = renderHook(() => useVoiceAgent("en-IN", {
+        onUserTurn: (text) => turns.push(text),
+      }));
+
+      act(() => result.current.start());
+      act(() => result.current.speak("The bitcell holds one bit."));
+      expect(result.current.state).toBe("listening");
+
+      // A trailing echo final lands right after speech ends: ignore it.
+      act(() => FakeRecognition.instances[0]?.emitFinal("The bitcell holds one bit."));
+      expect(turns).toEqual([]);
+
+      // Past the tail window the same words are a deliberate repeat.
+      act(() => {
+        vi.advanceTimersByTime(2000);
+      });
+      act(() => FakeRecognition.instances[0]?.emitFinal("The bitcell holds one bit."));
+      expect(turns).toEqual(["The bitcell holds one bit."]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("stops everything on demand", () => {
     const { result, unmount } = renderHook(() =>
       useVoiceAgent("en-IN", { onUserTurn: () => {} }),

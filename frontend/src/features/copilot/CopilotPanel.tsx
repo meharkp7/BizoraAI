@@ -453,6 +453,15 @@ export function CopilotPanel({
         <p className={styles.voiceStatus} aria-live="polite">
           {VOICE_STATUS[agent.state]}
           {agent.interim ? ` “${agent.interim}”` : null}
+          {agent.state === "speaking" ? (
+            <button
+              type="button"
+              className={styles.interruptButton}
+              onClick={() => agent.interrupt()}
+            >
+              Interrupt
+            </button>
+          ) : null}
         </p>
       ) : null}
       {voiceMode && agent.error ? (

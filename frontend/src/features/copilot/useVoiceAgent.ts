@@ -134,7 +134,38 @@ export interface VoiceAgentCallbacks {
  *  voice through speakers can trip speech-start immediately. */
 const BARGE_IN_GRACE_MS = 800;
 
+/** After speech ends, trailing echo finals are still filtered briefly. */
+const ECHO_TAIL_MS = 1200;
+
 const FATAL_ERRORS = new Set(["not-allowed", "service-not-allowed", "network", "audio-capture"]);
+
+function normalizeEchoText(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Whether a final transcript is the speaker feeding back into the mic:
+ * it matches (or is mostly covered by) recently spoken agent text.
+ * Real interruptions use different words, so they pass through.
+ */
+export function isEchoTranscript(transcript: string, spoken: readonly string[]): boolean {
+  const clean = normalizeEchoText(transcript);
+  if (clean === "") return false;
+  const words = clean.split(" ");
+  for (const utterance of spoken) {
+    const said = normalizeEchoText(utterance);
+    if (said === "") continue;
+    if (said.includes(clean) || clean.includes(said)) return true;
+    const saidWords = new Set(said.split(" "));
+    const overlap = words.filter((word) => saidWords.has(word)).length;
+    if (overlap / words.length >= 0.6) return true;
+  }
+  return false;
+}
 
 /**
  * A full-duplex voice conversation loop: the agent listens, the caller
@@ -153,6 +184,8 @@ export function useVoiceAgent(lang: string, callbacks: VoiceAgentCallbacks) {
   const speakQueueRef = useRef<string[]>([]);
   const speakDoneRef = useRef<(() => void) | null>(null);
   const utteranceStartRef = useRef(0);
+  const speechEndRef = useRef(0);
+  const spokenRef = useRef<string[]>([]);
   const runRef = useRef(0);
 
   useEffect(() => {
@@ -163,6 +196,19 @@ export function useVoiceAgent(lang: string, callbacks: VoiceAgentCallbacks) {
     stateRef.current = next;
     setState(next);
   }
+
+  const interrupt = useCallback(() => {
+    if (stateRef.current !== "speaking") return;
+    synthesis()?.synth.cancel();
+    runRef.current += 1;
+    speakQueueRef.current = [];
+    speakDoneRef.current = null;
+    // A barge-in's own transcript must never be echo-filtered.
+    speechEndRef.current = 0;
+    setInterim("");
+    setBoth("listening");
+    callbacksRef.current.onInterrupted?.();
+  }, []);
 
   const listen = useCallback(() => {
     if (!activeRef.current) return;
@@ -185,7 +231,17 @@ export function useVoiceAgent(lang: string, callbacks: VoiceAgentCallbacks) {
         if (result.isFinal) {
           const transcript = result[0].transcript.trim();
           setInterim("");
-          if (transcript !== "") callbacksRef.current.onUserTurn(transcript);
+          if (transcript === "") continue;
+          const speaking = stateRef.current === "speaking";
+          // The speaker feeds back into the mic while talking and just
+          // after: same-words finals are echo, never user turns.
+          const echoWindow =
+            speaking || Date.now() - speechEndRef.current < ECHO_TAIL_MS;
+          if (echoWindow && isEchoTranscript(transcript, spokenRef.current)) continue;
+          // A real final over agent speech is a barge-in even when the
+          // browser never fires speech-start: stop talking first.
+          if (speaking) interrupt();
+          callbacksRef.current.onUserTurn(transcript);
         } else {
           pending += result[0].transcript;
         }
@@ -196,14 +252,7 @@ export function useVoiceAgent(lang: string, callbacks: VoiceAgentCallbacks) {
       // Barge-in: user speech during agent speech takes the turn.
       if (stateRef.current !== "speaking") return;
       if (Date.now() - utteranceStartRef.current < BARGE_IN_GRACE_MS) return;
-      const pair = synthesis();
-      pair?.synth.cancel();
-      runRef.current += 1;
-      speakQueueRef.current = [];
-      speakDoneRef.current = null;
-      setInterim("");
-      setBoth("listening");
-      callbacksRef.current.onInterrupted?.();
+      interrupt();
     };
     recognition.onerror = (event) => {
       if (event.error === "aborted" || event.error === "no-speech") return;
@@ -228,7 +277,7 @@ export function useVoiceAgent(lang: string, callbacks: VoiceAgentCallbacks) {
     } catch {
       recognitionRef.current = null;
     }
-  }, [lang]);
+  }, [lang, interrupt]);
 
   const speakNext = useCallback(() => {
     const pair = synthesis();
@@ -236,12 +285,14 @@ export function useVoiceAgent(lang: string, callbacks: VoiceAgentCallbacks) {
     if (!pair || queue.length === 0) {
       const done = speakDoneRef.current;
       speakDoneRef.current = null;
+      speechEndRef.current = Date.now();
       if (activeRef.current) setBoth("listening");
       done?.();
       return;
     }
     const run = runRef.current;
     const text = queue.shift()!;
+    spokenRef.current = [...spokenRef.current.slice(-7), text];
     const utterance = new pair.Utterance(text);
     const voice = pickVoice(pair.synth);
     if (voice) utterance.voice = voice;
@@ -283,6 +334,8 @@ export function useVoiceAgent(lang: string, callbacks: VoiceAgentCallbacks) {
     runRef.current += 1;
     speakQueueRef.current = [];
     speakDoneRef.current = null;
+    spokenRef.current = [];
+    speechEndRef.current = 0;
     recognitionRef.current?.abort();
     recognitionRef.current = null;
     synthesis()?.synth.cancel();
@@ -303,17 +356,6 @@ export function useVoiceAgent(lang: string, callbacks: VoiceAgentCallbacks) {
     setBoth("listening");
     listen();
   }, [listen]);
-
-  const interrupt = useCallback(() => {
-    if (stateRef.current !== "speaking") return;
-    synthesis()?.synth.cancel();
-    runRef.current += 1;
-    speakQueueRef.current = [];
-    speakDoneRef.current = null;
-    setInterim("");
-    setBoth("listening");
-    callbacksRef.current.onInterrupted?.();
-  }, []);
 
   useEffect(() => stop, [stop]);
 

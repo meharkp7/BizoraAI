@@ -486,6 +486,88 @@ describe("CopilotPanel", () => {
     }
   });
 
+  it("interrupts speech from the status line", async () => {
+    useWorkspaceSelection.setState({ selectedNodeIds: [], selectedEdgeIds: [] });
+    interface FakeEvent {
+      resultIndex: number;
+      results: Array<{ isFinal: boolean; 0: { transcript: string } }>;
+    }
+    const instances: Array<{ onresult: ((event: FakeEvent) => void) | null }> = [];
+    class FakeRecognition {
+      onresult: ((event: FakeEvent) => void) | null = null;
+      onend: (() => void) | null = null;
+      onspeechstart: (() => void) | null = null;
+      constructor() {
+        instances.push(this);
+      }
+      start(): void {}
+      stop(): void {}
+      abort(): void {}
+    }
+    class FakeUtterance {
+      text: string;
+      onend: (() => void) | null = null;
+      constructor(text: string) {
+        this.text = text;
+      }
+    }
+    let cancelled = 0;
+    const w = window as unknown as Record<string, unknown>;
+    w.SpeechRecognition = FakeRecognition;
+    w.SpeechSynthesisUtterance = FakeUtterance;
+    w.speechSynthesis = {
+      speak: () => {},
+      cancel: () => {
+        cancelled += 1;
+      },
+      getVoices: () => [],
+    };
+    server.use(
+      http.post(
+        "/api/v1/graphs/:projectId/:graphId/revisions/:version/copilot/stream",
+        () =>
+          new HttpResponse(
+            copilotStreamBody({ reply: "A long answer worth interrupting.", cards: [], proposal: null }),
+            { headers: { "Content-Type": "text/event-stream" } },
+          ),
+      ),
+    );
+    try {
+      const user = userEvent.setup();
+      render(
+        <CopilotPanel
+          projectId="project-1"
+          graph={graphFixture}
+          disabled={false}
+          view="methodology"
+          selection={null}
+          onSubmit={() => {}}
+        />,
+        { wrapper },
+      );
+
+      await user.click(screen.getByRole("button", { name: "Voice chat" }));
+      expect(await screen.findByText("Listening — just talk.")).toBeInTheDocument();
+      act(() => {
+        instances[0]?.onresult?.({
+          resultIndex: 0,
+          results: [{ isFinal: true, 0: { transcript: "tell me everything" } }],
+        });
+      });
+
+      const interrupt = await screen.findByRole("button", { name: "Interrupt" });
+      await user.click(interrupt);
+
+      expect(cancelled).toBeGreaterThan(0);
+      expect(await screen.findByText("Listening — just talk.")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Interrupt" })).not.toBeInTheDocument();
+    } finally {
+      delete w.SpeechRecognition;
+      delete w.SpeechSynthesisUtterance;
+      delete w.speechSynthesis;
+    }
+  });
+
   it("hides the microphone without speech support", () => {
     useWorkspaceSelection.setState({ selectedNodeIds: [], selectedEdgeIds: [] });
     render(
