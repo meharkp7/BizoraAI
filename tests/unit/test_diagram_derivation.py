@@ -21,6 +21,7 @@ from bizora.core.diagram_derivation import (
     ENGINE_MIN_BOXES,
     first_array_cell,
     graft_cell_interior,
+    merge_methodology_text,
     methodology_to_circuit,
     methodology_to_structure,
     structure_drawable_boxes,
@@ -97,7 +98,7 @@ def test_derived_circuit_maps_steps_to_blocks_and_edges_to_nets() -> None:
     assert [component.type for component in circuit.components] == [
         ComponentType.INPUT,
         ComponentType.MODEL,
-        ComponentType.BLOCK,
+        ComponentType.EVALUATION,
         ComponentType.OUTPUT,
     ]
     assert circuit.components[1].pins == {"in": "e0", "out": "e1"}
@@ -149,11 +150,11 @@ def test_derived_circuit_types_follow_methodology_kinds() -> None:
     assert circuit is not None
     assert [component.type for component in circuit.components] == [
         ComponentType.INPUT,
-        ComponentType.BLOCK,
+        ComponentType.PROCESS,
         ComponentType.DECISION,
         ComponentType.STORE,
         ComponentType.MODEL,
-        ComponentType.BLOCK,
+        ComponentType.EVALUATION,
         ComponentType.DATASET,
         ComponentType.OUTPUT,
     ]
@@ -430,3 +431,213 @@ def test_graft_cell_interior_skips_bare_text_cell() -> None:
     assert (
         graft_cell_interior(make_array_structure(), make_array_structure()) is None
     )
+
+
+def _merge_figure() -> MethodologyIR:
+    """Two drawn steps: load raw responses, encode with a transformer."""
+    return MethodologyIR(
+        version=1,
+        title="Figure flow",
+        groups=(),
+        nodes=(
+            MethodologyNode(
+                id="f1",
+                label="Load raw responses",
+                kind=MethodologyNodeKind.INPUT,
+                confidence=0.9,
+                evidence=MethodologyEvidence(
+                    figure_id="fig1", quote="Load raw responses"
+                ),
+            ),
+            MethodologyNode(
+                id="f2",
+                label="Encode with a transformer",
+                kind=MethodologyNodeKind.MODEL,
+                confidence=0.9,
+                evidence=MethodologyEvidence(
+                    figure_id="fig1", quote="Encode with a transformer"
+                ),
+            ),
+        ),
+        edges=(MethodologyEdge(from_node="f1", to="f2"),),
+    )
+
+
+def test_merge_adds_text_only_steps_and_wires_edges() -> None:
+    """Text steps join the drawn flow; restated steps map, never duplicate."""
+    text = MethodologyIR(
+        version=1,
+        title="Text flow",
+        groups=(),
+        nodes=(
+            MethodologyNode(
+                id="t1",
+                label="Load raw responses",
+                kind=MethodologyNodeKind.INPUT,
+                confidence=0.8,
+            ),
+            MethodologyNode(
+                id="t2",
+                label="Calibrate the sensor array",
+                kind=MethodologyNodeKind.PROCESS,
+                detail="Two-point calibration per channel.",
+                confidence=0.8,
+                evidence=MethodologyEvidence(page=4, quote="we calibrate"),
+            ),
+            MethodologyNode(
+                id="t3",
+                label="Score each candidate",
+                kind=MethodologyNodeKind.EVALUATION,
+                confidence=0.8,
+            ),
+        ),
+        edges=(
+            MethodologyEdge(from_node="t1", to="t2"),
+            MethodologyEdge(from_node="t2", to="t3"),
+        ),
+    )
+
+    merged = merge_methodology_text(_merge_figure(), text)
+
+    assert merged is not None
+    assert merged.title == "Figure flow"
+    assert [node.id for node in merged.nodes] == ["f1", "f2", "t2", "t3"]
+    # t1 restates f1, so its edge rewires onto the drawn node.
+    assert [(edge.from_node, edge.to) for edge in merged.edges] == [
+        ("f1", "f2"),
+        ("f1", "t2"),
+        ("t2", "t3"),
+    ]
+    added = merged.nodes[2]
+    assert added.detail == "Two-point calibration per channel."
+    assert added.evidence is not None and added.evidence.page == 4
+    assert validate_diagram(merged).errors == ()
+
+
+def test_merge_returns_none_when_text_adds_nothing() -> None:
+    """A text flow that only restates the figure changes nothing."""
+    text = MethodologyIR(
+        version=1,
+        title="Text flow",
+        groups=(),
+        nodes=(
+            MethodologyNode(
+                id="t1",
+                label="Load raw responses",
+                kind=MethodologyNodeKind.INPUT,
+                confidence=0.8,
+            ),
+            MethodologyNode(
+                id="t2",
+                label="Encode with a transformer",
+                kind=MethodologyNodeKind.MODEL,
+                confidence=0.8,
+            ),
+        ),
+        edges=(MethodologyEdge(from_node="t1", to="t2"),),
+    )
+
+    assert merge_methodology_text(_merge_figure(), text) is None
+
+
+def test_merge_renames_colliding_ids_and_drops_self_loops() -> None:
+    """A new step never steals a drawn id; collapsed edges never loop."""
+    figure = MethodologyIR(
+        version=1,
+        title="Figure flow",
+        groups=(),
+        nodes=(
+            MethodologyNode(
+                id="n1",
+                label="Encode the input text",
+                kind=MethodologyNodeKind.MODEL,
+                confidence=0.9,
+            ),
+        ),
+        edges=(),
+    )
+    text = MethodologyIR(
+        version=1,
+        title="Text flow",
+        groups=(),
+        nodes=(
+            MethodologyNode(
+                id="n1",
+                label="Zebra calibration sweep",
+                kind=MethodologyNodeKind.PROCESS,
+                confidence=0.8,
+            ),
+            MethodologyNode(
+                id="n2",
+                label="Encode input text",
+                kind=MethodologyNodeKind.MODEL,
+                confidence=0.8,
+            ),
+            MethodologyNode(
+                id="n3",
+                label="Encode the input",
+                kind=MethodologyNodeKind.MODEL,
+                confidence=0.8,
+            ),
+        ),
+        edges=(MethodologyEdge(from_node="n2", to="n3"),),
+    )
+
+    merged = merge_methodology_text(figure, text)
+
+    assert merged is not None
+    assert [node.id for node in merged.nodes] == ["n1", "text-n1"]
+    # n2 and n3 both restate the drawn node, so their edge would loop.
+    assert merged.edges == ()
+    assert validate_diagram(merged).errors == ()
+
+
+def test_merge_carries_text_groups_and_remaps_clashes() -> None:
+    """Added steps keep their swimlanes; clashing lanes are renamed."""
+    figure = MethodologyIR(
+        version=1,
+        title="Figure flow",
+        groups=(MethodologyGroup(id="g1", label="Drawn lane"),),
+        nodes=(
+            MethodologyNode(
+                id="f1",
+                label="Load raw responses",
+                kind=MethodologyNodeKind.INPUT,
+                group="g1",
+                confidence=0.9,
+            ),
+        ),
+        edges=(),
+    )
+    text = MethodologyIR(
+        version=1,
+        title="Text flow",
+        groups=(
+            MethodologyGroup(id="g1", label="Stated lane"),
+            MethodologyGroup(id="g2", label="Extra lane"),
+        ),
+        nodes=(
+            MethodologyNode(
+                id="t1",
+                label="Calibrate the sensor array",
+                kind=MethodologyNodeKind.PROCESS,
+                group="g1",
+                confidence=0.8,
+            ),
+            MethodologyNode(
+                id="t2",
+                label="Score each candidate",
+                kind=MethodologyNodeKind.EVALUATION,
+                group="g2",
+                confidence=0.8,
+            ),
+        ),
+        edges=(),
+    )
+
+    merged = merge_methodology_text(figure, text)
+
+    assert merged is not None
+    assert [group.id for group in merged.groups] == ["g1", "text-g1", "g2"]
+    assert [node.group for node in merged.nodes] == ["g1", "text-g1", "g2"]
+    assert validate_diagram(merged).errors == ()

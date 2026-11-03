@@ -43,8 +43,10 @@ from bizora.contracts.diagram_ir import (
 from bizora.contracts.figures import FigureAttachment, ResponseUsage
 from bizora.core.diagram_derivation import (
     ENGINE_MIN_BOXES,
+    ENRICH_THIN_NODES,
     first_array_cell,
     graft_cell_interior,
+    merge_methodology_text,
     methodology_to_circuit,
     methodology_to_structure,
     structure_drawable_boxes,
@@ -68,6 +70,12 @@ from bizora.providers.muse import MuseMethodologyProvider, MuseProviderError
 # v3 captures stated per-step settings into methodology params so the
 # what-if editor has knobs to turn.
 PROMPT_VERSION = 4
+
+#: Text prompts version independently from figure prompts: v5 adds
+#: fine-granularity methodology steps and any-domain repeated-block
+#: structures, re-extracting text IRs while keeping cached figure
+#: transcriptions (whose prompts did not change).
+TEXT_PROMPT_VERSION = 5
 
 FigureIRKind = Literal["circuit", "flow", "structure"]
 TextIRKind = Literal["methodology", "structure"]
@@ -230,7 +238,7 @@ def diagram_cache_key(paper_hash: str, figure_id: str) -> str:
 def text_cache_key(paper_hash: str, kind: TextIRKind) -> str:
     """Build a stable cache key for one text-derived IR."""
     digest = _check_paper_hash(paper_hash)
-    return f"{digest}-text-{kind}-v{PROMPT_VERSION}"
+    return f"{digest}-text-{kind}-v{TEXT_PROMPT_VERSION}"
 
 
 def _figure_ir_kind(kind: DiagramKind) -> FigureIRKind | None:
@@ -325,7 +333,7 @@ def load_cached_text(
     except (OSError, ValueError):
         return None
     try:
-        if not isinstance(payload, dict) or payload.get("prompt_version") != PROMPT_VERSION:
+        if not isinstance(payload, dict) or payload.get("prompt_version") != TEXT_PROMPT_VERSION:
             return None
         raw = payload.get("ir")
         if raw is None:
@@ -352,7 +360,7 @@ def save_cached_text(
         directory = diagram_cache_dir()
         directory.mkdir(parents=True, exist_ok=True)
         payload = {
-            "prompt_version": PROMPT_VERSION,
+            "prompt_version": TEXT_PROMPT_VERSION,
             "ir": ir.model_dump(by_alias=True, mode="json") if ir is not None else None,
             "repaired": repaired,
         }
@@ -623,8 +631,9 @@ async def extract_paper_diagrams(
 
     Circuits come from circuit figures, else derived as system blocks
     from the methodology. Methodology comes from the richest valid
-    flow figure, else from text; structure comes from the richest
-    valid structure figure, else from text, else derived from the
+    flow figure, enriched with text-stated steps when the figure is
+    thin, else from text; structure comes from the richest valid
+    structure figure, else from text, else derived from the
     methodology. Every paper with a methodology therefore yields all
     three views.
     """
@@ -721,13 +730,27 @@ async def extract_paper_diagrams(
         and not figure_cell.children
         and sources.get("structure", "").startswith("figure:")
     )
+    # A thin transcribed flow rarely covers the full method: derive the
+    # text flow as well and merge its extra steps in below. Richer
+    # figures are served exactly as drawn (no extra model call).
+    figure_methodology = (
+        methodology
+        if sources.get("methodology", "").startswith("figure:")
+        else None
+    )
+    enrich_thin = (
+        figure_methodology is not None
+        and len(figure_methodology.nodes) < ENRICH_THIN_NODES
+    )
     text_structure: StructureIR | None = None
-    if (methodology is None or structure is None or needs_interior) and paper_text.strip():
+    if (
+        methodology is None or structure is None or needs_interior or enrich_thin
+    ) and paper_text.strip():
         text_result = await extract_text_diagrams(
             provider,
             paper_text,
             paper_hash=paper_hash,
-            want_methodology=methodology is None,
+            want_methodology=methodology is None or enrich_thin,
             want_structure=structure is None or needs_interior,
         )
         usage.extend(text_result.usage)
@@ -737,6 +760,37 @@ async def extract_paper_diagrams(
             sources["methodology"] = "text"
         elif methodology is None and text_result.methodology_validation.errors:
             validation["methodology"] = text_result.methodology_validation
+        if (
+            enrich_thin
+            and figure_methodology is not None
+            and text_result.methodology is not None
+            and not text_result.methodology_validation.errors
+        ):
+            merged = merge_methodology_text(
+                figure_methodology, text_result.methodology
+            )
+            if merged is not None:
+                report = validate_diagram(merged)
+                if not report.errors:
+                    added_nodes = len(merged.nodes) - len(figure_methodology.nodes)
+                    added_edges = len(merged.edges) - len(figure_methodology.edges)
+                    methodology = merged
+                    prior = validation.get(
+                        "methodology", DiagramValidationResult()
+                    )
+                    validation["methodology"] = DiagramValidationResult(
+                        errors=prior.errors,
+                        warnings=prior.warnings
+                        + report.warnings
+                        + (
+                            f"Enriched with {added_nodes} text-stated "
+                            f"steps and {added_edges} connections the "
+                            "figure does not draw (each carries its own "
+                            "page/quote evidence).",
+                        ),
+                        stats=dict(report.stats),
+                    )
+                    sources["methodology:text-enrichment"] = "text"
         if structure is None and text_result.structure is not None:
             structure = text_result.structure
             validation["structure"] = text_result.structure_validation
@@ -964,11 +1018,17 @@ _STRUCTURE_FIGURE_INSTRUCTIONS = (
 _METHODOLOGY_TEXT_INSTRUCTIONS = (
     "You derive a methodology flow from research-paper text into a "
     "MethodologyIR JSON object with keys version, title, groups, nodes, "
-    "edges. Include only steps the text states: each step becomes one "
+    "edges. Cover the full method at fine granularity: one node per "
+    "distinct step, sub-step, stage, and experiment the text states — "
+    "never collapse a multi-stage procedure into one node, and never "
+    "skip setup, calibration, measurement, or evaluation steps. "
+    "Include only steps the text states: each step becomes one "
     "node with id, label, kind (input, process, decision, store, model, "
     "evaluation, dataset, output), optional group, detail, params, "
     "confidence between 0 and 1, and evidence with the page number "
-    "from [Page N] markers and a short supporting quote. For each "
+    "from [Page N] markers and a short supporting quote. Write detail "
+    "as one or two sentences saying what the step does and why, "
+    "whenever the text supports it. For each "
     "step, copy every numeric setting and named configuration the text "
     "states for that step into params as string key/value pairs, keys "
     "in snake_case (for example cell_count '2000', technology 'TSMC "
@@ -986,7 +1046,13 @@ _STRUCTURE_TEXT_INSTRUCTIONS = (
     "You derive a physical structure from research-paper text into a "
     "StructureIR JSON object with keys version, title, root. Include "
     "only structure the text states: chips, arrays, cells, periphery, "
-    "modules, boards, layers, parts, regions. Copy stated dimensions "
+    "modules, boards, layers, parts, regions. This applies to every "
+    "domain, not just chips: a memory macro, a systolic array, a "
+    "sensor grid, a stack of transformer layers, a pipeline of "
+    "repeated stages — whenever the text describes repeated blocks, "
+    "model them as an array (or layered modules) with its repetition "
+    "count, and detail the repeated unit's own children from what the "
+    "text states about one instance. Copy stated dimensions "
     "into count (an integer or {rows, cols}, e.g. '16x16 array' becomes "
     "rows 16, cols 16) and dims {w, h, d, unit}. Each block carries id, "
     "label, kind, optional count, dims, pos, part, tensor_shape, "

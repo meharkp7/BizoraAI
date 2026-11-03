@@ -56,6 +56,8 @@ _SYSTEM_BLOCK_TYPES = frozenset(
         ComponentType.INPUT,
         ComponentType.OUTPUT,
         ComponentType.DECISION,
+        ComponentType.PROCESS,
+        ComponentType.EVALUATION,
     }
 )
 
@@ -345,6 +347,23 @@ _ARRANGE_SIDES: tuple[BlockPosition, ...] = (
 )
 
 
+def _long_sides(main: StructureBlock | None) -> list[BlockPosition]:
+    """Sides along the main array's long axis, for blocks with members.
+
+    A module whose members dress on top of its strip needs the long
+    edge: seven matrices fit the 94-unit side of an 8x2 array, not its
+    22-unit end. Square, single-count, and missing arrays offer no
+    long side, so placement falls back to the default cycle.
+    """
+    if main is None or not isinstance(main.count, ArrayCount):
+        return []
+    if main.count.rows > main.count.cols:
+        return [BlockPosition.LEFT, BlockPosition.RIGHT]
+    if main.count.cols > main.count.rows:
+        return [BlockPosition.TOP, BlockPosition.BOTTOM]
+    return []
+
+
 def normalize_structure_layout(
     ir: StructureIR,
 ) -> tuple[StructureIR, tuple[str, ...]]:
@@ -385,7 +404,6 @@ def normalize_structure_layout(
     kids = tuple(root.children) + tuple(hoisted)
     main = next((c for c in kids if c.kind == BlockKind.ARRAY), None)
     taken = {c.pos for c in kids if c.pos is not None}
-    cycle = [side for side in _ARRANGE_SIDES if side not in taken]
     need = [
         index
         for index, child in enumerate(kids)
@@ -394,11 +412,28 @@ def normalize_structure_layout(
         and child.pos is None
     ]
     if need:
+        # Blocks with members claim the long side first so their grid
+        # fits; everything else keeps the default cycle. Memberless
+        # trees behave exactly as before.
+        assigned: dict[int, BlockPosition] = {}
+        used = set(taken)
+        for index in need:
+            if not kids[index].children:
+                continue
+            free = [side for side in _long_sides(main) if side not in used]
+            if free:
+                assigned[index] = free[0]
+                used.add(free[0])
+        cycle = [side for side in _ARRANGE_SIDES if side not in used]
         updated = list(kids)
         names: list[str] = []
-        for order, index in enumerate(need):
-            pool = cycle or list(_ARRANGE_SIDES)
-            side = pool[order % len(pool)]
+        order = 0
+        for index in need:
+            side = assigned.get(index)
+            if side is None:
+                pool = cycle or list(_ARRANGE_SIDES)
+                side = pool[order % len(pool)]
+                order += 1
             updated[index] = kids[index].model_copy(update={"pos": side})
             names.append(f"'{kids[index].id}'")
         kids = tuple(updated)

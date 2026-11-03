@@ -10,6 +10,8 @@ honest evidence quotes so the UI labels them assumed, never
 from-paper.
 """
 
+import re
+
 from bizora.contracts.diagram_ir import (
     BlockKind,
     CircuitComponent,
@@ -19,6 +21,8 @@ from bizora.contracts.diagram_ir import (
     CircuitPort,
     CircuitSource,
     ComponentType,
+    MethodologyEdge,
+    MethodologyGroup,
     MethodologyIR,
     MethodologyNodeKind,
     NetRole,
@@ -65,6 +69,8 @@ _DERIVED_COMPONENT_TYPES = {
     "input": ComponentType.INPUT,
     "output": ComponentType.OUTPUT,
     "decision": ComponentType.DECISION,
+    "process": ComponentType.PROCESS,
+    "evaluation": ComponentType.EVALUATION,
 }
 
 
@@ -268,6 +274,160 @@ def methodology_to_structure(methodology: MethodologyIR) -> StructureIR | None:
 #: Engine minimum: buildStructureSafe refuses scenes with fewer than two
 #: boxes ("no physical structure could be built from this IR").
 ENGINE_MIN_BOXES = 2
+
+#: A transcribed figure flow below this many steps rarely covers a full
+#: paper method, so the pipeline enriches it with text-stated steps.
+#: Richer figures are served exactly as drawn (no extra model call).
+ENRICH_THIN_NODES = 12
+
+#: Text steps at least this similar (label token Jaccard) to a figure
+#: step are the same step restated, not a new one.
+MERGE_MATCH_SIMILARITY = 0.5
+
+
+def _label_tokens(label: str) -> frozenset[str]:
+    """Lowercase alphanumeric words of a step label."""
+    return frozenset(re.findall(r"[a-z0-9]+", label.lower()))
+
+
+def _label_similarity(left: str, right: str) -> float:
+    """Token-set Jaccard similarity of two step labels (0 when either is empty)."""
+    tokens_left, tokens_right = _label_tokens(left), _label_tokens(right)
+    if not tokens_left or not tokens_right:
+        return 0.0
+    return len(tokens_left & tokens_right) / len(tokens_left | tokens_right)
+
+
+def _fresh_id(want: str, used: set[str]) -> str:
+    """An id based on want that is not in used (text- prefix, then counter)."""
+    candidate = _truncate(want, 128)
+    if candidate not in used:
+        used.add(candidate)
+        return candidate
+    candidate = _truncate(f"text-{want}", 128)
+    if candidate not in used:
+        used.add(candidate)
+        return candidate
+    counter = 2
+    while _truncate(f"{candidate}-{counter}", 128) in used:
+        counter += 1
+    candidate = _truncate(f"{candidate}-{counter}", 128)
+    used.add(candidate)
+    return candidate
+
+
+def merge_methodology_text(
+    figure: MethodologyIR, text: MethodologyIR
+) -> MethodologyIR | None:
+    """Enrich a transcribed figure flow with text-stated steps.
+
+    The figure stays the base: its nodes, edges, groups, and title are
+    kept verbatim, and every added step carries its own page/quote
+    evidence, so the UI can tell drawn steps from text ones. Text steps
+    that restate a figure step (label similarity at or above
+    MERGE_MATCH_SIMILARITY) map onto it instead of duplicating it, and
+    text edges resolve through that mapping, so added steps connect to
+    the drawn flow instead of floating beside it. Returns None when the
+    text adds no node or edge.
+    """
+    used_ids = {node.id for node in figure.nodes}
+    id_map: dict[str, str] = {}
+    added: list[tuple[str, str]] = []  # (text id, merged id)
+    for node in text.nodes:
+        best_id: str | None = None
+        best_similarity = 0.0
+        for figure_node in figure.nodes:
+            similarity = _label_similarity(node.label, figure_node.label)
+            if similarity > best_similarity:
+                best_id, best_similarity = figure_node.id, similarity
+        if best_id is not None and best_similarity >= MERGE_MATCH_SIMILARITY:
+            id_map[node.id] = best_id
+            continue
+        merged_id = _fresh_id(node.id, used_ids)
+        id_map[node.id] = merged_id
+        added.append((node.id, merged_id))
+
+    figure_group_labels = {group.id: group.label for group in figure.groups}
+    used_group_ids = set(figure_group_labels)
+    text_groups = {group.id: group for group in text.groups}
+    group_map: dict[str, str] = {}
+    merged_groups = list(figure.groups)
+    for group in text.groups:
+        if figure_group_labels.get(group.id) == group.label:
+            group_map[group.id] = group.id
+            continue
+        merged_id = _fresh_id(group.id, used_group_ids)
+        group_map[group.id] = merged_id
+        parent = group.parent if group.parent in text_groups else None
+        merged_groups.append(
+            MethodologyGroup(
+                id=merged_id,
+                label=_truncate(group.label, 256),
+                parent=group_map.get(parent, parent) if parent else None,
+            )
+        )
+    # Remap pass: parents resolve to merged ids (groups iterate in text
+    # order, so a parent usually maps before its child; orphans drop).
+    remapped_groups = list(figure.groups)
+    for group in merged_groups[len(figure.groups) :]:
+        parent = group.parent
+        remapped_groups.append(
+            group
+            if parent is None or parent in used_group_ids
+            else group.model_copy(update={"parent": None})
+        )
+
+    text_nodes = {node.id: node for node in text.nodes}
+    merged_nodes = list(figure.nodes)
+    for text_id, merged_id in added:
+        node = text_nodes[text_id]
+        node_group = group_map.get(node.group, node.group) if node.group else None
+        merged_nodes.append(
+            node.model_copy(
+                update={
+                    "id": merged_id,
+                    "group": node_group
+                    if node_group in used_group_ids
+                    else None,
+                }
+            )
+        )
+
+    existing_edges = {
+        (edge.from_node, edge.to, edge.kind) for edge in figure.edges
+    }
+    merged_edges = list(figure.edges)
+    for edge in text.edges:
+        resolved_from = id_map.get(edge.from_node)
+        resolved_to = id_map.get(edge.to)
+        if resolved_from is None or resolved_to is None:
+            continue
+        if resolved_from == resolved_to:
+            continue
+        key = (resolved_from, resolved_to, edge.kind)
+        if key in existing_edges:
+            continue
+        existing_edges.add(key)
+        merged_edges.append(
+            MethodologyEdge(
+                from_node=resolved_from,
+                to=resolved_to,
+                label=edge.label,
+                kind=edge.kind,
+            )
+        )
+
+    if len(merged_nodes) == len(figure.nodes) and len(merged_edges) == len(
+        figure.edges
+    ):
+        return None
+    return MethodologyIR(
+        version=1,
+        title=figure.title,
+        groups=tuple(remapped_groups),
+        nodes=tuple(merged_nodes),
+        edges=tuple(merged_edges),
+    )
 
 
 def structure_drawable_boxes(structure: StructureIR) -> int:

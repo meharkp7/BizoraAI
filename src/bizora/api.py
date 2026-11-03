@@ -3,6 +3,7 @@
 import hashlib
 import json
 import logging
+import time
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Annotated, Any
@@ -20,7 +21,7 @@ from fastapi import (
     status,
 )
 from fastapi.responses import JSONResponse, Response, StreamingResponse
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -42,6 +43,7 @@ from bizora.contracts.components import (
     CopilotThreadSummary,
     PreflightRequest,
     RemovalPreflight,
+    VoiceTranscriptionResponse,
 )
 from bizora.contracts.diagram_ir import CircuitIR, MethodologyIR, StructureIR
 from bizora.contracts.diff import GraphRevisionDiff
@@ -50,6 +52,7 @@ from bizora.contracts.execution import AdapterSummary
 from bizora.contracts.figures import (
     MAX_FIGURE_IMAGE_BYTES,
     FigureAttachment,
+    FigureSegment,
     PaperFigure,
     ResponseUsage,
 )
@@ -151,6 +154,17 @@ from bizora.core.quality import build_quality_summary
 from bizora.core.replication import narration_for_latest_revision, plan_for_latest_revision
 from bizora.core.reported_service import discover_reported_metrics, reported_metrics_for_tables
 from bizora.core.run_service import ExperimentRunService
+from bizora.core.segmentation import (
+    MAX_PROMPTS,
+    Sam3SegmentationProvider,
+    SegmentationError,
+    SegmentationProvider,
+    SegmentationUnavailableError,
+    clean_prompts,
+    load_cached_segments,
+    save_cached_segments,
+    segment_cache_key,
+)
 from bizora.core.table_persistence_service import TablePersistenceService
 from bizora.core.transplant import plan_transplant as transplant_plan
 from bizora.core.usage_ledger import (
@@ -198,6 +212,12 @@ from bizora.providers.copilot import CopilotProvider
 from bizora.providers.fireworks import FireworksMethodologyProvider
 from bizora.providers.muse import MuseMethodologyProvider
 from bizora.providers.muse_copilot import MuseCopilotProvider
+from bizora.providers.muse_voice import (
+    MAX_VOICE_BYTES,
+    MuseVoiceProvider,
+    VoiceProviderError,
+    is_wav_audio,
+)
 from bizora.providers.tables import TableExtractionRequest
 from bizora.streaming.bus import get_shared_bus
 
@@ -232,6 +252,28 @@ def get_diagram_provider() -> MuseDiagramProvider:
 
 
 DIAGRAM_PROVIDER_DEPENDENCY = Depends(get_diagram_provider)
+
+
+def get_voice_provider() -> MuseVoiceProvider:
+    """Create the Muse voice provider or fail clearly when unconfigured."""
+    try:
+        return MuseVoiceProvider()
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Muse credentials are missing.",
+        ) from exc
+
+
+VOICE_PROVIDER_DEPENDENCY = Depends(get_voice_provider)
+
+
+def get_segmentation_provider() -> SegmentationProvider:
+    """Return the figure segmentation backend (availability is per-request)."""
+    return Sam3SegmentationProvider()
+
+
+SEGMENTATION_PROVIDER_DEPENDENCY = Depends(get_segmentation_provider)
 
 
 def get_fireworks_provider() -> FireworksMethodologyProvider:
@@ -1605,6 +1647,54 @@ def _copilot_settings_or_503() -> Settings:
 
 
 @router.post(
+    "/api/v1/graphs/{project_id}/{graph_id}/copilot/transcribe",
+    response_model=VoiceTranscriptionResponse,
+    tags=["graphs"],
+)
+async def transcribe_copilot_voice(
+    project_id: str,
+    graph_id: str,
+    file: UploadFile,
+    language_bias: str | None = Form(default=None, max_length=16),
+    provider: MuseVoiceProvider = VOICE_PROVIDER_DEPENDENCY,
+) -> VoiceTranscriptionResponse:
+    """Transcribe one voice utterance with Muse Voice Transcribe.
+
+    The clip must be mono WAV (the browser encodes one per utterance).
+    Transcription is context-free: the graph ids attribute the turn but
+    no graph state is read — a spoken turn is transcribed first, then
+    sent to the copilot as plain text.
+    """
+    _ = (project_id, graph_id)
+    data = await file.read()
+    if len(data) > MAX_VOICE_BYTES:
+        raise BizoraError(
+            ErrorCode.INVALID_REQUEST,
+            "The uploaded clip exceeds the "
+            f"{MAX_VOICE_BYTES // 1024 // 1024} MB limit.",
+        )
+    if not is_wav_audio(data):
+        raise BizoraError(ErrorCode.INVALID_REQUEST, "The uploaded clip must be WAV audio.")
+    try:
+        result = await provider.transcribe_wav(
+            data,
+            filename=file.filename or "utterance.wav",
+            language_bias=[language_bias] if language_bias else None,
+        )
+    except VoiceProviderError as exc:
+        logger.warning("Voice provider failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Voice transcription failed.",
+        ) from exc
+    return VoiceTranscriptionResponse(
+        transcript=result.transcript,
+        audio_duration_ms=result.audio_duration_ms,
+        session_id=result.session_id,
+    )
+
+
+@router.post(
     "/api/v1/graphs/{project_id}/{graph_id}/revisions/{version}/copilot",
     response_model=CopilotResponse,
     tags=["graphs"],
@@ -1992,6 +2082,132 @@ def get_figure_image(
         )
     content, media_type = browser_safe_figure_bytes(record.image_bytes, record.mime_type)
     return Response(content=content, media_type=media_type)
+
+
+class SegmentFigureRequest(BaseModel):
+    """Concept prompts to outline in one figure ("nmos transistor")."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    prompts: list[str] = Field(min_length=1, max_length=MAX_PROMPTS)
+
+
+class FigureSegmentList(BaseModel):
+    """Segmentation outcome: outlines plus honest availability."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    available: bool
+    reason: str | None = None
+    cached: bool = False
+    elapsed_ms: float | None = None
+    segments: list[FigureSegment] = Field(default_factory=list)
+
+
+def _figure_or_404(
+    session: Session, *, project_id: str, graph_id: str, figure_id: str
+) -> PaperFigureRecord:
+    record = get_paper_figure(
+        session, project_id=project_id, graph_id=graph_id, figure_id=figure_id
+    )
+    if record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Figure not found.",
+        )
+    return record
+
+
+@router.get(
+    "/api/v1/graphs/{project_id}/{graph_id}/figures/{figure_id}/segments",
+    tags=["graphs"],
+)
+def get_figure_segments(
+    project_id: str,
+    graph_id: str,
+    figure_id: str,
+    prompts: str = "",
+    session: Session = DB_SESSION_DEPENDENCY,
+    provider: SegmentationProvider = SEGMENTATION_PROVIDER_DEPENDENCY,
+) -> FigureSegmentList:
+    """Return cached outlines for one figure (never runs inference)."""
+    record = _figure_or_404(
+        session, project_id=project_id, graph_id=graph_id, figure_id=figure_id
+    )
+    cleaned = clean_prompts(tuple(prompts.split(",")))
+    if not cleaned:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="At least one concept prompt is required.",
+        )
+    available, reason = provider.available()
+    image_sha = record.sha256 or hashlib.sha256(record.image_bytes).hexdigest()
+    cached = load_cached_segments(segment_cache_key(image_sha, cleaned))
+    return FigureSegmentList(
+        available=available,
+        reason=reason,
+        cached=cached is not None,
+        segments=list(cached) if cached is not None else [],
+    )
+
+
+@router.post(
+    "/api/v1/graphs/{project_id}/{graph_id}/figures/{figure_id}/segments",
+    tags=["graphs"],
+)
+def segment_figure(
+    project_id: str,
+    graph_id: str,
+    figure_id: str,
+    request: SegmentFigureRequest,
+    session: Session = DB_SESSION_DEPENDENCY,
+    provider: SegmentationProvider = SEGMENTATION_PROVIDER_DEPENDENCY,
+) -> FigureSegmentList:
+    """Outline named components in one figure, caching per (bytes, prompts)."""
+    record = _figure_or_404(
+        session, project_id=project_id, graph_id=graph_id, figure_id=figure_id
+    )
+    cleaned = clean_prompts(tuple(request.prompts))
+    if not cleaned:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="At least one concept prompt is required.",
+        )
+    available, reason = provider.available()
+    if not available:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=reason or "Segmentation is not configured.",
+        )
+    image_sha = record.sha256 or hashlib.sha256(record.image_bytes).hexdigest()
+    key = segment_cache_key(image_sha, cleaned)
+    cached = load_cached_segments(key)
+    if cached is not None:
+        return FigureSegmentList(
+            available=True, reason=None, cached=True, segments=list(cached)
+        )
+    started = time.monotonic()
+    try:
+        segments = provider.segment(record.image_bytes, cleaned)
+    except SegmentationUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+    except SegmentationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(exc),
+        ) from exc
+    save_cached_segments(key, segments)
+    elapsed_ms = (time.monotonic() - started) * 1000
+    return FigureSegmentList(
+        available=True,
+        reason=None,
+        cached=False,
+        elapsed_ms=elapsed_ms,
+        segments=list(segments),
+    )
 
 
 class DiagramValidationReport(BaseModel):

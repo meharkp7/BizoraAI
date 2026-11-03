@@ -257,6 +257,16 @@ class CopilotRequest(BaseModel):
     )
 
 
+class VoiceTranscriptionResponse(BaseModel):
+    """One transcribed voice turn: the utterance as text."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    transcript: str = Field(min_length=0, max_length=4000)
+    audio_duration_ms: int | None = None
+    session_id: str | None = Field(default=None, max_length=128)
+
+
 class CopilotResponse(BaseModel):
     """Copilot reply: prose plus cards plus at most one pending proposal."""
 

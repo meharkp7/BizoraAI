@@ -550,6 +550,64 @@ def test_layout_keeps_explicit_pos_and_skips_taken_sides() -> None:
     assert by_id["gate"].pos == "right"
 
 
+def make_tall_structure() -> StructureIR:
+    return StructureIR.model_validate(
+        {
+            "version": 1,
+            "title": "llm",
+            "root": {
+                "id": "top",
+                "label": "top",
+                "kind": "module",
+                "confidence": 0.9,
+                "children": [
+                    {
+                        "id": "arr",
+                        "label": "weight blocks",
+                        "kind": "array",
+                        "count": {"rows": 8, "cols": 2},
+                        "confidence": 0.9,
+                        "children": [
+                            {
+                                "id": "cell",
+                                "label": "weight block",
+                                "kind": "cell",
+                                "confidence": 0.9,
+                                "children": [],
+                            }
+                        ],
+                    },
+                    {
+                        "id": "block",
+                        "label": "transformer block",
+                        "kind": "module",
+                        "confidence": 0.9,
+                        "children": [
+                            {
+                                "id": f"m{index}",
+                                "label": name,
+                                "kind": "module",
+                                "confidence": 0.9,
+                                "children": [],
+                            }
+                            for index, name in enumerate(["Q", "O", "K", "V", "Up", "Gate", "Down"])
+                        ],
+                    },
+                ],
+            },
+        }
+    )
+
+
+def test_layout_places_member_blocks_on_the_long_side() -> None:
+    arranged, notes = normalize_structure_layout(make_tall_structure())
+
+    by_id = {c.id: c for c in arranged.root.children}
+    # Seven members fit the 8-row side, not the 2-column end.
+    assert by_id["block"].pos == "left"
+    assert any("illustratively" in note for note in notes)
+
+
 def test_layout_leaves_placed_trees_untouched() -> None:
     ir = make_block()
 

@@ -25,6 +25,7 @@ from bizora.core.diagram_extraction import (
     extract_figure_diagram,
     extract_paper_diagrams,
     extract_text_diagrams,
+    load_cached_text,
     text_cache_key,
 )
 from bizora.core.diagram_whatif import WhatIfBasis, WhatIfResult
@@ -414,6 +415,7 @@ def test_served_structure_is_arranged_for_render(tmp_path: Any) -> None:
 
 
 def test_figure_methodology_preferred_over_text(tmp_path: Any) -> None:
+    """A thin figure stays the base; text steps enrich it, never replace it."""
     import os
 
     os.environ["BIZORA_CACHE_DIR"] = str(tmp_path)
@@ -423,6 +425,7 @@ def test_figure_methodology_preferred_over_text(tmp_path: Any) -> None:
         provider.classifications["fig2"] = DiagramKind.CIRCUIT
         provider.figure_payloads[("fig1", "flow")] = make_methodology_payload()
         provider.figure_payloads[("fig2", "circuit")] = make_circuit_payload()
+        provider.text_payloads["methodology"] = make_methodology_payload(4)
         provider.text_payloads["structure"] = make_structure_payload()
 
         async def run_test() -> None:
@@ -435,9 +438,16 @@ def test_figure_methodology_preferred_over_text(tmp_path: Any) -> None:
 
             assert isinstance(result.methodology, MethodologyIR)
             assert result.sources["methodology"] == "figure:fig1"
+            assert result.sources["methodology:text-enrichment"] == "text"
+            assert [node.id for node in result.methodology.nodes] == [
+                "n1",
+                "n2",
+                "n3",
+                "n4",
+            ]
             assert len(result.circuits) == 1
             assert result.sources["structure"] == "text"
-            assert "text:methodology" not in provider.calls
+            assert "text:methodology" in provider.calls
             assert provider.calls.get("text:structure") == 1
 
         asyncio.run(run_test())
@@ -479,6 +489,24 @@ def test_cache_keys_vary_by_figure_and_prompt_version() -> None:
     assert "v" in diagram_cache_key("a" * 64, "fig1")
     assert text_cache_key("a" * 64, "methodology") != text_cache_key("b" * 64, "methodology")
     assert text_cache_key("a" * 64, "methodology") != text_cache_key("a" * 64, "structure")
+
+
+def test_text_and_figure_caches_version_independently(tmp_path: Any) -> None:
+    """Text re-extracts on prompt v5 while figure transcriptions stay v4."""
+    import os
+
+    assert diagram_cache_key("a" * 64, "fig1").endswith("-v4")
+    assert text_cache_key("a" * 64, "methodology").endswith("-v5")
+
+    os.environ["BIZORA_CACHE_DIR"] = str(tmp_path)
+    try:
+        key = text_cache_key("c" * 64, "methodology")
+        (tmp_path / f"{key}.json").write_text(
+            json.dumps({"prompt_version": 4, "ir": None, "repaired": False})
+        )
+        assert load_cached_text(key, "methodology") is None
+    finally:
+        del os.environ["BIZORA_CACHE_DIR"]
 
 
 def test_empty_text_skips_text_extraction(tmp_path: Any) -> None:
@@ -1029,7 +1057,7 @@ def test_richest_flow_figure_wins_methodology(tmp_path: Any) -> None:
         provider.classifications["tile"] = DiagramKind.FLOW
         provider.classifications["fig2"] = DiagramKind.FLOW
         provider.figure_payloads[("tile", "flow")] = make_methodology_payload(2)
-        provider.figure_payloads[("fig2", "flow")] = make_methodology_payload(6)
+        provider.figure_payloads[("fig2", "flow")] = make_methodology_payload(12)
         provider.text_payloads["structure"] = make_structure_payload()
 
         async def run_test() -> None:
@@ -1041,7 +1069,7 @@ def test_richest_flow_figure_wins_methodology(tmp_path: Any) -> None:
             )
 
             assert isinstance(result.methodology, MethodologyIR)
-            assert len(result.methodology.nodes) == 6
+            assert len(result.methodology.nodes) == 12
             assert result.sources["methodology"] == "figure:fig2"
 
         asyncio.run(run_test())
@@ -1095,6 +1123,86 @@ def test_richest_structure_figure_wins_structure(tmp_path: Any) -> None:
             assert isinstance(result.structure, StructureIR)
             assert result.sources["structure"] == "figure:fig2"
             assert len(result.structure.root.children) == 4
+
+        asyncio.run(run_test())
+    finally:
+        del os.environ["BIZORA_CACHE_DIR"]
+
+
+def test_thin_figure_methodology_is_enriched_with_text_steps(tmp_path: Any) -> None:
+    """A thin transcribed flow gains the text's extra steps.
+
+    The figure stays the base (title, source, drawn steps verbatim);
+    text steps that restate drawn ones map onto them instead of
+    duplicating them.
+    """
+    import os
+
+    os.environ["BIZORA_CACHE_DIR"] = str(tmp_path)
+    try:
+        provider = ScriptedDiagramProvider()
+        provider.classifications["fig1"] = DiagramKind.FLOW
+        provider.figure_payloads[("fig1", "flow")] = make_methodology_payload(2)
+        provider.text_payloads["methodology"] = make_methodology_payload(4)
+        provider.text_payloads["structure"] = make_structure_payload()
+
+        async def run_test() -> None:
+            result = await extract_paper_diagrams(
+                provider,
+                [make_figure("fig1")],
+                "Some paper text.",
+                paper_hash="1a" * 32,
+            )
+
+            assert isinstance(result.methodology, MethodologyIR)
+            assert result.sources["methodology"] == "figure:fig1"
+            assert result.sources["methodology:text-enrichment"] == "text"
+            # load/train restate the drawn pair; step 3 and step 4 join.
+            assert [node.id for node in result.methodology.nodes] == [
+                "n1",
+                "n2",
+                "n3",
+                "n4",
+            ]
+            assert [(edge.from_node, edge.to) for edge in result.methodology.edges] == [
+                ("n1", "n2"),
+                ("n2", "n3"),
+                ("n3", "n4"),
+            ]
+            assert "text:methodology" in provider.calls
+            warnings = result.validation["methodology"].warnings
+            assert any("Enriched with 2 text-stated steps" in w for w in warnings)
+
+        asyncio.run(run_test())
+    finally:
+        del os.environ["BIZORA_CACHE_DIR"]
+
+
+def test_rich_figure_methodology_skips_text_enrichment(tmp_path: Any) -> None:
+    """A rich transcribed flow is served as drawn (no extra model call)."""
+    import os
+
+    os.environ["BIZORA_CACHE_DIR"] = str(tmp_path)
+    try:
+        provider = ScriptedDiagramProvider()
+        provider.classifications["fig1"] = DiagramKind.FLOW
+        provider.figure_payloads[("fig1", "flow")] = make_methodology_payload(12)
+        provider.text_payloads["methodology"] = make_methodology_payload(4)
+        provider.text_payloads["structure"] = make_structure_payload()
+
+        async def run_test() -> None:
+            result = await extract_paper_diagrams(
+                provider,
+                [make_figure("fig1")],
+                "Some paper text.",
+                paper_hash="1b" * 32,
+            )
+
+            assert isinstance(result.methodology, MethodologyIR)
+            assert result.sources["methodology"] == "figure:fig1"
+            assert "methodology:text-enrichment" not in result.sources
+            assert len(result.methodology.nodes) == 12
+            assert "text:methodology" not in provider.calls
 
         asyncio.run(run_test())
     finally:

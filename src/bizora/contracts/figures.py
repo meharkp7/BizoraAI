@@ -265,6 +265,42 @@ class FigureRegion(FigureRegionProposal):
     region_id: str = Field(pattern=FIGURE_ID_PATTERN)
 
 
+#: One polygon vertex: normalized x, y in 0..1.
+NormalizedPoint = tuple[float, float]
+
+
+class FigureSegment(BaseModel):
+    """One segmented component outline: normalized bbox plus polygon.
+
+    Produced on demand by a segmentation backend (SAM 3.1) from the
+    figure's own pixels, so the 3D view can extrude the paper's drawn
+    shapes instead of generic procedural stand-ins. Coordinates are
+    normalized to the figure image: x right, y down, 0..1.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    segment_id: str = Field(pattern=FIGURE_ID_PATTERN)
+    label: str = Field(min_length=1, max_length=256)
+    bbox: NormalizedBBox
+    polygon: tuple[NormalizedPoint, ...] = Field(min_length=3, max_length=256)
+    score: float | None = Field(default=None, ge=0, le=1)
+
+    @model_validator(mode="after")
+    def validate_geometry(self) -> "FigureSegment":
+        x, y, width, height = self.bbox
+        if not (0 <= x <= 1 and 0 <= y <= 1):
+            raise ValueError("bbox origin must sit inside the unit square")
+        if not (width > 0 and height > 0):
+            raise ValueError("bbox width and height must be positive")
+        if x + width > 1 or y + height > 1:
+            raise ValueError("bbox must not overflow the unit square")
+        for point_x, point_y in self.polygon:
+            if not (0 <= point_x <= 1 and 0 <= point_y <= 1):
+                raise ValueError("polygon vertices must sit inside the unit square")
+        return self
+
+
 class FigureRegionList(BaseModel):
     """Structured-output envelope the model returns for localization."""
 

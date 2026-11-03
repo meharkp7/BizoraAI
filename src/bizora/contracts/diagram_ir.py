@@ -57,6 +57,8 @@ class ComponentType(StrEnum):
     INPUT = "input"
     OUTPUT = "output"
     DECISION = "decision"
+    PROCESS = "process"
+    EVALUATION = "evaluation"
 
 
 class NetRole(StrEnum):
